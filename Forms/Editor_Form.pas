@@ -1144,13 +1144,14 @@ begin
 end;
 
 procedure TEditorForm.SaveToFile(const APath: string);
-var
-   lines: TStrings;
 begin
 {$IFDEF USE_CODEFOLDING}
-   lines := memCodeEditor.GetUncollapsedStrings;
-   lines.SaveToFile(APath, GInfra.CurrentLang.GetFileEncoding);
-   lines.Free;
+   with memCodeEditor.GetUncollapsedStrings do
+   try
+      SaveToFile(APath, GInfra.CurrentLang.GetFileEncoding);
+   finally
+      Free;
+   end;
 {$ELSE}
    memCodeEditor.Lines.SaveToFile(APath, GInfra.CurrentLang.GetFileEncoding);
 {$ENDIF}
@@ -1160,9 +1161,6 @@ function TEditorForm.SelectCodeRange(AObject: TObject; ADoSelect: boolean = true
 var
    i: integer;
    lines: TStrings;
-{$IFDEF USE_CODEFOLDING}
-   foldRange: TSynEditFoldRange;
-{$ENDIF}
 begin
    result := TCodeRange.New;
    lines := GetAllLines;
@@ -1214,7 +1212,7 @@ begin
                begin
                   if result.Lines.Objects[i] = AObject then
                   begin
-                     foldRange := CollapsableFoldRangeForLine(i+1);
+                     var foldRange := CollapsableFoldRangeForLine(i+1);
                      if (foldRange <> nil) and foldRange.Collapsed then
                      begin
                         result.FoldRange := foldRange;
@@ -1356,10 +1354,6 @@ var
    tag2: IXMLElement;
    idObject: IIdentifiable;
    lines: TStrings;
-{$IFDEF USE_CODEFOLDING}
-   foldRange: TSynEditFoldRange;
-   tag1: IXMLElement;
-{$ENDIF}
 begin
    if Visible then
    begin
@@ -1388,10 +1382,10 @@ begin
 {$IFDEF USE_CODEFOLDING}
       if memCodeEditor.CodeFolding.Enabled then
       begin
-         tag1 := nil;
+         var tag1: IXMLElement := nil;
          for i := 0 to memCodeEditor.AllFoldRanges.AllCount-1 do
          begin
-            foldRange := memCodeEditor.AllFoldRanges[i];
+            var foldRange := memCodeEditor.AllFoldRanges[i];
             if foldRange.Collapsed then
             begin
                if tag1 = nil then
@@ -1429,11 +1423,6 @@ var
    tag1: IXMLElement;
    mark: TSynEditMark;
    showEvent: TNotifyEvent;
-{$IFDEF USE_CODEFOLDING}
-   foldRange: TSynEditFoldRange;
-   foldLines: TStringList;
-   tag2: IXMLElement;
-{$ENDIF}
 begin
    if TXMLProcessor.GetBool(ATag, 'src_win_show') and GInfra.CurrentLang.EnabledCodeGenerator then
    begin
@@ -1474,9 +1463,9 @@ begin
          tag1 := TXMLProcessor.FindChildTag(ATag, 'fold_ranges');
          if tag1 <> nil then
          begin
-            foldLines := TStringList.Create;
+            var foldLines := TStringList.Create;
             try
-               tag2 := TXMLProcessor.FindChildTag(tag1, 'fold_range');
+               var tag2 := TXMLProcessor.FindChildTag(tag1, 'fold_range');
                while tag2 <> nil do
                begin
                   if StrToIntDef(tag2.Text, 0) > 0 then
@@ -1486,7 +1475,7 @@ begin
                foldLines.CustomSort(@CompareIntegers);
                for i := foldLines.Count-1 downto 0 do
                begin
-                  foldRange := memCodeEditor.CollapsableFoldRangeForLine(foldLines[i].ToInteger);
+                  var foldRange := memCodeEditor.CollapsableFoldRangeForLine(foldLines[i].ToInteger);
                   if (foldRange <> nil) and not foldRange.Collapsed then
                   begin
                      memCodeEditor.Collapse(foldRange);
