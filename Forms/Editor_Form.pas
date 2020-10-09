@@ -117,7 +117,7 @@ type
     procedure UnSelectCodeRange(AObject: TObject);
     procedure Localize(AList: TStringList); override;
     procedure ResetForm; override;
-    procedure SetSaveDialog(Sender: TSaveDialog);
+    procedure SetSaveDialog(ASaveDialog: TSaveDialog);
     procedure miGotoClick(Sender: TObject);
     procedure miCollapseAllClick(Sender: TObject);
     procedure miRichTextClick(Sender: TObject);
@@ -777,29 +777,32 @@ procedure TEditorForm.miSaveClick(Sender: TObject);
 var
    synExport: TSynCustomExporter;
    lines: TStrings;
+   filterKey: string;
 begin
    SetSaveDialog(SaveDialog2);
+   if Assigned(memCodeEditor.Highlighter) then
+      SaveDialog2.Filter := SaveDialog2.Filter + '|' + i18Manager.GetJoinedString('|', EDITOR_DIALOG_FILTER_KEYS);
    if SaveDialog2.Execute then
    begin
-      if (SaveDialog2.FilterIndex > 1) and Assigned(memCodeEditor.Highlighter) then
+      synExport := nil;
+      if SaveDialog2.FilterIndex > 1 then
       begin
-         case SaveDialog2.FilterIndex of
-            2: synExport := SynExporterRTF1;
-            3: synExport := SynExporterHTML1;
-         else
-            synExport := nil;
-         end;
-         if synExport <> nil then
-         begin
-            synExport.Highlighter := memCodeEditor.Highlighter;
-            lines := GetAllLines;
-            try
-               synExport.ExportAll(lines);
-               synExport.SaveToFile(SaveDialog2.FileName);
-            finally
-               synExport.Highlighter := nil;
-               lines.Free;
-            end;
+         filterKey := EDITOR_DIALOG_FILTER_KEYS[SaveDialog2.FilterIndex-2];
+         if RTF_FILES_FILTER_KEY = filterKey then
+            synExport := SynExporterRTF1
+         else if HTML_FILES_FILTER_KEY = filterKey then
+            synExport := SynExporterHTML1;
+      end;
+      if synExport <> nil then
+      begin
+         synExport.Highlighter := memCodeEditor.Highlighter;
+         lines := GetAllLines;
+         try
+            synExport.ExportAll(lines);
+            synExport.SaveToFile(SaveDialog2.FileName);
+         finally
+            synExport.Highlighter := nil;
+            lines.Free;
          end;
       end
       else
@@ -1501,18 +1504,12 @@ begin
    end;
 end;
 
-procedure TEditorForm.SetSaveDialog(Sender: TSaveDialog);
+procedure TEditorForm.SetSaveDialog(ASaveDialog: TSaveDialog);
 begin
-   with Sender do
+   with ASaveDialog do
    begin
       DefaultExt := GInfra.CurrentLang.DefaultExt;
       Filter := i18Manager.GetFormattedString('SourceFilesFilter', [GInfra.CurrentLang.Name, DefaultExt, DefaultExt]);
-      if (Sender = SaveDialog2) and Assigned(memCodeEditor.Highlighter) then
-      begin
-         Filter := Filter + '|' +
-                   i18Manager.GetString('RTFFilesFilter') + '|' +
-                   i18Manager.GetString('HTMLFilesFilter');
-      end;
       if GProject.Name.IsEmpty then
          FileName := i18Manager.GetString('Unknown')
       else
