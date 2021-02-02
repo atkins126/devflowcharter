@@ -39,6 +39,7 @@ const
    IO_PKG = 'java.io';
    TIME_PKG = 'java.time';
    TIME_FORMAT_PKG = TIME_PKG + '.format';
+   TIME_TEMPORAL_PKG = TIME_PKG + '.temporal';
    MATH_PKG = 'java.math';
    TEXT_PKG = 'java.text';
    SECURITY_PKG = 'java.security';
@@ -80,6 +81,7 @@ var
    JAVA_STRING_TYPE,
    JAVA_LIST_TYPE,
    JAVA_SET_TYPE,
+   JAVA_ENUM_SET_TYPE,
    JAVA_MAP_TYPE,
    JAVA_BOOLEAN_TYPE,
    JAVA_BOOLEAN_OBJECT_TYPE,
@@ -308,10 +310,9 @@ end;
 procedure Java_VarSectionGenerator(ALines: TStringList; AVarList: TVarDeclareList);
 var
    i, p1, p2, a, b: integer;
-   varType, varInit, varInit2, varVal, varGeneric, varGenericType, libImport, varAccess, varSize, varName: string;
-   dims: TArray<string>;
+   varType, varInit, varInit2, varVal, varGeneric, varGenericType, libImport, varAccess, varSize, varName, token: string;
+   dims, tokens: TArray<string>;
    pNativeType: PNativeDataType;
-   tokens: TArray<string>;
 begin
    if AVarList <> nil then
    begin
@@ -337,20 +338,22 @@ begin
                   begin
                      varGeneric := Copy(varInit, p1, p2-p1+1);
                      varGenericType := Copy(varInit, p1+1, p2-p1-1);
-                     varGenericType := ReplaceStr(varGenericType, ' ', '');
-                     tokens := varGenericType.Split([',']);
+                     tokens := varGenericType.Split([',', ' ', '<', '>']);
                      for b := 0 to High(tokens) do
                      begin
-                       for a := 0 to High(javaLang.NativeDataTypes) do
-                       begin
-                          pNativeType := @javaLang.NativeDataTypes[a];
-                          if (pNativeType.Lib <> '') and (pNativeType.Name = tokens[b]) then
-                          begin
-                             libImport := pNativeType.Lib + '.' + pNativeType.Name;
-                             AddLibImport(libImport);
-                             break;
-                          end;
-                       end;
+                        token := tokens[b];
+                        if token.IsEmpty then
+                           continue;
+                        for a := 0 to High(javaLang.NativeDataTypes) do
+                        begin
+                           pNativeType := @javaLang.NativeDataTypes[a];
+                           if (pNativeType.Lib <> '') and (pNativeType.Name = token) then
+                           begin
+                              libImport := pNativeType.Lib + '.' + pNativeType.Name;
+                              AddLibImport(libImport);
+                              break;
+                           end;
+                        end;
                      end;
                   end;
                end;
@@ -612,6 +615,8 @@ begin
                   result := JAVA_DURATION_TYPE;
                if result <> JAVA_DURATION_TYPE then
                   AddLibImport(TParserHelper.GetLibForType('Duration', TIME_PKG) + '.Duration');
+               if AValue.Contains('ChronoUnit.') then
+                  AddLibImport(TParserHelper.GetLibForType('ChronoUnit', TIME_TEMPORAL_PKG) + '.ChronoUnit');
             end
             else if AValue.StartsWith('Period.') then
             begin
@@ -822,10 +827,54 @@ begin
                  end;
               end;
             end
-            else if AValue.StartsWith('Arrays.asList(') and (lastChar = ')') then
+            else if AValue.StartsWith('Map.of(') and (lastChar = ')') then
+            begin
+               cValue := Copy(AValue, 8, AValue.Length-8);
+               tokens := cValue.Split([',']);
+               a := Length(tokens);
+               if (a = 0) or Odd(a) then
+                  Exit;
+               t1 := Java_GetConstantType(tokens[0].Trim, s);
+               t2 := Java_GetConstantType(tokens[1].Trim, s);
+               for i := 2 to High(tokens) do
+               begin
+                  a := Java_GetConstantType(tokens[i].Trim, s);
+                  if (i mod 2) = 0 then
+                  begin
+                     if a <> t1 then
+                        Exit;
+                  end
+                  else if a <> t2 then
+                     Exit;
+               end;
+               s1 := ProcessType(t1);
+               s2 := ProcessType(t2);
+               if (s1 <> '') and (s2 <> '') then
+                  AGenericType := s1 + ', ' + s2;
+               result := JAVA_MAP_TYPE;
+            end
+            else if StartsWithOneOf(AValue, ['EnumSet.allOf(', 'EnumSet.noneOf(', 'EnumSet.of(', 'EnumSet.complementOf(', 'EnumSet.range(']) and (lastChar = ')') then
+            begin
+               i := Pos('(', AValue);
+               a := Pos('.', AValue, i);
+               if a > i then
+               begin
+                  cValue := Copy(AValue, i+1, a-i-1);
+                  t1 := TParserHelper.GetType(cValue);
+                  AGenericType := ProcessType(t1);
+               end;
+               result := JAVA_ENUM_SET_TYPE;
+            end
+            else if StartsWithOneOf(AValue, ['Arrays.asList(', 'List.of(', 'Set.of(']) and (lastChar = ')') then
             begin
                t1 := UNKNOWN_TYPE;
-               cValue := Copy(AValue, 15, len-15);
+               if AValue.StartsWith('Arrays.asList(') then
+                  t2 := 15
+               else if AValue.StartsWith('List.of(') then
+                  t2 := 9
+               else
+                  t2 := 8;
+               cValue := Copy(AValue, t2, len-t2);
                if cValue.StartsWith('new ') and cValue.EndsWith('}') then
                begin
                   s := Copy(cValue, 5);
@@ -851,8 +900,15 @@ begin
                end;
                result := a;
                AGenericType := ProcessType(result);
-               AddLibImport(UTIL_PKG + '.Arrays');
-               result := JAVA_LIST_TYPE;
+               if t2 = 15 then
+               begin
+                  result := JAVA_LIST_TYPE;
+                  AddLibImport(UTIL_PKG + '.Arrays');
+               end
+               else if t2 = 9 then
+                  result := JAVA_LIST_TYPE
+               else
+                  result := JAVA_SET_TYPE;
             end
             else if AValue.StartsWith('new ') then
             begin
@@ -921,7 +977,7 @@ begin
                AddLibImport(TParserHelper.GetLibForType('Pattern', REGEX_PKG) + '.Pattern');
                result := JAVA_PATTERN_TYPE;
             end
-            else if (AValue[1] = '{') and (lastChar = '}') then
+            else if (firstChar = '{') and (lastChar = '}') then
             begin
                t1 := 0;
                t2 := 0;
@@ -1026,6 +1082,7 @@ initialization
    JAVA_STRING_TYPE         := TParserHelper.GetType('String', JAVA_LANG_ID);
    JAVA_LIST_TYPE           := TParserHelper.GetType('List', JAVA_LANG_ID);
    JAVA_SET_TYPE            := TParserHelper.GetType('Set', JAVA_LANG_ID);
+   JAVA_ENUM_SET_TYPE       := TParserHelper.GetType('EnumSet', JAVA_LANG_ID);
    JAVA_MAP_TYPE            := TParserHelper.GetType('Map', JAVA_LANG_ID);
    JAVA_BOOLEAN_TYPE        := TParserHelper.GetType('boolean', JAVA_LANG_ID);
    JAVA_BOOLEAN_OBJECT_TYPE := TParserHelper.GetType('Boolean', JAVA_LANG_ID);

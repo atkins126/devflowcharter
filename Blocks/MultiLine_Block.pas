@@ -38,6 +38,7 @@ type
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
          function GetTreeNodeText(ANodeOffset: integer = 0): string; override;
+         procedure CloneFrom(ABlock: TBlock); override;
       protected
          FErrLine: integer;
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload; virtual;
@@ -86,17 +87,22 @@ begin
    FErrLine := -1;
 end;
 
+procedure TMultiLineBlock.CloneFrom(ABlock: TBlock);
+begin
+   inherited CloneFrom(ABlock);
+   if ABlock is TMultiLineBlock then
+      FStatements.CloneFrom(TMultiLineBlock(ABlock).FStatements)
+end;
+
 procedure TMultiLineBlock.OnDblClickMemo(Sender: TObject);
 begin
    FStatements.SelectAll;
 end;
 
 procedure TMultiLineBlock.Paint;
-var
-   r: TRect;
 begin
    inherited;
-   r := FStatements.BoundsRect;
+   var r := FStatements.BoundsRect;
    r.Inflate(1, 1);
    BottomPoint.Y := r.Bottom;
    IPoint.Y := r.Bottom + 8;
@@ -132,12 +138,10 @@ begin
 end;
 
 function TMultiLineBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
-var
-   tmpList: TStringList;
 begin
    if (fsStrikeOut in Font.Style) or (FStatements.Text = '') then
       Exit(0);
-   tmpList := TStringList.Create;
+   var tmpList := TStringList.Create;
    try
       GenerateDefaultTemplate(tmpList, ALangId, ADeep);
       TInfra.InsertLinesIntoList(ALines, tmpList, AFromLine);
@@ -152,10 +156,6 @@ var
    chLine: TChangeLine;
    templateLines: TStringList;
    i, rowNum: integer;
-{$IFDEF USE_CODEFOLDING}
-   foldRegion: TFoldRegionItem;
-   foldRanges: TSynEditFoldRanges;
-{$ENDIF}
 begin
    if PerformEditorUpdate then
    begin
@@ -185,12 +185,12 @@ begin
                      end
                      else
                      begin
-                        foldRegion := chLine.CodeRange.FoldRange.FoldRegion;
+                        var foldRegion := chLine.CodeRange.FoldRange.FoldRegion;
                         TInfra.GetEditorForm.RemoveFoldRange(chLine.CodeRange.FoldRange);
                         for i := templateLines.Count-1 downto 0 do
                            chLine.CodeRange.Lines.InsertObject(chLine.CodeRange.FirstRow, templateLines[i], templateLines.Objects[i]);
                         TInfra.GetEditorForm.OnChangeEditor;
-                        foldRanges := TInfra.GetEditorForm.FindFoldRangesInCodeRange(chLine.CodeRange, templateLines.Count);
+                        var foldRanges := TInfra.GetEditorForm.FindFoldRangesInCodeRange(chLine.CodeRange, templateLines.Count);
                         try
                            if (foldRanges <> nil) and (foldRanges.Count > 0) and (foldRanges[0].FoldRegion = foldRegion) and not foldRanges[0].Collapsed then
                            begin
@@ -235,11 +235,9 @@ begin
 end;
 
 function TMultiLineBlock.GenerateTree(AParentNode: TTreeNode): TTreeNode;
-var
-   i: integer;
 begin
    result := AParentNode;
-   for i := 0 to FStatements.Lines.Count-1 do
+   for var i := 0 to FStatements.Lines.Count-1 do
       TTreeNodeWithFriend(AParentNode.Owner.AddChildObject(AParentNode, GetTreeNodeText(i), FStatements)).Offset := i;
    if TInfra.IsNOkColor(FStatements.Font.Color) then
    begin

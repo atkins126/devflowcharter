@@ -43,7 +43,8 @@ type
          FTemplateLang,
          FCurrentLang: TLangDefinition;
          FLangArray: array of TLangDefinition;
-         FLangArrayCount: integer;
+         FLangArrayHigh: integer;
+         class var FParsedEdit: TCustomEdit;
       public
          property CurrentLang: TLangDefinition read FCurrentLang;
          property TemplateLang: TLangDefinition read FTemplateLang;
@@ -140,11 +141,6 @@ const   // Global constants
         RESERVED_IDENT   = -8;
         INVALID_INIT_VAL = -9;
         VALID_IDENT      =  1;
-
-        FLOWCHART_BLOCKS = [blInstr, blMultiInstr, blInput, blOutput, blFuncCall,
-                            blWhile, blRepeat, blIf, blIfElse, blFor, blCase, blMain, blReturn];
-
-        GROUP_BLOCKS = [blWhile, blRepeat, blIf, blIfElse, blFor, blCase, blMain];
 
         LOOP_BLOCKS = [blWhile, blRepeat, blFor];
 
@@ -274,9 +270,6 @@ type
    THackCustomEdit = class(TCustomEdit);
    THackControl = class(TControl);
 
-var
-   FParsedEdit: TCustomEdit;
-
 constructor TInfra.Create;
 var
    searchRec: TSearchRec;
@@ -305,14 +298,14 @@ begin
    FTemplateLang := TLangDefinition.Create;
    FLangArray := FLangArray + [FTemplateLang];
    FCurrentLang := FLangArray[0];
-   FLangArrayCount := Length(FLangArray);
+   FLangArrayHigh := High(FLangArray);
 end;
 
 destructor TInfra.Destroy;
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayCount-1 do
+   for i := 0 to FLangArrayHigh do
       FLangArray[i].Free;
    FLangArray := nil;
    inherited Destroy;
@@ -395,7 +388,7 @@ procedure TInfra.GetLangNames(AList: TStrings);
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayCount-1 do
+   for i := 0 to FLangArrayHigh do
       AList.Add(FLangArray[i].Name);
 end;
 
@@ -435,7 +428,7 @@ var
    comp: TComponent;
    lang: TLangDefinition;
 begin
-   for i := 0 to FLangArrayCount-2 do
+   for i := 0 to FLangArrayHigh-1 do
    begin
       lang := FLangArray[i];
       comp := GetEditorForm.FindComponent(lang.HighLighterVarName);
@@ -813,7 +806,7 @@ var
    i: integer;
 begin
    result := nil;
-   for i := 0 to FLangArrayCount-1 do
+   for i := 0 to FLangArrayHigh do
    begin
       if SameText(FLangArray[i].Name, AName) then
       begin
@@ -827,7 +820,7 @@ procedure TInfra.SetLangHiglighterAttributes;
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayCount-1 do
+   for i := 0 to FLangArrayHigh do
    begin
       if Assigned(FLangArray[i].SetHLighterAttrs) then
          FLangArray[i].SetHLighterAttrs;
@@ -1081,8 +1074,13 @@ end;
 
 class function TInfra.Parse(AEdit: TCustomEdit; AParserMode: TYYMode): boolean;
 begin
+   result := false;
    FParsedEdit := AEdit;
-   result := Parse(Trim(AEdit.Text), AParserMode);
+   try
+      result := Parse(Trim(AEdit.Text), AParserMode);
+   except on E: Exception do
+      Application.ShowException(E);
+   end;
    FParsedEdit := nil;
 end;
 

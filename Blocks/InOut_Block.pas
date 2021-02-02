@@ -32,23 +32,21 @@ type
       protected
          FLabel,
          FLabelSegoe: string;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; const AText: string; AdjustWidth: boolean = false); overload;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; const AText: string; AdjustWidth: boolean); overload;
          procedure Paint; override;
          procedure PutTextControls; override;
    end;
 
    TInputBlock = class(TInOutBlock)
       public
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AdjustWidth: boolean = false); overload;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
          constructor Create(ABranch: TBranch); overload;
-         function Clone(ABranch: TBranch): TBlock; override;
    end;
 
    TOutputBlock = class(TInOutBlock)
       public
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AdjustWidth: boolean = false); overload;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
          constructor Create(ABranch: TBranch); overload;
-         function Clone(ABranch: TBranch): TBlock; override;
    end;
 
 implementation
@@ -57,7 +55,7 @@ uses
    Vcl.Controls, System.Classes, WinApi.Windows, System.Types, System.UITypes, System.Math,
    ApplicationCommon;
 
-constructor TInOutBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; const AText: string; AdjustWidth: boolean = false);
+constructor TInOutBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; const AText: string; AdjustWidth: boolean);
 var
    w: integer;
 begin
@@ -87,40 +85,32 @@ begin
    Constraints.MinHeight := 61;
 end;
 
-constructor TInputBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AdjustWidth: boolean = false);
+constructor TInputBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
    FLabel := i18Manager.GetString('CaptionIn');
    FLabelSegoe := GInfra.CurrentLang.LabelIn;
-   inherited Create(ABranch, ABlockParms, GInfra.CurrentLang.InputFunction, AdjustWidth);
-end;
-
-constructor TOutputBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AdjustWidth: boolean = false);
-begin
-   FLabel := i18Manager.GetString('CaptionOut');
-   FLabelSegoe := GInfra.CurrentLang.LabelOut;
-   inherited Create(ABranch, ABlockParms, GInfra.CurrentLang.OutputFunction, AdjustWidth);
-end;
-
-function TInputBlock.Clone(ABranch: TBranch): TBlock;
-begin
-   result := TInputBlock.Create(ABranch, GetBlockParms);
-   result.CloneFrom(Self);
-end;
-
-function TOutputBlock.Clone(ABranch: TBranch): TBlock;
-begin
-   result := TOutputBlock.Create(ABranch, GetBlockParms);
-   result.CloneFrom(Self);
+   inherited Create(ABranch, ABlockParms, GInfra.CurrentLang.InputFunction, false);
 end;
 
 constructor TInputBlock.Create(ABranch: TBranch);
 begin
-   Create(ABranch, TBlockParms.New(blInput, 0, 0, 150, 61), true);
+   FLabel := i18Manager.GetString('CaptionIn');
+   FLabelSegoe := GInfra.CurrentLang.LabelIn;
+   inherited Create(ABranch, TBlockParms.New(blInput, 0, 0, 150, 61), GInfra.CurrentLang.InputFunction, true);
+end;
+
+constructor TOutputBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
+begin
+   FLabel := i18Manager.GetString('CaptionOut');
+   FLabelSegoe := GInfra.CurrentLang.LabelOut;
+   inherited Create(ABranch, ABlockParms, GInfra.CurrentLang.OutputFunction, false);
 end;
 
 constructor TOutputBlock.Create(ABranch: TBranch);
 begin
-   Create(ABranch, TBlockParms.New(blOutput, 0, 0, 150, 61), true);
+   FLabel := i18Manager.GetString('CaptionOut');
+   FLabelSegoe := GInfra.CurrentLang.LabelOut;
+   inherited Create(ABranch, TBlockParms.New(blOutput, 0, 0, 150, 61), GInfra.CurrentLang.OutputFunction, true);
 end;
 
 procedure TInOutBlock.Paint;

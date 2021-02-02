@@ -72,6 +72,7 @@ type
          FFrame,
          FMouseLeave: boolean;
          FShape: TColorShape;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms);
          procedure MyOnMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
          procedure MyOnMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); virtual;
@@ -131,9 +132,8 @@ type
          property BType: TBlockType read FType default blUnknown;
          property ParentBranch: TBranch read FParentBranch;
          property Id: integer read GetId;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms);
          destructor Destroy; override;
-         function Clone(ABranch: TBranch): TBlock; virtual;
+         function Clone(ABranch: TBranch): TBlock;
          procedure ChangeColor(AColor: TColor); virtual;
          procedure SetFontStyle(const AStyle: TFontStyles);
          procedure SetFontSize(ASize: integer);
@@ -207,6 +207,7 @@ type
          FFalseLabel: string;
          FFixedBranches: integer;
          FDiamond: array[D_LEFT..D_LEFT_CLOSE] of TPoint;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms);
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
          procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
          procedure SetWidth(AMinX: integer); virtual;
@@ -221,7 +222,6 @@ type
          Expanded: boolean;
          FFoldParms: TInitParms;
          property BlockImportMode: boolean read FBlockImportMode write FBlockImportMode;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms);
          destructor Destroy; override;
          procedure ResizeHorz(AContinue: boolean); virtual;
          procedure ResizeVert(AContinue: boolean); virtual;
@@ -284,8 +284,8 @@ type
 implementation
 
 uses
-   System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, Main_Block,
-   Return_Block, ApplicationCommon, BlockFactory, UserFunction, XMLProcessor,
+   System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, System.TypInfo,
+   Main_Block, Return_Block, ApplicationCommon, BlockFactory, UserFunction, XMLProcessor,
    Navigator_Form, LangDefinition, FlashThread, Main_Form;
 
 type
@@ -858,8 +858,31 @@ begin
 end;
 
 function TBlock.Clone(ABranch: TBranch): TBlock;
+var
+  blockType: TRttiType;
+  method: TRttiMethod;
+  params: TArray<TRttiParameter>;
+  ctx: TRttiContext;
 begin
-{}
+   result := nil;
+   ctx := TRttiContext.Create;
+   blockType := ctx.GetType(ClassInfo);
+   for method in blockType.GetMethods do
+   begin
+      params := method.GetParameters;
+      if method.IsConstructor
+         and (method.Visibility = mvPublic)
+         and (Length(params) = 2)
+         and (params[0].ParamType = ctx.GetType(TBranch))
+         and (params[1].ParamType = ctx.GetType(TypeInfo(TBlockParms))) then
+      begin
+         result := method.Invoke(blockType.AsInstance.MetaclassType, [TValue.From<TBranch>(ABranch), TValue.From<TBlockParms>(GetBlockParms)]).AsType<TBlock>;
+         result.CloneFrom(Self);
+         break;
+      end;
+   end;
+   if result = nil then
+      raise Exception.Create('public constructor (TBranch, TBlockParms) not found in class ' + ClassName);
 end;
 
 procedure TBlock.NCHitTest(var Msg: TWMNCHitTest);

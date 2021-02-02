@@ -53,6 +53,7 @@ type
          function IsDeclared(const AName: string; AssociatedListCheck: boolean): boolean;
          function AddUpdateRow: integer; virtual;
          function IsRowVisible(ARow: integer): boolean;
+         function IsControlTooRight(AControl: TWinControl): boolean;
          function FindRow(x, y: integer): integer;
          procedure OnRowMovedList(Sender: TObject; FromIndex, ToIndex: Longint);
          procedure OnClickAdd(Sender: TObject); virtual; abstract;
@@ -66,9 +67,9 @@ type
          procedure OnDragDropList(Sender, Source: TObject; X, Y: Integer);
          procedure OnDragOverList(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
          procedure OnKeyDownCommon(Sender: TObject; var Key: Word; Shift: TShiftState);
-         function GetCheckBoxPoint(ACol, ARow: integer): TPoint;
+         function GetExternalCheckBoxPoint(ARow: integer): TPoint;
          procedure OnTopLeftChanged(Sender: TObject);
-         function CreateCheckBox(ACol, ARow: integer): TCheckBox;
+         function CreateExternalCheckBox(ARow: integer): TCheckBox;
          procedure OnClickChBox(Sender: TObject);
          procedure RefreshCheckBoxes;
          procedure OnColWidthsChanged(Sender: TObject);
@@ -734,11 +735,8 @@ begin
    begin
       sgList.RowCount := sgList.RowCount + 1;
       result := sgList.RowCount - 2;
-      if FExternalCol <> INVALID_COL then
-      begin
-         sgList.Objects[FExternalCol, result] := CreateCheckBox(FExternalCol, result);
-         RefreshCheckBoxes;
-      end;
+      CreateExternalCheckBox(result);
+      RefreshCheckBoxes;
    end;
    sgList.Cells[NAME_COL, result] := edtName.Text;
    edtName.Clear;
@@ -839,8 +837,7 @@ begin
    inherited;
    if btnAdd <> nil then
    begin
-      if FExternalCol <> INVALID_COL then
-         RefreshCheckBoxes;
+      RefreshCheckBoxes;
       btnAdd.Width := gbBox.Width div 3;
       btnImport.SetBounds(btnAdd.BoundsRect.Right+1, btnImport.Top, btnAdd.Width, btnImport.Height);
       btnExport.SetBounds(btnImport.BoundsRect.Right+1, btnExport.Top, btnAdd.Width, btnExport.Height);
@@ -937,7 +934,7 @@ end;
 function TDeclareList.ImportItemFromXMLTag(ATag: IXMLElement): TError;
 var
    lName: string;
-   lchkExtern: TCheckBox;
+   box: TCheckBox;
    idx: integer;
 begin
    result := errValidate;
@@ -946,12 +943,9 @@ begin
    begin
       idx := sgList.RowCount - 1;
       sgList.Cells[NAME_COL, idx] := lName;
-      if FExternalCol <> INVALID_COL then
-      begin
-         lchkExtern := CreateCheckBox(FExternalCol, idx);
-         lchkExtern.State := TInfra.DecodeCheckBoxState(ATag.GetAttribute(EXTERN_ATTR));
-         sgList.Objects[FExternalCol, idx] := lchkExtern;
-      end;
+      box := CreateExternalCheckBox(idx);
+      if box <> nil then
+         box.State := TInfra.DecodeCheckBoxState(ATag.GetAttribute(EXTERN_ATTR));
       result := errNone;
    end;
 end;
@@ -1084,29 +1078,34 @@ begin
    TInfra.UpdateCodeEditor;
 end;
 
-function TDeclareList.GetCheckBoxPoint(ACol, ARow: integer): TPoint;
+function TDeclareList.GetExternalCheckBoxPoint(ARow: integer): TPoint;
 begin
-   result := sgList.CellRect(ACol, ARow).TopLeft;
+   result := sgList.CellRect(FExternalCol, ARow).TopLeft;
    if result.X = 0 then
       result.X := sgList.ClientWidth;
    if result.Y = 0 then
       result.Y := ARow * (sgList.DefaultRowHeight + sgList.GridLineWidth);
-   result.X := result.X + sgList.Left + (sgList.ColWidths[ACol] div 2) - 5;
+   result.X := result.X + sgList.Left + (sgList.ColWidths[FExternalCol] div 2) - 5;
    result.Y := result.Y + sgList.Top + 4;
 end;
 
-function TDeclareList.CreateCheckBox(ACol, ARow: integer): TCheckBox;
+function TDeclareList.CreateExternalCheckBox(ARow: integer): TCheckBox;
 var
    pnt: TPoint;
 begin
-   pnt := GetCheckBoxPoint(ACol, ARow);
-   result := TCheckBox.Create(sgList.Parent);
-   result.Parent := sgList.Parent;
-   result.AllowGrayed := GInfra.CurrentLang.AllowTransExternVarConst;
-   result.SetBounds(pnt.X, pnt.Y, 12, 12);
-   result.Visible := IsRowVisible(ARow) and (result.BoundsRect.Right < sgList.ClientWidth + sgList.Left + 2);
-   result.OnClick := OnClickChBox;
-   result.Repaint;
+   result := nil;
+   if FExternalCol <> INVALID_COL then
+   begin
+      pnt := GetExternalCheckBoxPoint(ARow);
+      result := TCheckBox.Create(sgList.Parent);
+      result.Parent := sgList.Parent;
+      sgList.Objects[FExternalCol, ARow] := result;
+      result.AllowGrayed := GInfra.CurrentLang.AllowTransExternVarConst;
+      result.SetBounds(pnt.X, pnt.Y, 12, 12);
+      result.Visible := IsRowVisible(ARow) and not IsControlTooRight(result);
+      result.OnClick := OnClickChBox;
+      result.Repaint;
+   end;
 end;
 
 procedure TStringGridEx.ColWidthsChanged;
@@ -1146,8 +1145,8 @@ begin
          if obj is TWinControl then
          begin
             winControl := TWinControl(obj);
-            TInfra.MoveWin(winControl, GetCheckBoxPoint(FExternalCol, i));
-            winControl.Visible := IsRowVisible(i) and (winControl.BoundsRect.Right < sgList.ClientWidth + sgList.Left + 2);
+            TInfra.MoveWin(winControl, GetExternalCheckBoxPoint(i));
+            winControl.Visible := IsRowVisible(i) and not IsControlTooRight(winControl);
          end;
       end;
    end;
@@ -1165,7 +1164,12 @@ end;
 
 function TDeclareList.IsRowVisible(ARow: integer): boolean;
 begin
-   result := (ARow >= sgList.TopRow) and (ARow < sgList.TopRow+sgList.VisibleRowCount);
+   result := (ARow >= sgList.TopRow) and (ARow < sgList.TopRow + sgList.VisibleRowCount);
+end;
+
+function TDeclareList.IsControlTooRight(AControl: TWinControl): boolean;
+begin
+   result := AControl.BoundsRect.Right > sgList.ClientWidth + sgList.Left + 1;
 end;
 
 function TDeclareList.GetFocusColor: TColor;

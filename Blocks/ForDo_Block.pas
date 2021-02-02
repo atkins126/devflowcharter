@@ -50,7 +50,6 @@ type
          property DescOrder: boolean read FDescOrder write SetDescOrder;
          constructor Create(ABranch: TBranch); overload;
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
-         function Clone(ABranch: TBranch): TBlock; override;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
          procedure ExpandFold(AResize: boolean); override;
          function GetTextControl: TCustomEdit; override;
@@ -153,12 +152,6 @@ begin
    FStatement := nil;
 end;
 
-function TForDoBlock.Clone(ABranch: TBranch): TBlock;
-begin
-   result := TForDoBlock.Create(ABranch, GetBlockParms);
-   result.CloneFrom(Self);
-end;
-
 procedure TForDoBlock.CloneFrom(ABlock: TBlock);
 var
    forBlock: TForDoBlock;
@@ -188,11 +181,17 @@ begin
 end;
 
 procedure TForDoBlock.OnChangeExtend(AStatement: TStatement);
+var
+   w: integer;
 begin
-   AStatement.Width := Max(TInfra.GetAutoWidth(AStatement), 30);
-   PutTextControls;
-   FInitParms.Width := edtStop.Left + edtStop.Width + 76;
-   FInitParms.BottomPoint.X := FInitParms.Width - RIGHT_MARGIN;
+   w := Max(TInfra.GetAutoWidth(AStatement), 30);
+   if w <> AStatement.Width then
+   begin
+      AStatement.Width := w;
+      PutTextControls;
+      FInitParms.Width := edtStop.Left + edtStop.Width + 76;
+      FInitParms.BottomPoint.X := FInitParms.Width - RIGHT_MARGIN;
+   end;
 end;
 
 procedure TForDoBlock.SetDescOrder(AValue: boolean);
@@ -313,13 +312,13 @@ procedure TForDoBlock.VarOnChange(Sender: TObject);
 var
    header: TUserFunctionHeader;
    isOk: boolean;
+   w: integer;
 begin
    GProject.SetChanged;
    edtVar.Font.Color := GSettings.FontColor;
    edtVar.Hint := i18Manager.GetFormattedString('ExpOk', [edtVar.Text, sLineBreak]);
    if not GInfra.CurrentLang.ForDoVarList then
       UpdateEditor(edtVar);
-   edtVar.Width := Max(TInfra.GetAutoWidth(edtVar), IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
    if GSettings.ParseFor then
    begin
       if (GProject.GlobalVars <> nil) and GProject.GlobalVars.IsValidLoopVar(edtVar.Text) then
@@ -338,7 +337,12 @@ begin
             edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
       end;
    end;
-   PutTextControls;
+   w := Max(TInfra.GetAutoWidth(edtVar), IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
+   if w <> edtVar.Width then
+   begin
+      edtVar.Width := w;
+      PutTextControls;
+   end;
 end;
 
 function TForDoBlock.FillCodedTemplate(const ALangId: string): string;
