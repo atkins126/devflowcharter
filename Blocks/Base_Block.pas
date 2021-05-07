@@ -119,6 +119,9 @@ type
          procedure SaveInXML2(ATag: IXMLElement);
          procedure ExitSizeMove;
          function GetBlockParms: TBlockParms; virtual;
+         function GetBlockTemplate(const ALangId: string): string;
+         function GetBlockTemplateExpr(const ALangId: string): string;
+         function FindTemplate(const ALangId: string; const ATemplate: string): string;
       public
          BottomPoint: TPoint;    // points to arrow at the bottom of the block
          IPoint: TPoint;          // points to I mark
@@ -410,7 +413,7 @@ procedure TGroupBlock.CloneFrom(ABlock: TBlock);
 var
    grpBlock: TGroupBlock;
    newBlock, prevBlock, block: TBlock;
-   lBranch, lBranch2: TBranch;
+   br, br2: TBranch;
    i: integer;
 begin
    inherited CloneFrom(ABlock);
@@ -443,16 +446,16 @@ begin
       end;
       for i := PRIMARY_BRANCH_IDX to grpBlock.FBranchList.Count-1 do
       begin
-         lBranch := grpBlock.FBranchList[i];
-         lBranch2 := GetBranch(i);
-         if lBranch2 = nil then
-            lBranch2 := AddBranch(lBranch.Hook);
+         br := grpBlock.FBranchList[i];
+         br2 := GetBranch(i);
+         if br2 = nil then
+            br2 := AddBranch(br.Hook);
          prevBlock := nil;
-         for block in lBranch do
+         for block in br do
          begin
-            newBlock := block.Clone(lBranch2);
-            lBranch2.InsertAfter(newBlock, prevBlock);
-            prevBlock := lBranch2.Last;
+            newBlock := block.Clone(br2);
+            br2.InsertAfter(newBlock, prevBlock);
+            prevBlock := br2.Last;
          end;
       end;
    end;
@@ -588,23 +591,23 @@ end;
 procedure TGroupBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
 var
    i: integer;
-   p: PPoint;
+   p: TPoint;
 begin
    if Expanded then
    begin
       for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
       begin
-         p := @FBranchList[i].Hook;
+         p := FBranchList[i].Hook;
          if Rect(p.X-5, TopHook.Y, p.X+5, p.Y).Contains(Point(X, Y)) then
          begin
-            DrawArrow(p.X, TopHook.Y, p^, arrEnd, clRed);
+            DrawArrow(p.X, TopHook.Y, p, arrEnd, clRed);
             Ired := i;
             Cursor := TCursor(GCustomCursor);
             break;
          end
          else if Ired = i then
          begin
-            DrawArrow(p.X, TopHook.Y, p^);
+            DrawArrow(p.X, TopHook.Y, p);
             Ired := -1;
             Cursor := crDefault;
             break;
@@ -724,15 +727,11 @@ end;
 
 procedure TGroupBlock.OnMouseLeave(AClearRed: boolean = true);
 var
-   p: PPoint;
-   lBranch: TBranch;
+   br: TBranch;
 begin
-   lBranch := GetBranch(Ired);
-   if lBranch <> nil then
-   begin
-      p := @lBranch.Hook;
-      DrawArrow(p.X, TopHook.Y, p^);
-   end;
+   br := GetBranch(Ired);
+   if br <> nil then
+      DrawArrow(br.Hook.X, TopHook.Y, br.Hook);
    inherited OnMouseLeave(AClearRed);
 end;
 
@@ -787,13 +786,13 @@ end;
 function TGroupBlock.GenerateNestedCode(ALines: TStringList; ABranchInd, ADeep: integer; const ALangId: string): integer;
 var
    block: TBlock;
-   lBranch: TBranch;
+   br: TBranch;
 begin
    result := 0;
-   lBranch := GetBranch(ABranchInd);
-   if lBranch <> nil then
+   br := GetBranch(ABranchInd);
+   if br <> nil then
    begin
-      for block in lBranch do
+      for block in br do
           result := result + block.GenerateCode(ALines, ALangId, ADeep);
    end;
 end;
@@ -1021,7 +1020,7 @@ var
    block, blockPrev: TBlock;
    i, first, last: integer;
    p: TPoint;
-   lBranch: TBranch;
+   br: TBranch;
 begin
    if GetBranch(idx) <> nil then
    begin
@@ -1036,13 +1035,13 @@ begin
    for i := first to last do
    begin
       blockPrev := nil;
-      lBranch := FBranchList[i];
-      for block in lBranch do
+      br := FBranchList[i];
+      for block in br do
       begin
          if blockPrev <> nil then
             p := Point(blockPrev.BottomPoint.X+blockPrev.Left-block.TopHook.X, blockPrev.BoundsRect.Bottom)
          else
-            p := Point(lBranch.Hook.X-block.TopHook.X, lBranch.Hook.Y+1);
+            p := Point(br.Hook.X-block.TopHook.X, br.Hook.Y+1);
          TInfra.MoveWin(block, p);
          blockPrev := block;
       end;
@@ -1723,14 +1722,14 @@ end;
 
 function TGroupBlock.CanInsertReturnBlock: boolean;
 var
-   lBranch: TBranch;
+   br: TBranch;
 begin
    if Ired = 0 then
       result := (FParentBranch <> nil) and (FParentBranch.Count > 0) and (FParentBranch.Last = Self)
    else
    begin
-      lBranch := GetBranch(Ired);
-      result := (lBranch <> nil) and (lBranch.Count = 0);
+      br := GetBranch(Ired);
+      result := (br <> nil) and (br.Count = 0);
    end;
 end;
 
@@ -1778,14 +1777,14 @@ end;
 function TGroupBlock.FindLastRow(AStart: integer; ALines: TStrings): integer;
 var
    i: integer;
-   lBranch: TBranch;
+   br: TBranch;
 begin
    result := inherited FindLastRow(AStart, ALines);
    for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
    begin
-      lBranch := FBranchList[i];
-      if lBranch.Count > 0 then
-         result := Max(result, lBranch.Last.FindLastRow(AStart, ALines));
+      br := FBranchList[i];
+      if br.Count > 0 then
+         result := Max(result, br.Last.FindLastRow(AStart, ALines));
    end;
 end;
 
@@ -2107,17 +2106,17 @@ end;
 
 function TGroupBlock.RemoveBranch(AIndex: integer): boolean;
 var
-   lBranch: TBranch;
+   br: TBranch;
    obj: TObject;
 begin
    result := false;
-   lBranch := GetBranch(AIndex);
-   if (lBranch <> nil) and (AIndex > FFixedBranches) then
+   br := GetBranch(AIndex);
+   if (br <> nil) and (AIndex > FFixedBranches) then
    begin
       obj := nil;
-      if (GClpbrd.UndoObject is TBlock) and (TBlock(GClpbrd.UndoObject).ParentBranch = lBranch) then
+      if (GClpbrd.UndoObject is TBlock) and (TBlock(GClpbrd.UndoObject).ParentBranch = br) then
          obj := GClpbrd.UndoObject;
-      if FBranchList.Remove(lBranch) <> -1 then
+      if FBranchList.Remove(br) <> -1 then
       begin
          obj.Free;
          AfterRemovingBranch;
@@ -2213,7 +2212,7 @@ var
    brx, fw, fh, i: integer;
    txt: string;
    tag1, tag2: IXMLElement;
-   lBranch: TBranch;
+   br: TBranch;
    unPin: boolean;
    comment: TComment;
    block: TBlock;
@@ -2259,22 +2258,22 @@ begin
 
          for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
          begin
-            lBranch := FBranchList[i];
+            br := FBranchList[i];
 
             tag2 := ATag.OwnerDocument.CreateElement(BRANCH_TAG);
             ATag.AppendChild(tag2);
 
-            tag2.SetAttribute(ID_ATTR, lBranch.Id.ToString);
+            tag2.SetAttribute(ID_ATTR, br.Id.ToString);
 
-            if lBranch.Statement <> nil then
-               tag2.SetAttribute(BRANCH_STMNT_ATTR, lBranch.Statement.Id.ToString);
+            if br.Statement <> nil then
+               tag2.SetAttribute(BRANCH_STMNT_ATTR, br.Statement.Id.ToString);
 
             tag1 := ATag.OwnerDocument.CreateElement('x');
-            TXMLProcessor.AddText(tag1, lBranch.hook.X.ToString);
+            TXMLProcessor.AddText(tag1, br.hook.X.ToString);
             tag2.AppendChild(tag1);
 
             tag1 := ATag.OwnerDocument.CreateElement('y');
-            TXMLProcessor.AddText(tag1, lBranch.hook.Y.ToString);
+            TXMLProcessor.AddText(tag1, br.hook.Y.ToString);
             tag2.AppendChild(tag1);
 
             for block in GetBlocks(i) do
@@ -2533,33 +2532,58 @@ begin
    result := '';
 end;
 
-function TBlock.FillTemplate(const ALangId: string; const ATemplate: string = ''): string;
+function TBlock.GetBlockTemplate(const ALangId: string): string;
 var
-   textControl: TCustomEdit;
-   s, template: string;
    lang: TLangDefinition;
 begin
    result := '';
-   template := '';
-   if ATemplate.IsEmpty then
-   begin
-      lang := GInfra.GetLangDefinition(ALangId);
-      if (lang <> nil) and not lang.GetTemplate(ClassType).IsEmpty then
-         template := lang.GetTemplateExpr(ClassType);
-   end
-   else
-      template := ATemplate;
+   lang := GInfra.GetLangDefinition(ALangId);
+   if lang <> nil then
+      result := lang.GetBlockTemplate(FType);
+end;
+
+function TBlock.GetBlockTemplateExpr(const ALangId: string): string;
+var
+   templateLines: TStringList;
+   template, line: string;
+begin
+   result := '';
+   template := GetBlockTemplate(ALangId);
+   if template.IsEmpty then
+      template := PRIMARY_PLACEHOLDER;
+   templateLines := TStringList.Create;
+   try
+      templateLines.Text := template;
+      for line in templateLines do
+      begin
+         if line.Contains(PRIMARY_PLACEHOLDER) then
+         begin
+            result := line;
+            break;
+         end;
+      end;
+   finally
+      templateLines.Free;
+   end;
+end;
+
+function TBlock.FindTemplate(const ALangId: string; const ATemplate: string): string;
+begin
+   result := '';
+   if not ATemplate.IsEmpty then
+      result := ATemplate
+   else if not GetBlockTemplate(ALangId).IsEmpty then
+      result := GetBlockTemplateExpr(ALangId);
+end;
+
+function TBlock.FillTemplate(const ALangId: string; const ATemplate: string = ''): string;
+var
+   template: string;
+begin
+   result := FillCodedTemplate(ALangId);
+   template := FindTemplate(ALangId, ATemplate);
    if not template.IsEmpty then
-   begin
-      textControl := GetTextControl;
-      if textControl <> nil then
-         s := Trim(textControl.Text)
-      else
-         s := '';
-      result := ReplaceStr(template, PRIMARY_PLACEHOLDER, s);
-   end
-   else
-      result := FillCodedTemplate(ALangId);
+      result := ReplaceStr(template, PRIMARY_PLACEHOLDER, result);
 end;
 
 function TBlock.FillCodedTemplate(const ALangId: string): string;
@@ -2681,25 +2705,20 @@ end;
 
 procedure TBlock.GenerateDefaultTemplate(ALines: TStringList; const ALangId: string; ADeep: integer);
 var
-   langDef: TLangDefinition;
    template, txt: string;
    textControl: TCustomEdit;
 begin
-   langDef := GInfra.GetLangDefinition(ALangId);
-   if langDef <> nil then
-   begin
-      txt := '';
-      textControl := GetTextControl;
-      if textControl is TCustomMemo then
-         txt := textControl.Text
-      else if textControl <> nil then
-         txt := Trim(textControl.Text);
-      template := langDef.GetTemplate(Self.ClassType);
-      if template.IsEmpty then
-         template := PRIMARY_PLACEHOLDER;
-      template := ReplaceStr(template, PRIMARY_PLACEHOLDER, txt);
-      GenerateTemplateSection(ALines, template, ALangId, ADeep);
-   end;
+   txt := '';
+   textControl := GetTextControl;
+   if textControl is TCustomMemo then
+      txt := textControl.Text
+   else if textControl <> nil then
+      txt := Trim(textControl.Text);
+   template := GetBlockTemplate(ALangId);
+   if template.IsEmpty then
+      template := PRIMARY_PLACEHOLDER;
+   template := ReplaceStr(template, PRIMARY_PLACEHOLDER, txt);
+   GenerateTemplateSection(ALines, template, ALangId, ADeep);
 end;
 
 function TGroupBlock.ExtractBranchIndex(const AStr: string): integer;

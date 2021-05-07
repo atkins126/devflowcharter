@@ -121,6 +121,7 @@ type
          function SetCurrentLang(const ALangName: string): TLangDefinition;
          function ValidateConstId(const AId: string): integer;
          function ValidateId(const AId: string): integer;
+         function ParseVarSize(const ASize: string): boolean;
          procedure SetLangHiglighterAttributes;
          procedure GetLangNames(AList: TStrings);
          procedure SetHLighters;
@@ -1119,14 +1120,14 @@ begin
       begin
          templateLines := TStringList.Create;
          try
-            if ATemplate.IsEmpty then
+            template := ATemplate;
+            if template.IsEmpty then
             begin
-               template := GInfra.CurrentLang.GetTemplate(AObject.ClassType);
+               if AObject is TBlock then
+                  template := GInfra.CurrentLang.GetBlockTemplate(TBlock(AObject).BType);
                if template.IsEmpty then
                   template := PRIMARY_PLACEHOLDER;
-            end
-            else
-               template := ATemplate;
+            end;
             templateLines.Text := template;
             for i := 0 to templateLines.Count-1 do
             begin
@@ -1266,19 +1267,19 @@ end;
 class function TInfra.GetTextWidth(const AText: string; AControl: TControl): integer;
 var
    fontInfo: PPropInfo;
-   cFont: TFont;
+   prop: TObject;
 begin
    result := 0;
    fontInfo := GetPropInfo(AControl, 'Font');
    if fontInfo <> nil then
    begin
-      cFont := TFont(GetObjectProp(AControl, fontInfo));
-      if cFont <> nil then
+      prop := GetObjectProp(AControl, fontInfo);
+      if prop is TFont then
       begin
          with TControlCanvas.Create do
          try
             Control := AControl;
-            Font.Assign(cFont);
+            Font.Assign(TFont(prop));
             result := TextWidth(AText);
          finally
             Free;
@@ -1452,6 +1453,18 @@ begin
          end;
       end;
    end;
+end;
+
+function TInfra.ParseVarSize(const ASize: string): boolean;
+var
+   lang: TLangDefinition;
+   goParse: boolean;
+begin
+   result := true;
+   lang := GetLangDefinition(PASCAL_LANG_ID);
+   goParse := (lang <> nil) and Assigned(lang.Parse);
+   if (ASize <> '') and ((ASize[1] = '0') or (ASize[1] = '-') or (goParse and not lang.Parse(ASize, yymVarSize))) then
+      result := false;
 end;
 
 function TInfra.ValidateId(const AId: string): integer;
