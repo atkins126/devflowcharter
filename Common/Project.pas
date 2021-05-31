@@ -52,8 +52,6 @@ type
       class var FInstance: TProject;
       constructor Create;
       procedure SetGlobalDeclarations(AForm: TDeclarationsForm);
-      function GetComponents<T: class>(AComparer: IComparer<T> = nil): IEnumerable<T>;
-      function GetComponentByName(AClass: TClass; const AName: string): TComponent;
       function GetIWinControlComponent(AHandle: THandle): IWinControl;
       procedure RefreshZOrder;
       procedure ExportPagesToXMLTag(ATag: IXMLElement);
@@ -79,8 +77,8 @@ type
       function GetComments: IEnumerable<TComment>;
       function GetUserFunctions: IEnumerable<TUserFunction>;
       function GetUserDataTypes: IEnumerable<TUserDataType>;
-      function GetUserDataType(const ATypeName: string): TUserDataType;
-      function GetUserFunction(const AFunctionName: string): TUserFunction;
+      function GetComponent<T: class>(const AName: string): T;
+      function GetComponents<T: class>(AComparer: IComparer<T> = nil): IEnumerable<T>;
       procedure ExportToGraphic(AGraphic: TGraphic);
       procedure ExportToXMLTag(ATag: IXMLElement);
       function ExportToXMLFile(const AFile: string): TError;
@@ -248,7 +246,7 @@ begin
       for i := 0 to FGlobalVars.cbType.Items.Count-1 do
       begin
          name := FGlobalVars.cbType.Items[i];
-         userType := GetUserDataType(name);
+         userType := GetComponent<TUserDataType>(name);
          nativeType := GInfra.GetNativeDataType(name);
          if nativeType <> nil then
          begin
@@ -1124,7 +1122,7 @@ end;
 function TProject.GetLibraryList: TStringList;
 var
    libName: string;
-   tabObj: ITabbable;
+   tab: ITabable;
    comp: TComponent;
    components: IEnumerable<TComponent>;
 begin
@@ -1133,14 +1131,11 @@ begin
    components := GetComponents<TComponent>(ByPageIndexComponentComparer);
    for comp in components do
    begin
-      if Supports(comp, ITabbable, tabObj) then
+      if Supports(comp, ITabable, tab) then
       begin
-         libName := tabObj.GetLibName;
-         if not libName.IsEmpty then
-         begin
-            if GInfra.CurrentLang.AllowDuplicatedLibs or (result.IndexOf(libName) = -1) then
-               result.AddObject(libName, tabObj.GetTab);
-         end;
+         libName := tab.GetLibName;
+         if (not libName.IsEmpty) and (GInfra.CurrentLang.AllowDuplicatedLibs or (result.IndexOf(libName) = -1)) then
+            result.AddObject(libName, tab.GetTab);
       end;
    end;
 end;
@@ -1159,31 +1154,23 @@ begin
    end;
 end;
 
-function TProject.GetUserDataType(const ATypeName: string): TUserDataType;
-begin
-   result := TUserDataType(GetComponentByName(TUserDataType, ATypeName));
-end;
-
-function TProject.GetUserFunction(const AFunctionName: string): TUserFunction;
-begin
-   result := TUserFunction(GetComponentByName(TUserFunction, AFunctionName));
-end;
-
-function TProject.GetComponentByName(AClass: TClass; const AName: string): TComponent;
+function TProject.GetComponent<T>(const AName: string): T;
 var
    i: integer;
-   tab: ITabbable;
+   named: INameable;
+   comp: TComponent;
 begin
    result := nil;
    if not AName.Trim.IsEmpty then
    begin
       for i := 0 to FComponentList.Count-1 do
       begin
-         if (FComponentList[i].ClassType = AClass) and Supports(FComponentList[i], ITabbable, tab) then
+         comp := FComponentList[i];
+         if (comp.ClassType = T) and Supports(comp, INameable, named) then
          begin
-            if TInfra.SameStrings(tab.GetName, AName) then
+            if TInfra.SameStrings(named.GetName, AName) then
             begin
-               result := FComponentList[i];
+               result := T(comp);
                break;
             end;
          end;
