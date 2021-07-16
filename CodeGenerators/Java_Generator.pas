@@ -87,10 +87,13 @@ var
    JAVA_BOOLEAN_OBJECT_TYPE,
    JAVA_DATE_TYPE,
    JAVA_CALENDAR_TYPE,
+   JAVA_OFFSET_DATETIME_TYPE,
+   JAVA_ZONED_DATETIME_TYPE,
    JAVA_LOCAL_DATETIME_TYPE,
    JAVA_LOCAL_DATE_TYPE,
    JAVA_LOCAL_TIME_TYPE,
    JAVA_INSTANT_TYPE,
+   JAVA_CLOCK_TYPE,
    JAVA_DURATION_TYPE,
    JAVA_PERIOD_TYPE,
    JAVA_LOCALE_TYPE,
@@ -517,6 +520,11 @@ begin
    result := false;
 end;
 
+function IsTimeType(const AValue: string; const AType: string; ALastChar: char): boolean;
+begin
+   result := StartsWithOneOf(AValue, [AType + '.now(', AType + '.of(']) and (ALastChar = ')');
+end;
+
 function GetTypeForString(AType: integer; const AValue: string): integer;
 begin
    result := AType;
@@ -552,10 +560,12 @@ begin
             begin
                if AValue.EndsWith(JAVA_STRING_DELIM + '.length()') then
                   result := JAVA_INT_TYPE
+               else if AValue.EndsWith(JAVA_STRING_DELIM + '.toCharArray()') then
+                  result := TParserHelper.EncodeArrayType(JAVA_CHAR_TYPE, 1)
+               else if AValue.Contains(JAVA_STRING_DELIM + '.getBytes(') and (lastChar = ')') then
+                  result := TParserHelper.EncodeArrayType(JAVA_BYTE_TYPE, 1)
                else if lastChar = JAVA_STRING_DELIM then
-                  result := JAVA_STRING_TYPE
-               else
-                  Exit;
+                  result := JAVA_STRING_TYPE;
             end
             else if AValue.StartsWith('new String(' + JAVA_STRING_DELIM) and AValue.EndsWith(JAVA_STRING_DELIM + ')') and (len > 13) then
                result := JAVA_STRING_TYPE
@@ -599,12 +609,22 @@ begin
                result := JAVA_DATE_TYPE
             else if AValue = 'Calendar.getInstance()' then
                result := JAVA_CALENDAR_TYPE
-            else if (AValue = 'LocalDateTime.now()') or AValue.StartsWith('LocalDateTime.of(') then
+            else if IsTimeType(AValue, 'OffsetDateTime', lastChar) then
+               result := JAVA_OFFSET_DATETIME_TYPE
+            else if IsTimeType(AValue, 'ZonedDateTime', lastChar) then
+               result := JAVA_ZONED_DATETIME_TYPE
+            else if IsTimeType(AValue, 'LocalDateTime', lastChar) then
                result := JAVA_LOCAL_DATETIME_TYPE
-            else if (AValue = 'LocalDate.now()') or AValue.StartsWith('LocalDate.of(') then
+            else if IsTimeType(AValue, 'LocalDate', lastChar) then
                result := JAVA_LOCAL_DATE_TYPE
-            else if (AValue = 'LocalTime.now()') or AValue.StartsWith('LocalTime.of(') then
+            else if IsTimeType(AValue, 'LocalTime', lastChar) then
                result := JAVA_LOCAL_TIME_TYPE
+            else if AValue.StartsWith('Clock.') and (lastChar = ')') then
+            begin
+               cValue := Copy(AValue, 7);
+               if StartsWithOneOf(cValue, ['fixed(', 'offset(', 'system(', 'systemDefaultZone(', 'systemUTC(', 'tick(', 'tickMinutes(', 'tickSeconds(']) then
+                  result := JAVA_CLOCK_TYPE
+            end
             else if AValue.StartsWith('Duration.') then
             begin
                if EndsWithOneOf(AValue, ['.toDays()', '.toHours()', '.toMillis()', '.toMinutes()', '.toNanos()']) then
@@ -949,7 +969,7 @@ begin
                      Exit;
                   cValue := Trim(Copy(AValue, 5, i-5));
                   t1 := TParserHelper.GetType(cValue);
-                  if IsPrimitiveType(t1) or MatchText(cValue, ['String', 'Pattern', 'DateTimeFormatter', 'Locale']) then
+                  if IsPrimitiveType(t1) or MatchText(cValue, ['String', 'Pattern', 'DateTimeFormatter', 'Locale', 'Clock']) then
                      Exit;
                   ProcessType(t1);
                   result := t1;
@@ -1088,10 +1108,13 @@ initialization
    JAVA_BOOLEAN_OBJECT_TYPE := TParserHelper.GetType('Boolean', JAVA_LANG_ID);
    JAVA_DATE_TYPE           := TParserHelper.GetType('Date', JAVA_LANG_ID);
    JAVA_CALENDAR_TYPE       := TParserHelper.GetType('Calendar', JAVA_LANG_ID);
+   JAVA_OFFSET_DATETIME_TYPE:= TParserHelper.GetType('OffsetDateTime', JAVA_LANG_ID);
+   JAVA_ZONED_DATETIME_TYPE := TParserHelper.GetType('ZonedDateTime', JAVA_LANG_ID);
    JAVA_LOCAL_DATETIME_TYPE := TParserHelper.GetType('LocalDateTime', JAVA_LANG_ID);
    JAVA_LOCAL_DATE_TYPE     := TParserHelper.GetType('LocalDate', JAVA_LANG_ID);
    JAVA_LOCAL_TIME_TYPE     := TParserHelper.GetType('LocalTime', JAVA_LANG_ID);
    JAVA_INSTANT_TYPE        := TParserHelper.GetType('Instant', JAVA_LANG_ID);
+   JAVA_CLOCK_TYPE          := TParserHelper.GetType('Clock', JAVA_LANG_ID);
    JAVA_DURATION_TYPE       := TParserHelper.GetType('Duration', JAVA_LANG_ID);
    JAVA_PERIOD_TYPE         := TParserHelper.GetType('Period', JAVA_LANG_ID);
    JAVA_LOCALE_TYPE         := TParserHelper.GetType('Locale', JAVA_LANG_ID);
