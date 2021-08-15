@@ -24,7 +24,7 @@ interface
 
 uses
    Vcl.StdCtrls, Vcl.Graphics, System.Classes, System.SysUtils, Vcl.ComCtrls, System.Types,
-   Vcl.Controls, Base_Block, OmniXML, CommonTypes, Statement;
+   Vcl.Controls, Base_Block, OmniXML, Types, Statement;
 
 type
 
@@ -67,7 +67,7 @@ implementation
 
 uses
    System.StrUtils, System.UITypes, System.Math, XMLProcessor, Return_Block, Navigator_Form,
-   LangDefinition, ApplicationCommon;
+   LangDefinition, Infrastructure, Constants;
 
 constructor TCaseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

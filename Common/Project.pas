@@ -26,7 +26,7 @@ interface
 uses
    WinApi.Windows, Vcl.Graphics, System.Classes, Vcl.ComCtrls, Vcl.Controls, System.Contnrs,
    Generics.Defaults, UserFunction, OmniXML, UserDataType, Main_Block, DeclareList,
-   BaseEnumerator, CommonTypes, CommonInterfaces, BlockTabSheet, Comment, Declarations_Form;
+   Types, Interfaces, BlockTabSheet, Comment, Declarations_Form;
 
 type
 
@@ -56,6 +56,10 @@ type
       procedure RefreshZOrder;
       procedure ExportPagesToXMLTag(ATag: IXMLElement);
       function GetSelectList(ATag: IXMLElement; const ALabel: string; const ATagName: string; const ATagName2: string = ''): TStringList;
+      function GetComponents<T: class>(AComparer: IComparer<T> = nil): IEnumerable<T>;
+      function GetIComponents<I: IInterface>(AComparer: IComparer<TComponent> = nil): IEnumerable<I>; overload;
+      function GetIComponents<T: class; I: IInterface>(AComparer: IComparer<T> = nil): IEnumerable<I>; overload;
+      function GetComponent<T: class>(const AName: string): T;
    public
       Name: string;
       ChangingOn: boolean;
@@ -77,8 +81,8 @@ type
       function GetComments: IEnumerable<TComment>;
       function GetUserFunctions: IEnumerable<TUserFunction>;
       function GetUserDataTypes: IEnumerable<TUserDataType>;
-      function GetComponent<T: class>(const AName: string): T;
-      function GetComponents<T: class>(AComparer: IComparer<T> = nil): IEnumerable<T>;
+      function GetUserFunction(const AName: string): TUserFunction;
+      function GetUserDataType(const AName: string): TUserDataType;
       procedure ExportToGraphic(AGraphic: TGraphic);
       procedure ExportToXMLTag(ATag: IXMLElement);
       function ExportToXMLFile(const AFile: string): TError;
@@ -90,7 +94,7 @@ type
       function GetMainBlock: TMainBlock;
       procedure PopulateDataTypeCombos;
       procedure RefreshStatements;
-      procedure ChangeDesktopColor(const AColor: TColor);
+      procedure ChangeDesktopColor(AColor: TColor);
       function CountErrWarn: TErrWarnCount;
       procedure GenerateTree(ANode: TTreeNode);
       procedure RepaintFlowcharts;
@@ -121,9 +125,9 @@ implementation
 
 uses
    System.SysUtils, Vcl.Menus, Vcl.Forms, System.StrUtils, System.Types, System.UITypes,
-   Generics.Collections, ApplicationCommon, XMLProcessor, Base_Form, LangDefinition,
-   Navigator_Form, Base_Block, TabComponent, ParserHelper, SelectImport_Form,
-   WinApi.Messages, Vcl.ExtCtrls;
+   Generics.Collections, Infrastructure, Constants, XMLProcessor, Base_Form, LangDefinition,
+   Navigator_Form, Base_Block, TabComponent, ParserHelper, SelectImport_Form, BaseEnumerator,
+   WinApi.Messages, Vcl.ExtCtrls, Rtti;
 
 var
    ByPageIndexUserDataTypeComparer: IComparer<TUserDataType>;
@@ -301,27 +305,48 @@ begin
    result := GetComponents<TUserDataType>(ByPageIndexUserDataTypeComparer);
 end;
 
+function TProject.GetIComponents<I>(AComparer: IComparer<TComponent> = nil): IEnumerable<I>;
+begin
+   result := GetIComponents<TComponent, I>(AComparer);
+end;
+
 function TProject.GetComponents<T>(AComparer: IComparer<T> = nil): IEnumerable<T>;
 var
    i: integer;
    list: TList<T>;
+   comp: TComponent;
 begin
    list := TList<T>.Create;
-   if list.Capacity < FComponentList.Count then
-      list.Capacity := FComponentList.Count;
    for i := 0 to FComponentList.Count-1 do
    begin
-       if T <> TComponent then
-       begin
-          if FComponentList[i].ClassType = T then
-             list.Add(FComponentList[i]);
-       end
-       else
-          list.Add(FComponentList[i]);
+      comp := FComponentList[i];
+      if (T = TComponent) or (comp.ClassType = T) then
+         list.Add(comp);
    end;
    if AComparer <> nil then
       list.Sort(AComparer);
    result := TEnumeratorFactory<T>.Create(list);
+end;
+
+function TProject.GetIComponents<T, I>(AComparer: IComparer<T> = nil): IEnumerable<I>;
+var
+   list: TList<I>;
+   intf: I;
+   rType: TRttiType;
+   iType: TRttiInterfaceType;
+begin
+   list := TList<I>.Create;
+   rType := TRttiContext.Create.GetType(TypeInfo(I));
+   if rType is TRttiInterfaceType then
+   begin
+      iType := rType as TRttiInterfaceType;
+      for var comp in GetComponents<T>(AComparer) do
+      begin
+         if Supports(comp, iType.GUID, intf) then
+            list.Add(intf);
+      end;
+   end;
+   result := TEnumeratorFactory<I>.Create(list);
 end;
 
 function TProject.Register(AObject: TObject; AId: integer = ID_INVALID): integer;
@@ -339,16 +364,13 @@ begin
       if accepted then
          FObjectIds[idx] := id;
    end
+   else if accepted then
+      FObjectIds.AddObject(id, AObject)
    else
    begin
-      if accepted then
-         FObjectIds.AddObject(id, AObject)
-      else
-      begin
-         FObjectIds.AddObject(FObjectIdSeed.ToString, AObject);
-         result := FObjectIdSeed;
-         FObjectIdSeed := FObjectIdSeed + 1;
-      end;
+      FObjectIds.AddObject(FObjectIdSeed.ToString, AObject);
+      result := FObjectIdSeed;
+      FObjectIdSeed := FObjectIdSeed + 1;
    end;
    if accepted then
    begin
@@ -429,12 +451,8 @@ end;
 
 procedure TProject.ExportToXMLTag(ATag: IXMLElement);
 var
-   comp: TComponent;
-   components: IEnumerable<TComponent>;
-   xmlObj: IXMLable;
    i: integer;
    pageControl: TPageControl;
-   baseForm: TBaseForm;
 begin
 
    ATag.SetAttribute(LANG_ATTR, GInfra.CurrentLang.Name);
@@ -454,14 +472,13 @@ begin
    for i := 0 to pageControl.PageCount-1 do
       UpdateZOrder(TBlockTabSheet(pageControl.Pages[i]).Box);
 
-   components := GetComponents<TComponent>(ByPageIndexComponentComparer);
-   for comp in components do
+   for var xmlable in GetIComponents<IXMLable>(ByPageIndexComponentComparer) do
    begin
-      if Supports(comp, IXMLable, xmlObj) and xmlObj.Active then
-         xmlObj.ExportToXMLTag(ATag);
+      if xmlable.Active then
+         xmlable.ExportToXMLTag(ATag);
    end;
 
-   for baseForm in TInfra.GetBaseForms do
+   for var baseForm in TInfra.GetBaseForms do
       baseForm.ExportSettingsToXMLTag(ATag);
 end;
 
@@ -497,7 +514,6 @@ end;
 function TProject.ImportFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
 var
    s, langName, ver: string;
-   baseForm: TBaseForm;
 begin
 
    result := errValidate;
@@ -506,7 +522,7 @@ begin
    if GInfra.GetLangDefinition(langName) = nil then
    begin
       Gerr_text := i18Manager.GetFormattedString('LngNoSprt', [langName]);
-      exit;
+      Exit;
    end;
 
    ver := ATag.GetAttribute(APP_VERSION_ATTR);
@@ -543,7 +559,7 @@ begin
       RefreshStatements;
       ImportCommentsFromXML(ATag);
       RefreshZOrder;
-      for baseForm in TInfra.GetBaseForms do
+      for var baseForm in TInfra.GetBaseForms do
          baseForm.ImportSettingsFromXMLTag(ATag);
    end;
 end;
@@ -797,14 +813,11 @@ begin
 end;
 
 function TProject.GetIWinControlComponent(AHandle: THandle): IWinControl;
-var
-   i: integer;
-   winControl: IWinControl;
 begin
    result := nil;
-   for i := 0 to FComponentList.Count-1 do
+   for var winControl in GetIComponents<IWinControl> do
    begin
-      if Supports(FComponentList[i], IWinControl, winControl) and (winControl.GetHandle = AHandle) then
+      if winControl.GetHandle = AHandle then
       begin
          result := winControl;
          break;
@@ -836,17 +849,9 @@ begin
 end;
 
 procedure TProject.RefreshZOrder;
-var
-   comp: TComponent;
-   winControl: IWinControl;
-   components: IEnumerable<TComponent>;
 begin
-   components := GetComponents<TComponent>(ByZOrderComponentComparer);
-   for comp in components do
-   begin
-      if Supports(comp, IWinControl, winControl) then
-         winControl.BringAllToFront;
-   end;
+   for var winControl in GetIComponents<IWinControl>(ByZOrderComponentComparer) do
+      winControl.BringAllToFront;
 end;
 
 procedure TProject.ExportToGraphic(AGraphic: TGraphic);
@@ -874,103 +879,71 @@ begin
 end;
 
 function TProject.GetMainBlock: TMainBlock;
-var
-   i: integer;
-   func: TUserFunction;
 begin
    result := nil;
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
+      if (func.Header = nil) and func.Active then
       begin
-         func := TUserFunction(FComponentList[i]);
-         if (func.Header = nil) and func.Active then
-         begin
-            result := func.Body;
-            break;
-         end;
+         result := func.Body;
+         break;
       end;
    end;
 end;
 
 procedure TProject.PopulateDataTypeCombos;
-var
-   i: integer;
-   func: TUserFunction;
 begin
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
-      begin
-         func := TUserFunction(FComponentList[i]);
-         if func.Body <> nil then
-            func.Body.PopulateComboBoxes;
-      end;
+      if func.Body <> nil then
+         func.Body.PopulateComboBoxes;
    end;
 end;
 
-procedure TProject.ChangeDesktopColor(const AColor: TColor);
-var
-   i: integer;
-   comp: TComponent;
-   pgcPages: TPageControl;
+procedure TProject.ChangeDesktopColor(AColor: TColor);
 begin
-   pgcPages := TInfra.GetMainForm.pgcPages;
-   for i := 0 to pgcPages.PageCount-1 do
-      TBlockTabSheet(pgcPages.Pages[i]).Box.Color := AColor;
-   for i := 0 to FComponentList.Count-1 do
+   TInfra.GetMainForm.UpdateTabsColor(AColor);
+   for var func in GetUserFunctions do
    begin
-      comp := FComponentList[i];
-      if comp is TUserFunction then
-      begin
-         if TUserFunction(comp).Body <> nil then
-            TUserFunction(comp).Body.ChangeColor(AColor);
-      end
-      else if comp is TComment then
-         TComment(comp).Color := AColor;
+      if func.Body <> nil then
+         func.Body.ChangeColor(AColor);
    end;
+   for var comment in GetComments do
+      comment.Color := AColor;
 end;
 
 function TProject.CountErrWarn: TErrWarnCount;
 var
-   i: integer;
-   func: TUserFunction;
-   dataType: TUserDataType;
    errWarnCount: TErrWarnCount;
 begin
    result.ErrorCount := 0;
    result.WarningCount := 0;
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
+      if func.Active then
       begin
-         func := TUserFunction(FComponentList[i]);
-         if func.Active then
+         if func.Header <> nil then
          begin
-            if func.Header <> nil then
-            begin
-               case func.Header.GetFocusColor of
-                  NOK_COLOR:  Inc(result.ErrorCount);
-                  WARN_COLOR: Inc(result.WarningCount);
-               end;
-            end;
-            if func.Body <> nil then
-            begin
-               errWarnCount := func.Body.CountErrWarn;
-               Inc(result.ErrorCount, errWarnCount.ErrorCount);
-               Inc(result.WarningCount, errWarnCount.WarningCount);
-            end;
-         end;
-      end
-      else if FComponentList[i] is TUserDataType then
-      begin
-         dataType := TUserDataType(FComponentList[i]);
-         if dataType.Active then
-         begin
-            case dataType.GetFocusColor of
+            case func.Header.GetFocusColor of
                NOK_COLOR:  Inc(result.ErrorCount);
                WARN_COLOR: Inc(result.WarningCount);
             end;
+         end;
+         if func.Body <> nil then
+         begin
+            errWarnCount := func.Body.CountErrWarn;
+            Inc(result.ErrorCount, errWarnCount.ErrorCount);
+            Inc(result.WarningCount, errWarnCount.WarningCount);
+         end;
+      end;
+   end;
+   for var dataType in GetUserDataTypes do
+   begin
+      if dataType.Active then
+      begin
+         case dataType.GetFocusColor of
+            NOK_COLOR:  Inc(result.ErrorCount);
+            WARN_COLOR: Inc(result.WarningCount);
          end;
       end;
    end;
@@ -978,8 +951,7 @@ end;
 
 procedure TProject.GenerateTree(ANode: TTreeNode);
 var
-   dataType: TUserDataType;
-   mainFunc, func: TUserFunction;
+   mainFunc: TUserFunction;
    node: TTreeNode;
    mForm: TBaseForm;
 begin
@@ -990,7 +962,7 @@ begin
    begin
       mForm := TInfra.GetDataTypesForm;
       node := ANode.Owner.AddChildObject(ANode, mForm.GetTreeNodeText, mForm);
-      for dataType in GetUserDataTypes do
+      for var dataType in GetUserDataTypes do
       begin
          if dataType.Active then
             dataType.GenerateTree(node);
@@ -1011,7 +983,7 @@ begin
    else
       node := ANode;
 
-   for func in GetUserFunctions do
+   for var func in GetUserFunctions do
    begin
       if func.Active then
       begin
@@ -1028,38 +1000,23 @@ begin
 end;
 
 procedure TProject.UpdateHeadersBody(APage: TTabSheet);
-var
-   i: integer;
-   func: TUserFunction;
 begin
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
-      begin
-         func := TUserFunction(FComponentList[i]);
-         if (func.Header <> nil ) and (func.Body <> nil) and (func.Body.Page = APage) then
-            func.Header.SetPageCombo(APage.Caption);
-      end;
+      if (func.Header <> nil ) and (func.Body <> nil) and (func.Body.Page = APage) then
+         func.Header.SetPageCombo(APage.Caption);
    end;
 end;
 
 procedure TProject.RefreshStatements;
-var
-   i: integer;
-   func: TUserFunction;
-   chon: boolean;
 begin
-   chon := ChangingOn;
+   var chon := ChangingOn;
    ChangingOn := false;
    try
-      for i := 0 to FComponentList.Count-1 do
+      for var func in GetUserFunctions do
       begin
-         if FComponentList[i] is TUserFunction then
-         begin
-            func := TUserFunction(FComponentList[i]);
-            if func.Active and (func.Body <> nil) then
-               func.Body.RefreshStatements;
-         end;
+         if func.Active and (func.Body <> nil) then
+            func.Body.RefreshStatements;
       end;
    finally
       ChangingOn := chon;
@@ -1068,111 +1025,79 @@ begin
 end;
 
 function TProject.FindMainBlockForControl(const AControl: TControl): TMainBlock;
-var
-   i: integer;
-   func: TUserFunction;
 begin
    result := nil;
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
+      if func.Active and (func.Body <> nil) and (func.Body.Parent = AControl.Parent) and func.Body.BoundsRect.Contains(AControl.BoundsRect.TopLeft) then
       begin
-         func := TUserFunction(FComponentList[i]);
-         if func.Active and (func.Body <> nil) and (func.Body.Parent = AControl.Parent) and func.Body.BoundsRect.Contains(AControl.BoundsRect.TopLeft) then
-         begin
-            result := func.Body;
-            break;
-         end;
+         result := func.Body;
+         break;
       end;
    end;
 end;
 
 procedure TProject.RepaintComments;
-var
-   i: integer;
-   comment: TComment;
 begin
-   for i := 0 to FComponentList.Count-1 do
+   for var comment in GetComments do
    begin
-      if FComponentList[i] is TComment then
-      begin
-         comment := TComment(FComponentList[i]);
-         if comment.Visible then
-            comment.Repaint;
-      end;
+      if comment.Visible then
+         comment.Repaint;
    end;
 end;
 
 procedure TProject.RepaintFlowcharts;
-var
-   i: integer;
-   func: TUserFunction;
 begin
-   for i := 0 to FComponentList.Count-1 do
+   for var func in GetUserFunctions do
    begin
-      if FComponentList[i] is TUserFunction then
-      begin
-         func := TUserFunction(FComponentList[i]);
-         if (func.Body <> nil) and func.Body.Visible then
-            func.Body.RepaintAll;
-      end;
+      if (func.Body <> nil) and func.Body.Visible then
+         func.Body.RepaintAll;
    end;
 end;
 
 function TProject.GetLibraryList: TStringList;
 var
    libName: string;
-   tab: ITabable;
-   comp: TComponent;
-   components: IEnumerable<TComponent>;
 begin
    result := TStringList.Create;
    result.CaseSensitive := GInfra.CurrentLang.CaseSensitiveSyntax;
-   components := GetComponents<TComponent>(ByPageIndexComponentComparer);
-   for comp in components do
+   for var tab in GetIComponents<IWithTab>(ByPageIndexComponentComparer) do
    begin
-      if Supports(comp, ITabable, tab) then
-      begin
-         libName := tab.GetLibName;
-         if (not libName.IsEmpty) and (GInfra.CurrentLang.AllowDuplicatedLibs or (result.IndexOf(libName) = -1)) then
-            result.AddObject(libName, tab.GetTab);
-      end;
+      libName := tab.GetLibName;
+      if (not libName.IsEmpty) and (GInfra.CurrentLang.AllowDuplicatedLibs or (result.IndexOf(libName) = -1)) then
+         result.AddObject(libName, tab.GetTab);
    end;
 end;
 
 procedure TProject.RefreshSizeEdits;
-var
-   i: integer;
-   sizeEdit: ISizeEditable;
 begin
    if (GlobalVars <> nil) and (GlobalVars.edtSize.Text <> '1') then
       GlobalVars.edtSize.OnChange(GlobalVars.edtSize);
-   for i := 0 to FComponentList.Count-1 do
-   begin
-      if Supports(FComponentList[i], ISizeEditable, sizeEdit) then
-         sizeEdit.RefreshSizeEdits;
-   end;
+   for var withSizeEdits in GetIComponents<IWithSizeEdits> do
+      withSizeEdits.RefreshSizeEdits;
+end;
+
+function TProject.GetUserFunction(const AName: string): TUserFunction;
+begin
+   result := GetComponent<TUserFunction>(AName);
+end;
+
+function TProject.GetUserDataType(const AName: string): TUserDataType;
+begin
+   result := GetComponent<TUserDataType>(AName);
 end;
 
 function TProject.GetComponent<T>(const AName: string): T;
-var
-   i: integer;
-   named: INameable;
-   comp: TComponent;
 begin
    result := nil;
    if not AName.Trim.IsEmpty then
    begin
-      for i := 0 to FComponentList.Count-1 do
+      for var withName in GetIComponents<T, IWithName> do
       begin
-         comp := FComponentList[i];
-         if (comp.ClassType = T) and Supports(comp, INameable, named) then
+         if TInfra.SameStrings(withName.GetName, AName) then
          begin
-            if TInfra.SameStrings(named.GetName, AName) then
-            begin
-               result := T(comp);
-               break;
-            end;
+            result := T(withName);
+            break;
          end;
       end;
    end;

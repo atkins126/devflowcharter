@@ -22,7 +22,7 @@ unit Return_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Classes, Vcl.StdCtrls, Base_Block, CommonTypes;
+   Vcl.Graphics, System.Classes, Vcl.StdCtrls, Base_Block, Types;
 
 type
 
@@ -45,7 +45,7 @@ implementation
 
 uses
    Vcl.Controls, System.SysUtils, System.StrUtils, System.Types, System.UITypes,
-   ApplicationCommon, Project, UserFunction, Main_Block, LangDefinition;
+   Infrastructure, Project, UserFunction, Main_Block, LangDefinition, Constants;
 
 constructor TReturnBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 var

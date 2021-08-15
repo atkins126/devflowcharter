@@ -19,15 +19,15 @@
 
 
 
-unit ApplicationCommon;
+unit Infrastructure;
 
 interface
 
 uses
    WinApi.Windows, Vcl.Forms, Vcl.StdCtrls, Vcl.Grids, Vcl.Controls, Vcl.Graphics,
    System.SysUtils, System.Classes, System.StrUtils,
-   Vcl.ComCtrls, LocalizationManager, Project, Settings, LangDefinition, CommonTypes,
-   Base_Form, CommonInterfaces, Functions_Form, DataTypes_Form, Declarations_Form,
+   Vcl.ComCtrls, LocalizationManager, Project, Settings, LangDefinition, Types,
+   Base_Form, Interfaces, Functions_Form, DataTypes_Form, Declarations_Form,
    Main_Form, Base_Block, SynEditTypes, Settings_Form, Editor_Form, Explorer_Form,
    UserFunction, BlockTabSheet, About_Form, YaccLib;
 
@@ -43,8 +43,8 @@ type
          FTemplateLang,
          FCurrentLang: TLangDefinition;
          FLangArray: array of TLangDefinition;
-         FLangArrayHigh: integer;
          class var FParsedEdit: TCustomEdit;
+         class var FPPI: integer;
       public
          property CurrentLang: TLangDefinition read FCurrentLang;
          property TemplateLang: TLangDefinition read FTemplateLang;
@@ -115,6 +115,7 @@ type
          class function GetPageFromXY(APageControl: TPageControl; x, y: integer): TTabSheet;
          class function GetPageFromTabIndex(APageControl: TPageControl; ATabIndex: integer): TTabSheet;
          class function IndexOf<T>(const AValue: T; const AArray: TArray<T>): integer;
+         class function Scaled(on96: integer): integer;
          function GetNativeDataType(const AName: string): PNativeDataType;
          function GetNativeFunction(const AName: string): PNativeFunction;
          function GetLangDefinition(const AName: string): TLangDefinition;
@@ -127,127 +128,7 @@ type
          procedure SetHLighters;
    end;
 
-const   // Global constants
-
-        PROGRAM_NAME        = 'devFlowcharter';
-
-        NEW_PROJECT_CAPTION = PROGRAM_NAME;
-        PROJECT_CAPTION     = NEW_PROJECT_CAPTION + ' - ';
-
-        // hint duration in milliseconds
-        HINT_PAUSE       = 5000;
-
-        INCORRECT_IDENT  = -6;
-        DUPLICATED_IDENT = -7;
-        RESERVED_IDENT   = -8;
-        INVALID_INIT_VAL = -9;
-        VALID_IDENT      =  1;
-
-        LOOP_BLOCKS = [blWhile, blRepeat, blFor];
-
-        EDITOR_DEFAULT_INDENT_LENGTH = 2;
-        EDITOR_DEFAULT_FONT_SIZE = 10;
-        LABEL_DEFAULT_FONT_SIZE = 10;
-        EDITOR_DEFAULT_GUTTER_FONT_SIZE = 8;
-
-        TAB_CHAR        = #9;
-        SPACE_CHAR      = #32;
-        INDENT_XML_CHAR = TAB_CHAR;
-
-        PAGE_CAPTION_ATTR = 'tab';
-        COMMENT_ATTR      = 'comment';
-        PAGE_FRONT_ATTR   = 'pageFront';
-        LANG_ATTR         = 'language';
-        FOLDED_ATTR       = 'folded';
-        FOLD_TEXT_ATTR    = 'foldtext';
-        FRAME_ATTR        = 'frame';
-        BLOCK_TYPE_ATTR   = 'type';
-        ID_ATTR           = 'hash';
-        BRANCH_STMNT_ATTR = 'bstmnt_hash';
-        FONT_SIZE_ATTR    = 'fontsize';
-        FONT_STYLE_ATTR   = 'fontstyle';
-        Z_ORDER_ATTR      = 'ZOrdVal';
-        EXTERN_ATTR       = 'extern';
-        SIZE_ATTR         = 'size';
-        INIT_ATTR         = 'init';
-        VALUE_ATTR        = 'value';
-        NAME_ATTR         = 'name';
-        TYPE_ATTR         = 'type';
-        IS_HEADER_ATTR    = 'isHeader';
-        APP_VERSION_ATTR  = 'devFVersion';
-        KIND_ATTR         = 'kind';
-        POINTER_ATTR      = 'pointer';
-        BLOCK_TAG         = 'block';
-        BRANCH_TAG        = 'branch';
-        TEXT_TAG          = 'text';
-        VAR_TAG           = 'var';
-        CONST_TAG         = 'const';
-        DATATYPE_TAG      = 'datatype';
-        FUNCTION_TAG      = 'routine';
-        HEADER_TAG        = 'header';
-        FILE_CONTENTS_TAG = 'FileContentsTemplate';
-
-        LB_PHOLDER  = '#!';
-        LB_PHOLDER2  = '##';
-
-        VERSION_NUMBER_SEP  = '.';
-
-        MAIN_PAGE_MARKER  = 'mainPage#!';
-
-        MARGIN_X = 50;
-        MARGIN_Y = 50;
-
-        OK_COLOR = clGreen;
-        NOK_COLOR = clRed;
-        WARN_COLOR = clOlive;
-        TEXT_COLOR = clGrayText;
-        BLACK_COLOR = clWindowText;
-        DEFAULT_DESKTOP_COLOR = clWhite;
-        MATCH_BRACKET_COLOR = clRed;
-
-        ID_ALLOW_CHARS = ['a'..'z', 'A'..'Z', '0'..'9', '_'];
-
-        FLOWCHART_DEFAULT_FONT_NAME = 'Tahoma';
-        FLOWCHART_MIN_FONT_SIZE = 8;
-        FLOWCHART_MAX_FONT_SIZE = FLOWCHART_MIN_FONT_SIZE + 4;
-        FLOWCHART_VALID_FONT_SIZES = [FLOWCHART_MIN_FONT_SIZE..FLOWCHART_MAX_FONT_SIZE];
-        FLOWCHART_FONT_NAMESIZE_SEP = ' : ';
-
-        ROW_NOT_FOUND = -1;
-        BRANCH_IDX_NOT_FOUND = -1;
-
-        FUNCTION_TYPE_IND = -5;
-
-        PRIMARY_PLACEHOLDER = '%s1';
-
-        DEF_PAGE_CAPTION_KEY = 'mainPage';
-
-        UNKNOWN_VERSION = 'unknown';
-
-        SETTINGS_SECTION = 'Settings';
-
-        PRINT_SCALE_BASE     = 100;   // 100 %
-        DEFAULT_PRINT_MARGIN = 5;     //   5 %
-
-        DECLARATIONS_FORM_RIGHT_MARGIN = 16;
-
-        RTF_FILES_FILTER_KEY = 'RTFFilesFilter';
-        HTML_FILES_FILTER_KEY = 'HTMLFilesFilter';
-        XML_FILES_FILTER_KEY = 'XMLFilesFilter';
-        BMP_FILES_FILTER_KEY = 'BMPFilesFilter';
-        PNG_FILES_FILTER_KEY = 'PNGFilesFilter';
-        JPG_FILES_FILTER_KEY = 'JPGFilesFilter';
-        EDITOR_DIALOG_FILTER_KEYS: TArray<string> = [RTF_FILES_FILTER_KEY, HTML_FILES_FILTER_KEY];
-        PROJECT_DIALOG_FILTER_KEYS: TArray<string> = [XML_FILES_FILTER_KEY, BMP_FILES_FILTER_KEY, PNG_FILES_FILTER_KEY, JPG_FILES_FILTER_KEY];
-
-        // Language identifiers; must be identical to value in <Name> tag in XML language definition file
-        PASCAL_LANG_ID  = 'Pascal';
-        C_LANG_ID       = 'ANSI C';
-        TIBASIC_LANG_ID = 'TIBASIC';
-        PYTHON_LANG_ID  = 'Python 3';
-        JAVA_LANG_ID    = 'Java';
-
-var     // Global variables
+   var     // Global variables
 
     GClpbrd:        TClipbrd;
     GInfra:         TInfra;
@@ -257,15 +138,12 @@ var     // Global variables
     GErr_text:      string;
     i18Manager:     Ti18Manager;
 
-    function CompareIntegers(AList: TStringList; idx1, idx2: integer): integer;
-
 implementation
 
 uses
    Vcl.Printers, WinApi.Messages, Vcl.Menus, Vcl.Dialogs, Vcl.Imaging.jpeg, Vcl.Imaging.PngImage,
-   System.Math, System.TypInfo, Generics.Collections, System.IOUtils, System.Rtti,
-   UserDataType, XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator, System.Character,
-   System.Generics.Defaults;
+   System.Math, Generics.Collections, System.IOUtils, System.Rtti, Constants, UserDataType,
+   XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator, System.Character, System.Generics.Defaults;
 
 type
    THackCustomEdit = class(TCustomEdit);
@@ -299,14 +177,14 @@ begin
    FTemplateLang := TLangDefinition.Create;
    FLangArray := FLangArray + [FTemplateLang];
    FCurrentLang := FLangArray[0];
-   FLangArrayHigh := High(FLangArray);
+   FPPI := Screen.MonitorFromWindow(Application.Handle).PixelsPerInch;
 end;
 
 destructor TInfra.Destroy;
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayHigh do
+   for i := 0 to High(FLangArray) do
       FLangArray[i].Free;
    FLangArray := nil;
    inherited Destroy;
@@ -389,7 +267,7 @@ procedure TInfra.GetLangNames(AList: TStrings);
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayHigh do
+   for i := 0 to High(FLangArray) do
       AList.Add(FLangArray[i].Name);
 end;
 
@@ -429,7 +307,7 @@ var
    comp: TComponent;
    lang: TLangDefinition;
 begin
-   for i := 0 to FLangArrayHigh-1 do
+   for i := 0 to High(FLangArray)-1 do
    begin
       lang := FLangArray[i];
       comp := GetEditorForm.FindComponent(lang.HighLighterVarName);
@@ -807,7 +685,7 @@ var
    i: integer;
 begin
    result := nil;
-   for i := 0 to FLangArrayHigh do
+   for i := 0 to High(FLangArray) do
    begin
       if SameText(FLangArray[i].Name, AName) then
       begin
@@ -821,7 +699,7 @@ procedure TInfra.SetLangHiglighterAttributes;
 var
    i: integer;
 begin
-   for i := 0 to FLangArrayHigh do
+   for i := 0 to High(FLangArray) do
    begin
       if Assigned(FLangArray[i].SetHLighterAttrs) then
          FLangArray[i].SetHLighterAttrs;
@@ -1265,26 +1143,15 @@ begin
 end;
 
 class function TInfra.GetTextWidth(const AText: string; AControl: TControl): integer;
-var
-   fontInfo: PPropInfo;
-   prop: TObject;
 begin
    result := 0;
-   fontInfo := GetPropInfo(AControl, 'Font');
-   if fontInfo <> nil then
-   begin
-      prop := GetObjectProp(AControl, fontInfo);
-      if prop is TFont then
-      begin
-         with TControlCanvas.Create do
-         try
-            Control := AControl;
-            Font.Assign(TFont(prop));
-            result := TextWidth(AText);
-         finally
-            Free;
-         end;
-      end;
+   with TControlCanvas.Create do
+   try
+      Control := AControl;
+      Font.Assign(THackControl(AControl).Font);
+      result := TextWidth(AText);
+   finally
+      Free;
    end;
 end;
 
@@ -1294,7 +1161,9 @@ begin
    if AControl is TCheckBox then
       result := GetTextWidth(TCheckBox(AControl).Caption, AControl) + GetSystemMetrics(SM_CXMENUCHECK) + 3
    else if AControl is TCustomEdit then
-      result := GetTextWidth(TCustomEdit(AControl).Text, AControl);
+      result := GetTextWidth(TCustomEdit(AControl).Text, AControl)
+   else if AControl is TButton then
+      result := GetTextWidth(TButton(AControl).Caption, AControl);
 end;
 
 class procedure TInfra.IndentSpacesToTabs(ALines: TStringList);
@@ -1436,6 +1305,11 @@ begin
       result := APageControl.Pages[idx];
 end;
 
+class function TInfra.Scaled(on96: integer): integer;
+begin
+   result := MulDiv(on96, FPPI, 96);
+end;
+
 function TInfra.ValidateConstId(const AId: string): integer;
 var
    i: integer;
@@ -1474,11 +1348,6 @@ begin
       result := INCORRECT_IDENT
    else if CurrentLang.Keywords.IndexOf(AId) <> -1 then
       result := RESERVED_IDENT;
-end;
-
-function CompareIntegers(AList: TStringList; idx1, idx2: integer): integer;
-begin
-   result := AList[idx1].ToInteger - AList[idx2].ToInteger;
 end;
 
 initialization

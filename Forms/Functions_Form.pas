@@ -24,7 +24,7 @@ unit Functions_Form;
 interface
 
 uses
-   System.Types, OmniXML, PageControl_Form, CommonTypes;
+   System.Types, OmniXML, PageControl_Form, Types;
 
 type
 
@@ -48,8 +48,8 @@ implementation
 {$R *.dfm}
 
 uses
-   Vcl.Forms, System.SysUtils, ApplicationCommon, Base_Block, Main_Block, Navigator_Form,
-   UserFunction, CommonInterfaces, XMLProcessor, BlockTabSheet;
+   Vcl.Forms, System.SysUtils, Infrastructure, Base_Block, Main_Block, Navigator_Form,
+   UserFunction, Interfaces, XMLProcessor, BlockTabSheet, Constants;
 
 procedure TFunctionsForm.miAddClick(Sender: TObject);
 begin
@@ -65,7 +65,7 @@ begin
    body := TMainBlock.Create(GProject.GetActivePage, ABodyTopLeft);
    header := TUserFunctionHeader.Create(Self);
    TUserFunction.Create(header, body);
-   if CanFocus then
+   if Visible and Enabled then  // replace with CanFocus once fixed by Embarcadero (RSP-34465)
       SetFocus;
    pgcTabs.ActivePage := header;
    if header.edtName.CanFocus then

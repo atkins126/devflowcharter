@@ -26,7 +26,7 @@ unit XMLProcessor;
 interface
 
 uses
-   Vcl.Controls, Vcl.Dialogs, OmniXML, Base_Block, CommonTypes;
+   Vcl.Controls, Vcl.Dialogs, OmniXML, Base_Block, Types;
 
 type
 
@@ -66,7 +66,7 @@ const
 implementation
 
 uses
-   System.SysUtils, ApplicationCommon, BlockFactory, BlockTabSheet;
+   System.SysUtils, Infrastructure, BlockFactory, BlockTabSheet, Constants;
 
 class function TXMLProcessor.FindChildTag(ATag: IXMLElement; const AName: string): IXMLElement;
 begin

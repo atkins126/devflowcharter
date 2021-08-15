@@ -28,7 +28,7 @@ uses
 
 type
 
-   TBaseEnumerator<T: class> = class(TInterfacedObject, IEnumerator<T>, IEnumerator)
+   TBaseEnumerator<T> = class(TInterfacedObject, IEnumerator<T>, IEnumerator)
       private
          FList: TList<T>;
          FIndex: integer;
@@ -44,9 +44,8 @@ type
          destructor Destroy; override;
    end;
 
-   TEnumeratorFactory<T: class> = class(TInterfacedObject, IEnumerable<T>, IEnumerable)
+   TEnumeratorFactory<T> = class(TInterfacedObject, IEnumerable<T>, IEnumerable)
      private
-        FList: TList<T>;
         FInstance: IEnumerator<T>;
      public
         constructor Create(AList: TList<T>); overload;
@@ -87,8 +86,6 @@ end;
 function TBaseEnumerator<T>.GetCurrent: TObject;
 begin
    result := nil;
-   if InListRange then
-      result := FList[FIndex];
 end;
 
 procedure TBaseEnumerator<T>.Reset;
@@ -98,13 +95,15 @@ end;
 
 function TBaseEnumerator<T>.GenericGetCurrent: T;
 begin
-   result := T(GetCurrent);
+   result := Default(T);
+   if InListRange then
+      result := FList[FIndex];
 end;
 
 constructor TEnumeratorFactory<T>.Create(AList: TList<T>);
 begin
    inherited Create;
-   FList := AList;
+   FInstance := TBaseEnumerator<T>.Create(AList);
 end;
 
 function TEnumeratorFactory<T>.GetEnumerator: IEnumerator;
@@ -114,8 +113,6 @@ end;
 
 function TEnumeratorFactory<T>.GenericGetEnumerator: IEnumerator<T>;
 begin
-   if FInstance = nil then
-      FInstance := TBaseEnumerator<T>.Create(FList);
    result := FInstance;
 end;
 

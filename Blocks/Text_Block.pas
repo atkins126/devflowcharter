@@ -24,8 +24,7 @@ unit Text_Block;
 interface
 
 uses
-   Vcl.Graphics, Vcl.ExtCtrls, Vcl.Controls, Base_Block, MultiLine_Block,
-   CommonTypes;
+   Vcl.Graphics, Vcl.ExtCtrls, Vcl.Controls, Base_Block, MultiLine_Block, Types;
 
 type
 
@@ -51,7 +50,7 @@ type
 implementation
 
 uses
-   System.Classes, System.Types, ApplicationCommon;
+   System.Classes, System.Types, Constants, Infrastructure;
 
 constructor TTextBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

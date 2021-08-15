@@ -22,12 +22,11 @@ unit StatementMemo;
 interface
 
 uses
-  System.Classes, Vcl.StdCtrls, Vcl.Graphics, Vcl.Controls, CommonInterfaces,
-  MemoEx, CommonTypes;
+  System.Classes, Vcl.StdCtrls, Vcl.Graphics, Vcl.Controls, Interfaces, MemoEx, Types;
 
 type
 
-  TStatementMemo = class(TMemoEx, IFocusable)
+  TStatementMemo = class(TMemoEx, IWithFocus)
      public
      { Public declarations }
         constructor Create(AOwner: TComponent); override;
@@ -43,7 +42,7 @@ type
 implementation
 
 uses
-   Vcl.Forms, System.SysUtils, ApplicationCommon, Base_Block;
+   Vcl.Forms, System.SysUtils, Base_Block, Infrastructure, Constants;
 
 constructor TStatementMemo.Create(AOwner: TComponent);
 begin

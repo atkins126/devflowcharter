@@ -24,7 +24,7 @@ unit RepeatUntil_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Types, Base_Block, CommonTypes;
+   Vcl.Graphics, System.Types, Base_Block, Types;
 
 type
 
@@ -44,8 +44,7 @@ type
 implementation
 
 uses
-   System.Classes, System.SysUtils, System.StrUtils, System.Math, ApplicationCommon,
-   LangDefinition;
+   System.Classes, System.SysUtils, System.StrUtils, System.Math, Infrastructure, LangDefinition;
 
 constructor TRepeatUntilBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

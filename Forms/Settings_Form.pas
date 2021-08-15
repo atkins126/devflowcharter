@@ -25,7 +25,7 @@ interface
 
 uses
   Vcl.Controls, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics, System.Classes, System.Types,
-  Base_Form, Settings, CommonTypes;
+  Base_Form, Settings, Types;
 
 type
   TSettingsForm = class(TBaseForm)
@@ -147,7 +147,7 @@ var
 implementation
 
 uses
-   System.StrUtils, System.SysUtils, ApplicationCommon, LangDefinition;
+   System.StrUtils, System.SysUtils, LangDefinition, Constants, Infrastructure;
 
 const
    SHAPE_BORDER_COLOR = clBlack;

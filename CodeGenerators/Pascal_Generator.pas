@@ -61,7 +61,7 @@ In general, support for programming language in devFlowcharter can be done on 2 
           _Parse (function to parse expressions with internal parser)
           _GetHLighterVarName (function to obtain variable name of highlighter component from point 2a)
        If any generation method is not needed, it may not be implemented at all.
-   2d. Add language identifier string constant (e.g. PYTHON_LANG_ID) to ApplicationCommon unit.
+   2d. Add language identifier string constant (e.g. PYTHON_LANG_ID) to Constants unit.
        It should contain the same value as <Name> tag in language definition XML file.
    2e. Refer to _Block.pas units in Blocks directory. Modify GenerateCode method in _Block classes by adding new "if" section.
        This part is responsible for generating code inside main section of the program.
@@ -92,8 +92,8 @@ implementation
 
 uses
    System.SysUtils, System.StrUtils, System.Classes, Vcl.Graphics, Vcl.StdCtrls, SynHighlighterPas,
-   Pascal_Parser, Main_Block, ApplicationCommon, DeclareList, Settings, LocalizationManager,
-   LangDefinition, CommonTypes, ParserHelper, YaccLib;
+   Pascal_Parser, Main_Block, Infrastructure, DeclareList, Settings, LocalizationManager,
+   LangDefinition, CommonTypes, ParserHelper, YaccLib, Constants;
 
 var
    pascalLang: TLangDefinition;

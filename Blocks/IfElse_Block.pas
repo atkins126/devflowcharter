@@ -24,7 +24,7 @@ unit IfElse_Block;
 interface
 
 uses
-   WinApi.Windows, Vcl.Graphics, Vcl.ComCtrls, Base_Block, OmniXML, CommonTypes;
+   WinApi.Windows, Vcl.Graphics, Vcl.ComCtrls, Base_Block, OmniXML, Types;
 
 type
 
@@ -56,7 +56,7 @@ const
 implementation
 
 uses
-   System.SysUtils, System.Classes, System.Types, System.Math, Return_Block, ApplicationCommon;
+   System.SysUtils, System.Classes, System.Types, System.Math, Return_Block, Infrastructure;
 
 constructor TIfElseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

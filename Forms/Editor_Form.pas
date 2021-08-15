@@ -30,8 +30,8 @@ uses
 {$ENDIF}
    Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics, System.Types,
    Vcl.Dialogs, Vcl.ComCtrls, Vcl.Clipbrd, Vcl.Menus, System.SysUtils, System.Classes,
-   SynEdit, SynExportRTF, SynEditPrint, CommonTypes, SynHighlighterPas, SynHighlighterCpp,
-   SynMemo, SynExportHTML, OmniXML, Base_Form, CommonInterfaces, SynEditExport, SynEditHighlighter,
+   SynEdit, SynExportRTF, SynEditPrint, Types, SynHighlighterPas, SynHighlighterCpp,
+   SynMemo, SynExportHTML, OmniXML, Base_Form, Interfaces, SynEditExport, SynEditHighlighter,
    SynHighlighterPython, SynHighlighterJava;
 
 type
@@ -130,7 +130,7 @@ type
     FCloseBracketHint,
     FFocusEditor: boolean;
     FDialog: TFindDialog;
-    FFocusControl: IFocusable;
+    FWithFocus: IWithFocus;
     procedure PasteComment(const AText: string);
     function BuildBracketHint(startLine, endLine: integer): string;
     function CharToPixels(P: TBufferCoord): TPoint;
@@ -166,11 +166,16 @@ implementation
 
 uses
    System.StrUtils, System.UITypes, WinApi.Messages, System.Math, WinApi.Windows,
-   ApplicationCommon, Goto_Form, Settings, LangDefinition, Main_Block, Help_Form,
-   Comment, XMLProcessor, Main_Form, Base_Block, SynEditTypes, ParserHelper,
+   Infrastructure, Goto_Form, Settings, LangDefinition, Main_Block, Help_Form,
+   Comment, XMLProcessor, Main_Form, Base_Block, SynEditTypes, ParserHelper, Constants,
    System.Character;
 
 {$R *.dfm}
+
+function CompareIntegers(AList: TStringList; idx1, idx2: integer): integer;
+begin
+   result := AList[idx1].ToInteger - AList[idx2].ToInteger;
+end;
 
 constructor TEditorHintWindow.Create(AOwner: TComponent);
 begin
@@ -332,7 +337,7 @@ begin
    FFocusEditor := true;
    FCloseBracketHint := false;
    FCloseBracketPos := TPoint.Zero;
-   FFocusControl := nil;
+   FWithFocus := nil;
    Width := 425;
    Height := 558;
    FDialog := nil;
@@ -523,7 +528,7 @@ var
    dispCoord: TDisplayCoord;
    obj: TObject;
 begin
-   FFocusControl := nil;
+   FWithFocus := nil;
    miFindProj.Enabled := false;
    miCut.Enabled := memCodeEditor.SelAvail;
    miCopy.Enabled := miCut.Enabled;
@@ -538,7 +543,7 @@ begin
    if dispCoord.Row > 0 then
    begin
       obj := memCodeEditor.Lines.Objects[dispCoord.Row-1];
-      miFindProj.Enabled := TInfra.IsValidControl(obj) and Supports(obj, IFocusable, FFocusControl) and FFocusControl.CanBeFocused;
+      miFindProj.Enabled := TInfra.IsValidControl(obj) and Supports(obj, IWithFocus, FWithFocus) and FWithFocus.CanBeFocused;
    end;
 end;
 
@@ -1351,7 +1356,7 @@ procedure TEditorForm.ExportSettingsToXMLTag(ATag: IXMLElement);
 var
    i: integer;
    tag2: IXMLElement;
-   idObject: IIdentifiable;
+   withId: IWithId;
    lines: TStrings;
 begin
    if Visible then
@@ -1405,8 +1410,8 @@ begin
          begin
             tag2 := ATag.OwnerDocument.CreateElement('text_line');
             TXMLProcessor.AddCDATA(tag2, lines[i]);
-            if TInfra.IsValidControl(lines.Objects[i]) and Supports(lines.Objects[i], IIdentifiable, idObject) then
-               tag2.SetAttribute(ID_ATTR, idObject.Id.ToString);
+            if TInfra.IsValidControl(lines.Objects[i]) and Supports(lines.Objects[i], IWithId, withId) then
+               tag2.SetAttribute(ID_ATTR, withId.Id.ToString);
             ATag.AppendChild(tag2);
          end;
       finally
@@ -1621,7 +1626,7 @@ var
    i: integer;
    selText, sline: string;
 begin
-   if (FFocusControl <> nil) and FFocusControl.CanBeFocused then
+   if (FWithFocus <> nil) and FWithFocus.CanBeFocused then
    begin
       focusInfo := TFocusInfo.New;
       point := memCodeEditor.ScreenToClient(pmPopMenu.PopupPoint);
@@ -1665,9 +1670,9 @@ begin
          if codeRange.FirstRow <> ROW_NOT_FOUND then
             focusInfo.RelativeLine := focusInfo.Line - codeRange.FirstRow;
       end;
-      FFocusControl.RetrieveFocus(focusInfo);
+      FWithFocus.RetrieveFocus(focusInfo);
    end;
-   FFocusControl := nil;
+   FWithFocus := nil;
 end;
 
 end.

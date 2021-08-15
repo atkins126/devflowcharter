@@ -23,7 +23,7 @@ interface
 
 uses
    Vcl.Controls, OmniXML, Vcl.StdCtrls, Vcl.Grids, System.Classes, System.Types,
-   Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls, SizeEdit, CommonInterfaces, CommonTypes;
+   Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls, SizeEdit, Interfaces, Types;
 
 type
 
@@ -41,7 +41,7 @@ type
           property OnTopLeftChanged: TNotifyEvent read FTopLeftChanged write FTopLeftChanged;
     end;
 
-   TDeclareList = class(TGroupBox, IFocusable, IIdentifiable)
+   TDeclareList = class(TGroupBox, IWithFocus, IWithId)
       protected
          FModifying: boolean;
          FId,
@@ -173,8 +173,8 @@ const
 implementation
 
 uses
-   System.SysUtils, System.StrUtils, System.UITypes, System.Rtti, ApplicationCommon,
-   XMLProcessor, Project, UserDataType, LangDefinition, ParserHelper;
+   System.SysUtils, System.StrUtils, System.UITypes, System.Rtti, Infrastructure,
+   XMLProcessor, Project, UserDataType, LangDefinition, ParserHelper, Constants;
 
 constructor TDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
 var
@@ -438,7 +438,7 @@ begin
       end;
       if list = nil then
       begin
-         dataType := GProject.GetComponent<TUserDataType>(typeName);
+         dataType := GProject.GetUserDataType(typeName);
          if dataType <> nil then
          begin
             result := dataType.RetrieveFocus(AInfo);
@@ -489,7 +489,7 @@ begin
    result := TInfra.GetDimensionCount(sgList.Cells[VAR_SIZE_COL, i]);
    if AIncludeType and (result <> -1) then
    begin
-      dataType := GProject.GetComponent<TUserDataType>(sgList.Cells[VAR_TYPE_COL, i]);
+      dataType := GProject.GetUserDataType(sgList.Cells[VAR_TYPE_COL, i]);
       if dataType <> nil then
          result := dataType.GetDimensionCount + result;
    end;
@@ -507,7 +507,7 @@ begin
    size := sgList.Cells[VAR_SIZE_COL, i];
    if AIncludeType then
    begin
-      dataType := GProject.GetComponent<TUserDataType>(sgList.Cells[VAR_TYPE_COL, i]);
+      dataType := GProject.GetUserDataType(sgList.Cells[VAR_TYPE_COL, i]);
       if dataType <> nil then
          size := size + dataType.GetDimensions;
    end;
@@ -606,7 +606,7 @@ begin
       begin
          if TParserHelper.IsEnumType(lType) then
          begin
-            dataType := GProject.GetComponent<TUserDataType>(cbType.Text);
+            dataType := GProject.GetUserDataType(cbType.Text);
             if (dataType <> nil) and not dataType.IsValidEnumValue(initVal) then
                status := INVALID_INIT_VAL;
          end
@@ -1083,8 +1083,8 @@ begin
       result.X := sgList.ClientWidth;
    if result.Y = 0 then
       result.Y := ARow * (sgList.DefaultRowHeight + sgList.GridLineWidth);
-   result.X := result.X + sgList.Left + (sgList.ColWidths[FExternalCol] div 2) - 5;
-   result.Y := result.Y + sgList.Top + 4;
+   result.X := result.X + sgList.Left + (sgList.ColWidths[FExternalCol] div 2) - TInfra.Scaled(5);
+   result.Y := result.Y + sgList.Top + (sgList.DefaultRowHeight div 2) - TInfra.Scaled(5);
 end;
 
 function TDeclareList.CreateExternalCheckBox(ARow: integer): TCheckBox;
@@ -1099,7 +1099,7 @@ begin
       result.Parent := sgList.Parent;
       sgList.Objects[FExternalCol, ARow] := result;
       result.AllowGrayed := GInfra.CurrentLang.AllowTransExternVarConst;
-      result.SetBounds(pnt.X, pnt.Y, 12, 12);
+      result.SetBounds(pnt.X, pnt.Y, TInfra.Scaled(12), TInfra.Scaled(12));
       result.Visible := IsRowVisible(ARow) and not IsControlTooRight(result);
       result.OnClick := OnClickChBox;
       result.Repaint;

@@ -17,7 +17,7 @@ interface
 
 
 uses 
-   YaccLib, LexLib, Pascal_Generator, ParserHelper, ApplicationCommon, CommonTypes;
+   YaccLib, LexLib, Pascal_Generator, ParserHelper, Infrastructure;
 
 var
    paramList: array of integer;

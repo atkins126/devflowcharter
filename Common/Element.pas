@@ -25,7 +25,7 @@ interface
 
 uses
    Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.Forms, Vcl.Controls, Generics.Defaults,
-   OmniXml, PageControl_Form, CommonTypes;
+   OmniXml, PageControl_Form, Types;
 
 type
 
@@ -65,7 +65,7 @@ type
 implementation
 
 uses
-   Vcl.Graphics, System.SysUtils, CommonInterfaces, ApplicationCommon, TabComponent;
+   Vcl.Graphics, System.SysUtils, Interfaces, TabComponent, Infrastructure, Constants;
 
 constructor TElement.Create(AParent: TScrollBox);
 begin
@@ -82,7 +82,7 @@ begin
 
    edtName := TNameEdit.Create(Self);
    edtName.Parent := Self;
-   edtName.SetBounds(3, 0, 70, 21);
+   edtName.SetBounds(3, 0, TInfra.Scaled(70), 21);
    edtName.ParentFont := false;
    edtName.Font.Style := [];
    edtName.ParentCtl3D := false;
@@ -94,9 +94,9 @@ begin
    edtName.OnChange := OnChangeName;
 
    cbType := TComboBox.Create(Self);
-   cbType.SetBounds(87, 0, 70, 21);
-   cbType.Constraints.MaxWidth := 74;
    cbType.Parent := Self;
+   cbType.SetBounds(TInfra.Scaled(87), 0, TInfra.Scaled(70), 21);
+   cbType.Constraints.MaxWidth := TInfra.Scaled(74);
    cbType.Style := csDropDownList;
    cbType.ParentFont := false;
    cbType.Font.Style := [];
@@ -146,6 +146,8 @@ end;
 
 procedure TElement.OnChangeType(Sender: TObject);
 begin
+   if FParentForm.Visible and FParentForm.Enabled then  // replace with CanFocus once fixed by Embarcadero (RSP-34465)
+      FParentForm.SetFocus;
    cbType.Hint := cbType.Text;
    if FParentTab.Font.Color <> NOK_COLOR then
       TTabComponent(FParentTab).UpdateCodeEditor;

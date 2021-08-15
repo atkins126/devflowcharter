@@ -25,7 +25,7 @@ interface
 
 uses
    Vcl.Controls, Vcl.Menus, Vcl.ComCtrls, System.Classes, System.Types, OmniXML,
-   Base_Form, CommonTypes;
+   Base_Form, Types;
 
 type
 
@@ -79,8 +79,8 @@ implementation
 {$R *.dfm}
 
 uses
-   System.SysUtils, System.StrUtils, Vcl.Forms, ApplicationCommon, XMLProcessor,
-   TabComponent, CommonInterfaces;
+   System.SysUtils, System.StrUtils, Vcl.Forms, Infrastructure, XMLProcessor,
+   TabComponent, Interfaces;
 
 procedure TPageControlForm.miRemoveClick(Sender: TObject);
 var

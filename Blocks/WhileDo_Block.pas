@@ -24,7 +24,7 @@ unit WhileDo_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Types, Base_Block, CommonTypes;
+   Vcl.Graphics, System.Types, Base_Block, Types;
 
 type
 
@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-   System.Classes, ApplicationCommon, Return_Block;
+   System.Classes, Return_Block, Infrastructure;
 
 constructor TWhileDoBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

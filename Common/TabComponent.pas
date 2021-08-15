@@ -25,12 +25,12 @@ interface
 
 uses
    System.Classes, Vcl.ComCtrls, Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, WinApi.Windows,
-   Vcl.Graphics, WinApi.Messages, CommonInterfaces, OmniXML, Element, PageControl_Form,
-   CommonTypes, Generics.Defaults;
+   Vcl.Graphics, WinApi.Messages, Interfaces, OmniXML, Element, PageControl_Form,
+   Types, Generics.Defaults;
 
 type
 
-   TTabComponent = class(TTabSheet, IXMLable, IIdentifiable, ITabable, INameable, ISizeEditable, IFocusable, IExportable, IGenericComparable)
+   TTabComponent = class(TTabSheet, IXMLable, IWithId, IWithTab, IWithName, IWithSizeEdits, IWithFocus, IExportable, IGenericComparable)
       private
          FParentForm: TPageControlForm;
          FId: integer;
@@ -101,8 +101,8 @@ type
 implementation
 
 uses
-   System.SysUtils, Generics.Collections, System.StrUtils, System.Rtti, ApplicationCommon,
-   XMLProcessor, BaseEnumerator;
+   System.SysUtils, Generics.Collections, System.StrUtils, System.Rtti, Infrastructure,
+   XMLProcessor, BaseEnumerator, Constants;
 
 var
    ByTopElementComparer: IComparer<TElement>;
@@ -378,7 +378,7 @@ begin
    SendMessage(sbxElements.Handle, WM_SETREDRAW, WPARAM(False), 0);
    try
       elem := CreateElement;
-      sbxElements.Height := sbxElements.Height + 22;
+      sbxElements.Height := sbxElements.Height + TInfra.Scaled(22);
    finally
       SendMessage(sbxElements.Handle, WM_SETREDRAW, WPARAM(True), 0);
       RedrawWindow(sbxElements.Handle, nil, 0, RDW_INVALIDATE or RDW_FRAME or RDW_ERASE or RDW_ALLCHILDREN);

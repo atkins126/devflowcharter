@@ -26,7 +26,7 @@ uses
     SynEditCodeFolding,
 {$ENDIF}
     System.Classes, System.SysUtils, SizeEdit, SynEditHighlighter, YaccLib, DeclareList, UserFunction,
-    CommonTypes, OmniXML, UserDataType;
+    Types, OmniXML, UserDataType;
 
 type
 
@@ -269,7 +269,7 @@ const
 implementation
 
 uses
-   Vcl.Forms, System.StrUtils, System.IniFiles, ApplicationCommon, XMLProcessor;
+   Vcl.Forms, System.StrUtils, System.IniFiles, XMLProcessor, Constants, Infrastructure;
 
 constructor TLangDefinition.Create;
 begin

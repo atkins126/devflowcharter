@@ -29,8 +29,8 @@ implementation
 
 uses
    System.Classes, System.SysUtils, System.StrUtils, Vcl.Graphics, Vcl.ComCtrls,
-   System.Character, SynHighlighterJava, DeclareList, ApplicationCommon, UserDataType,
-   UserFunction, LangDefinition, ParserHelper, CommonTypes;
+   System.Character, SynHighlighterJava, DeclareList, Infrastructure, UserDataType,
+   UserFunction, LangDefinition, ParserHelper, Types, Constants;
 
 const
    JAVA_STRING_DELIM = #34;
@@ -782,7 +782,7 @@ begin
             begin
                if ContainsOneOf(AValue, ['.charValue()', '.toLowerCase(', '.toUpperCase(', '.reverseBytes(', '.toTitleCase(']) then
                   result := JAVA_CHAR_TYPE
-               else if ContainsOneOf( AValue, ['.digit(', '.codePoint']) then
+               else if ContainsOneOf( AValue, ['.digit(', '.getNumericValue(', '.getType(', '.codePoint']) then
                   result := JAVA_INT_TYPE
                else if AValue.Contains('.toString(') then
                   result := JAVA_STRING_TYPE

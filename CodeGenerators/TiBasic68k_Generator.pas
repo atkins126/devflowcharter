@@ -24,7 +24,7 @@ implementation
 
 uses
    System.SysUtils, System.Classes, System.StrUtils, UserFunction, DeclareList,
-   Main_Block, LangDefinition, ApplicationCommon, CommonInterfaces;
+   Main_Block, LangDefinition, Interfaces, Infrastructure, Constants;
 
 var
    tiBasicLang: TLangDefinition;

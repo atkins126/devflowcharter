@@ -25,11 +25,11 @@ interface
 
 uses
    Vcl.Forms, System.Classes, Vcl.Graphics, Vcl.Controls, OmniXML, BaseEnumerator,
-   CommonTypes, CommonInterfaces;
+   Types, Interfaces;
 
 type
 
-  TBaseForm = class(TForm, IFocusable)
+  TBaseForm = class(TForm, IWithFocus)
     public
       procedure Localize(AList: TStringList); virtual;
       procedure ImportSettingsFromXMLTag(ATag: IXMLElement); virtual;
@@ -49,7 +49,7 @@ type
 implementation
 
 uses
-   WinApi.Windows, ApplicationCommon;
+   WinApi.Windows, Infrastructure, Constants;
 
 procedure TBaseForm.Localize(AList: TStringList);
 begin

@@ -23,7 +23,7 @@ interface
 
 uses
    System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.StdCtrls, WinApi.Messages,
-   CommonInterfaces, CommonTypes, YaccLib;
+   Interfaces, Types, YaccLib;
 
 type
 
@@ -31,7 +31,7 @@ type
 
   TOnChangeExtend = procedure(AStatement: TStatement) of object;
 
-  TStatement = class(TCustomEdit, IIdentifiable, IFocusable)
+  TStatement = class(TCustomEdit, IWithId, IWithFocus)
   private
     { Private declarations }
     FExecuteParse: boolean;
@@ -121,7 +121,7 @@ type
 implementation
 
 uses
-   WinApi.Windows, System.SysUtils, Vcl.Forms, ApplicationCommon, Base_Block, Navigator_Form;
+   WinApi.Windows, System.SysUtils, Vcl.Forms, Infrastructure, Base_Block, Navigator_Form, Constants;
 
 constructor TStatement.Create(AOwner: TComponent);
 const

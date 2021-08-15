@@ -27,7 +27,7 @@ interface
 uses
    WinApi.Windows, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Controls, Vcl.Graphics,
    WinApi.Messages, System.SysUtils, System.Classes, Vcl.ComCtrls, System.UITypes,
-   Generics.Collections, Statement, OmniXML, BaseEnumerator, CommonInterfaces, CommonTypes,
+   Generics.Collections, Statement, OmniXML, BaseEnumerator, Interfaces, Types,
    BlockTabSheet, Comment, MemoEx;
 
 const
@@ -56,7 +56,7 @@ type
    TGroupBlock = class;
    TBranch = class;
 
-   TBlock = class(TCustomControl, IIdentifiable, IFocusable, IExportable, IMemoEx)
+   TBlock = class(TCustomControl, IWithId, IWithFocus, IExportable, IMemoEx)
       private
          FParentBlock: TGroupBlock;
          FParentBranch: TBranch;
@@ -258,7 +258,7 @@ type
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
    end;
 
-   TBranch = class(TList<TBlock>, IIdentifiable)
+   TBranch = class(TList<TBlock>, IWithId)
       private
          FParentBlock: TGroupBlock;
          FRemovedBlockIdx: integer;
@@ -288,8 +288,8 @@ implementation
 
 uses
    System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, System.TypInfo,
-   Main_Block, Return_Block, ApplicationCommon, BlockFactory, UserFunction, XMLProcessor,
-   Navigator_Form, LangDefinition, FlashThread, Main_Form;
+   Main_Block, Return_Block, Infrastructure, BlockFactory, UserFunction, XMLProcessor,
+   Navigator_Form, LangDefinition, FlashThread, Main_Form, Constants;
 
 type
    THackControl = class(TControl);
@@ -886,7 +886,7 @@ end;
 procedure TBlock.NCHitTest(var Msg: TWMNCHitTest);
 begin
    inherited;
-   if GetAsyncKeyState(vkLButton) <> 0 then
+   if (GetAsyncKeyState(vkLButton) <> 0) and not Mouse.IsDragging then
    begin
       FMouseLeave := false;
       case Cursor of

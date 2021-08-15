@@ -24,7 +24,7 @@ unit FunctionCall_Block;
 interface
 
 uses
-   Vcl.Graphics, Base_Block, CommonTypes;
+   Vcl.Graphics, Base_Block, Types;
 
 type
 
@@ -40,7 +40,7 @@ type
 implementation
 
 uses
-   Vcl.Controls, Vcl.Forms, System.Classes, System.Types, ApplicationCommon;
+   Vcl.Controls, Vcl.Forms, System.Classes, System.Types, Infrastructure;
 
 constructor TFunctionCallBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

@@ -23,7 +23,7 @@ unit If_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Types, Base_Block, CommonTypes;
+   Vcl.Graphics, System.Types, Base_Block, Types;
 
 type
 
@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-   System.Classes, ApplicationCommon;
+   System.Classes, Infrastructure;
 
 constructor TIfBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

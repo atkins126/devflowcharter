@@ -21,9 +21,13 @@ program devFlowcharter;
 
 {$R *.dres}
 
+{$WEAKLINKRTTI ON}
+{$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
+
 uses
   Forms,
-  ApplicationCommon in 'Common\ApplicationCommon.pas',
+  Constants in 'Common\Constants.pas',
+  Infrastructure in 'Common\Infrastructure.pas',
   Instr_Block in 'Blocks\Instr_Block.pas',
   Base_Block in 'Blocks\Base_Block.pas',
   ForDo_Block in 'Blocks\ForDo_Block.pas',
@@ -71,12 +75,12 @@ uses
   Comment in 'Common\Comment.pas',
   Settings in 'Common\Settings.pas',
   SizeEdit in 'Common\SizeEdit.pas',
-  CommonInterfaces in 'Common\CommonInterfaces.pas',
+  Interfaces in 'Common\Interfaces.pas',
   PageControl_Form in 'Forms\PageControl_Form.pas' {PageControlForm},
   TabComponent in 'Common\TabComponent.pas',
   Element in 'Common\Element.pas',
   Navigator_Form in 'Forms\Navigator_Form.pas' {NavigatorForm},
-  CommonTypes in 'Common\CommonTypes.pas',
+  Types in 'Common\Types.pas',
   Text_Block in 'Blocks\Text_Block.pas',
   SelectImport_Form in 'Forms\SelectImport_Form.pas' {SelectImportForm},
   EditMemo_Form in 'Forms\EditMemo_Form.pas' {MemoEditorForm},

@@ -24,7 +24,7 @@ unit Folder_Block;
 interface
 
 uses
-   System.Types, Base_Block, CommonTypes;
+   System.Types, Base_Block, Types;
 
 type
 
@@ -42,7 +42,7 @@ type
 implementation
 
 uses
-   System.StrUtils, ApplicationCommon;
+   System.StrUtils, Infrastructure;
 
 constructor TFolderBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

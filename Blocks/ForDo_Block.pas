@@ -25,7 +25,7 @@ interface
 
 uses
    Vcl.StdCtrls, Vcl.Graphics, System.Classes, Base_Block, Statement, OmniXML,
-   CommonTypes, LangDefinition;
+   Types, LangDefinition;
 
 type
 
@@ -43,6 +43,7 @@ type
          procedure PutTextControls; override;
          function GetTextTop: integer;
          function FillExpression(const AExpression: string; const ALangId: string): string;
+         function IsInitialized: boolean;
       public
          edtStart, edtStop: TStatement;
          cbVar: TComboBox;
@@ -70,7 +71,7 @@ implementation
 
 uses
    Vcl.Controls, Vcl.Forms, System.SysUtils, System.StrUtils, System.Math,
-   ApplicationCommon, XMLProcessor, Main_Block, UserFunction, Return_Block;
+   Infrastructure, Constants, XMLProcessor, Main_Block, UserFunction, Return_Block;
 
 const
    DEFAULT_WIDTH = 240;
@@ -231,7 +232,7 @@ var
    lShapeColor: TColor;
 begin
    inherited;
-   if Expanded then
+   if Expanded and IsInitialized then
    begin
 
       bhx := Branch.Hook.X;
@@ -590,6 +591,11 @@ begin
    end
    else
       result := FillCodedTemplate(lang.Name);
+end;
+
+function TForDoBlock.IsInitialized: boolean;
+begin
+   result := (edtStart <> nil) and (edtStop <> nil) and (edtVar <> nil) and (cbVar <> nil);
 end;
 
 function TForDoBlock.GetFromXML(ATag: IXMLElement): TError;

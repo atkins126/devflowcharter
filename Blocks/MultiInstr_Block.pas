@@ -24,7 +24,7 @@ unit MultiInstr_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Classes, Base_Block, MultiLine_Block, CommonTypes;
+   Vcl.Graphics, System.Classes, Base_Block, MultiLine_Block, Types;
 
 type
 
@@ -42,7 +42,7 @@ type
 implementation
 
 uses
-   System.SysUtils, System.StrUtils, System.UITypes, ApplicationCommon, YaccLib;
+   System.SysUtils, System.StrUtils, System.UITypes, Infrastructure, YaccLib, Constants;
 
 constructor TMultiInstrBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin

@@ -19,7 +19,7 @@
 
 
 
-unit CommonTypes;
+unit Types;
 
 interface
 
@@ -148,7 +148,7 @@ type
 implementation
 
 uses
-   System.SysUtils, System.Rtti, CommonInterfaces, ApplicationCommon, XMLProcessor;
+   System.SysUtils, System.Rtti, Interfaces, XMLProcessor, Constants;
 
 constructor TComponentComparer.Create(ACompareType: integer);
 begin
