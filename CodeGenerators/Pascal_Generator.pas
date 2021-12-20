@@ -1,7 +1,7 @@
 {
    Copyright (C) 2006 The devFlowcharter project.
    The initial author of this file is Michal Domagala.
-    
+
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License
    as published by the Free Software Foundation; either version 2
@@ -161,7 +161,7 @@ begin
                end
                else
                begin
-                  line := GSettings.IndentSpaces + varName + ': ';
+                  line := GSettings.IndentString + varName + ': ';
                   if dCount > 0 then
                   begin
                      varSize := '';
@@ -202,7 +202,7 @@ begin
                ALines.Add('var');
                cnt := 1;
             end;
-            ALines.AddObject(GSettings.IndentSpaces + buf + ': ' + currType + ';', AVarList);
+            ALines.AddObject(GSettings.IndentString + buf + ': ' + currType + ';', AVarList);
          end;
       end;
    end;
@@ -222,7 +222,7 @@ begin
          idx := ALines.Count;
          block.GenerateCode(ALines, pascalLang.Name, deep);
          if rand_flag <> 0 then
-            ALines.Insert(idx+1, DupeString(GSettings.IndentSpaces, deep+1) + 'Randomize;');
+            ALines.Insert(idx+1, GSettings.IndentString(deep+1) + 'Randomize;');
       end
       else
       begin

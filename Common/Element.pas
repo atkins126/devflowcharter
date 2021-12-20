@@ -46,7 +46,7 @@ type
          FElementTypeID: string;
          constructor Create(AParent: TScrollBox);
          procedure OnClickRemove(Sender: TObject);
-         procedure OnChangeType(Sender: TObject);
+         procedure OnChangeType(Sender: TObject); virtual;
          procedure OnChangeName(Sender: TObject); virtual;
          procedure UpdateMe;
          procedure OnDragOverElement(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
@@ -68,6 +68,8 @@ uses
    Vcl.Graphics, System.SysUtils, Interfaces, TabComponent, Infrastructure, Constants;
 
 constructor TElement.Create(AParent: TScrollBox);
+var
+   w: integer;
 begin
 
    inherited Create(AParent);
@@ -110,6 +112,8 @@ begin
    btnRemove.DoubleBuffered := true;
    btnRemove.Caption := i18Manager.GetString('btnRemove');
    btnRemove.OnClick := OnClickRemove;
+   w := TInfra.GetAutoWidth(btnRemove);
+   btnRemove.SetBounds(Parent.Width-w-TInfra.Scaled(32), 0, w+14, TInfra.Scaled(20));
 
    OnDragOver := OnDragOverElement;
    OnDragDrop := OnDragDropElement;

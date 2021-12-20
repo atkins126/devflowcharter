@@ -177,6 +177,8 @@ type
          function CountErrWarn: TErrWarnCount; virtual;
          function LockDrawing: boolean;
          procedure UnLockDrawing;
+         procedure LockDrawingComments;
+         procedure UnLockDrawingComments;
          function GetFocusColor: TColor;
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; virtual;
          function CanRemove: boolean;
@@ -193,10 +195,12 @@ type
          function GetExportFileName: string; virtual;
          function ExportToXMLFile(const AFile: string): TError; virtual;
          procedure OnMouseLeave(AClearRed: boolean = true); virtual;
+         function FindSelectedBlock: TBlock; virtual;
       published
          property Color;
          property OnMouseDown;
          property OnResize;
+         property OnMouseMove;
    end;
 
    TGroupBlock = class(TBlock)    // block which can aggregate child blocks
@@ -256,6 +260,7 @@ type
          function GetBranchIndexByControl(AControl: TControl): integer;
          function RemoveBranch(AIndex: integer): boolean;
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
+         function FindSelectedBlock: TBlock; override;
    end;
 
    TBranch = class(TList<TBlock>, IWithId)
@@ -1183,12 +1188,10 @@ begin
 end;
 
 procedure TBlock.MoveComments(x, y: integer);
-var
-   comment: TComment;
 begin
    if (x <> 0) and (y <> 0) and (Left <> 0) and (Top <> 0) and ((x <> Left) or (y <> Top)) then
    begin
-      for comment in GetComments(true) do
+      for var comment in GetComments(true) do
       begin
          if comment.Visible then
             TInfra.MoveWinTopZ(comment, comment.Left+x-Left, comment.Top+y-Top);
@@ -1295,6 +1298,32 @@ begin
    if Color <> lColor then
       ChangeColor(lColor);
    NavigatorForm.Invalidate;
+end;
+
+function TBlock.FindSelectedBlock: TBlock;
+begin
+   result := nil;
+   if Color = GSettings.HighlightColor then
+      result := Self;
+end;
+
+function TGroupBlock.FindSelectedBlock: TBlock;
+begin
+   result := inherited FindSelectedBlock;
+   if result = nil then
+   begin
+      for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+      begin
+         for var block in FBranchList[i] do
+         begin
+            result := block.FindSelectedBlock;
+            if result <> nil then
+               break;
+         end;
+         if result <> nil then
+            break;
+      end;
+   end;
 end;
 
 procedure TGroupBlock.ChangeColor(AColor: TColor);
@@ -1699,6 +1728,7 @@ begin
       FTopParentBlock.FDrawingFlag := true;
       result := true;
       SendMessage(FTopParentBlock.Handle, WM_SETREDRAW, WPARAM(False), 0);
+      FTopParentBlock.LockDrawingComments;
    end;
 end;
 
@@ -1707,10 +1737,29 @@ begin
    if FTopParentBlock.FDrawingFlag then
    begin
       SendMessage(FTopParentBlock.Handle, WM_SETREDRAW, WPARAM(True), 0);
+      FTopParentBlock.UnLockDrawingComments;
       GProject.RepaintFlowcharts;
       GProject.RepaintComments;
       RedrawWindow(Page.Handle, nil, 0, RDW_INVALIDATE or RDW_FRAME or RDW_ERASE);
       FTopParentBlock.FDrawingFlag := false;
+   end;
+end;
+
+procedure TBlock.LockDrawingComments;
+begin
+   for var comment in GetComments(true) do
+   begin
+      if comment.Visible then
+         SendMessage(comment.Handle, WM_SETREDRAW, WPARAM(False), 0);
+   end;
+end;
+
+procedure TBlock.UnLockDrawingComments;
+begin
+   for var comment in GetComments(true) do
+   begin
+      if comment.Visible then
+         SendMessage(comment.Handle, WM_SETREDRAW, WPARAM(True), 0);
    end;
 end;
 
@@ -2766,8 +2815,8 @@ begin
       ALines.Capacity := i;
    for i := 0 to ATemplate.Count-1 do
    begin
-      line := DupeString(GSettings.IndentSpaces, ADeep) + ATemplate[i];
-      line := ReplaceStr(line, INDENT_XML_CHAR, GSettings.IndentSpaces);
+      line := GSettings.IndentString(ADeep) + ATemplate[i];
+      line := ReplaceStr(line, INDENT_XML_CHAR, GSettings.IndentString);
       line := TInfra.StripInstrEnd(line);
       obj := ATemplate.Objects[i];
       if obj = nil then
@@ -2808,8 +2857,8 @@ begin
       end
       else
       begin
-         line := DupeString(GSettings.IndentSpaces, ADeep) + ATemplate[i];
-         line := ReplaceStr(line, INDENT_XML_CHAR, GSettings.IndentSpaces);
+         line := GSettings.IndentString(ADeep) + ATemplate[i];
+         line := ReplaceStr(line, INDENT_XML_CHAR, GSettings.IndentString);
          obj := ATemplate.Objects[i];
          if obj = nil then
             obj := Self;

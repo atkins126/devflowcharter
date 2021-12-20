@@ -25,11 +25,13 @@ interface
 
 uses
    Vcl.Forms, System.Classes, Vcl.Graphics, Vcl.Controls, OmniXML, BaseEnumerator,
-   Types, Interfaces;
+   Types, Interfaces, Vcl.ExtCtrls;
 
 type
 
   TBaseForm = class(TForm, IWithFocus)
+    protected
+      procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     public
       procedure Localize(AList: TStringList); virtual;
       procedure ImportSettingsFromXMLTag(ATag: IXMLElement); virtual;
@@ -142,6 +144,12 @@ end;
 function TBaseForm.GetTreeNodeText(ANodeOffset: integer = 0): string;
 begin
    result := Caption;
+end;
+
+procedure TBaseForm.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+   if Key in TO_MAIN_FORM_KEYS then
+      TInfra.GetMainForm.KeyDown(Key, Shift);
 end;
 
 end.

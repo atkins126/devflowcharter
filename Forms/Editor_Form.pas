@@ -124,6 +124,7 @@ type
     procedure memCodeEditorChange(Sender: TObject);
     procedure miFindProjClick(Sender: TObject);
     procedure OnChangeEditor;
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
   private
     { Private declarations }
     FCloseBracketPos: TPoint;
@@ -1648,14 +1649,14 @@ begin
                begin
                   sline := memCodeEditor.Lines[i];
                   if i = selStart.Line then
-                     selText := RightStr(sline, sline.Length - selStart.Char + 1) + sLineBreak
+                     selText := RightStr(sline, sline.Length - selStart.Char + 1) + #10
                   else if i = selEnd.Line then
                   begin
                      sline := LeftStr(sline, selEnd.Char-1);
                      selText := selText + sline.TrimLeft;
                   end
                   else
-                     selText := selText + sline.TrimLeft + sLineBreak;
+                     selText := selText + sline.TrimLeft + #10;
                end;
                focusInfo.SelText := selText;
             end
@@ -1673,6 +1674,11 @@ begin
       FWithFocus.RetrieveFocus(focusInfo);
    end;
    FWithFocus := nil;
+end;
+
+procedure TEditorForm.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+{}
 end;
 
 end.

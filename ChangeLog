@@ -1,3 +1,31 @@
+9.5 [06-11-2021]
+- Flowchart: prevent propagating Delete key press to text boxes when used to remove block
+- F11 key can now be used to enable/disable resizing frame
+- F12 key can now be used to fold/unfold selected block
+
+9.4 [04-11-2021]
+- Code Editor: fix few issues with "Find in Project" feature after loading project from file
+
+9.3 [23-10-2021]
+- added possibility to remove flowchart blocks with Delete key
+- Code Editor: fix indent issues in auto-updating of multiline blocks
+- fix blinking comments when updating flowchart
+
+9.2 [26-09-2021]
+- make attached SynEdit component compile with Delphi 11
+- Code Editor: fix width to display vertical scrollbar correctly
+- minor fixes and optimizations
+
+9.1 [25-08-2021]
+- DataTypes: fix misalignments in fields box introduced in 9.0
+- Functions: fix not updating function description in flowchart for parameter changes
+
+9.0 [15.08.2021]
+- fix access violation in for..do loop in some cases
+- fix bugs in copy/cut with drag and drop when resize frame was enabled
+- fixes for high DPI monitors (125%)
+- reduce exe file size
+
 8.12 [20.07.2021]
 - compiled with Delphi 10.4.2
 

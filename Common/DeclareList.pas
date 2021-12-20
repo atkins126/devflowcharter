@@ -447,12 +447,10 @@ begin
       end;
    end;
    if list <> nil then
-   begin
-      list.sgList.Row := i;
-      list.Show;
-   end
+      list.sgList.Row := i
    else
       list := Self;
+   list.Show;
    GetParentForm(list, False).Show;
    result := i > 0;
 end;
@@ -999,7 +997,6 @@ begin
    tag := ATag.OwnerDocument.CreateElement(FKind + 'width');
    tag.Text := Width.ToString;
    ATag.AppendChild(tag);
-   ATag.SetAttribute(ID_ATTR, FId.ToString);
 end;
 
 procedure TDeclareList.ExportItemToXMLTag(ATag: IXMLElement; idx: integer);

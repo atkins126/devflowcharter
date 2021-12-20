@@ -14,12 +14,12 @@ type
     chkSelectAll: TCheckBox;
     procedure FormShow(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
-    procedure FormCreate(Sender: TObject);
     procedure chkSelectAllClick(Sender: TObject);
   private
      FList: TStringList;
-     procedure CreateCheckBoxList;
-     procedure ClearCheckBoxList;
+     procedure SetComponents;
+     procedure ClearCheckBoxes;
+     procedure SetHeight(AHeight: integer);
   public
      procedure SetSelectList(AList: TStringList);
      procedure ResetForm; override;
@@ -31,7 +31,7 @@ var
 implementation
 
 uses
-   System.UITypes;
+   System.UITypes, WinApi.Windows;
 
 {$R *.dfm}
 
@@ -41,12 +41,10 @@ begin
 end;
 
 procedure TSelectImportForm.FormClose(Sender: TObject; var Action: TCloseAction);
-var
-   i: integer;
 begin
    if (FList <> nil) and not IsAbortResult(ModalResult) then
    begin
-      for i := pnlImports.ControlCount-1 downto 0 do
+      for var i := pnlImports.ControlCount-1 downto 0 do
       begin
          if not TCheckBox(pnlImports.Controls[i]).Checked then
             FList.Delete(i);
@@ -55,48 +53,37 @@ begin
    FList := nil;
 end;
 
-procedure TSelectImportForm.FormCreate(Sender: TObject);
-begin
-   Constraints.MaxHeight := (Screen.Height * 9) div 10;
-   Constraints.MaxWidth := 279;
-   Constraints.MinWidth := 279;
-end;
-
 procedure TSelectImportForm.FormShow(Sender: TObject);
 begin
    chkSelectAll.Checked := true;
-   ClearCheckBoxList;
-   CreateCheckBoxList;
+   ClearCheckBoxes;
+   SetComponents;
+   SetHeight(btnCancel.Top + btnCancel.Height + 45);
 end;
 
 procedure TSelectImportForm.ResetForm;
 begin
    Caption := '';
    chkSelectAll.Checked := true;
-   ClearCheckBoxList;
+   ClearCheckBoxes;
    FList := nil;
    Close;
 end;
 
 procedure TSelectImportForm.chkSelectAllClick(Sender: TObject);
-var
-   i: integer;
 begin
-   for i := 0 to pnlImports.ControlCount-1 do
+   for var i := 0 to pnlImports.ControlCount-1 do
       TCheckBox(pnlImports.Controls[i]).Checked := chkSelectAll.Checked;
 end;
 
-procedure TSelectImportForm.CreateCheckBoxList;
-var
-   i, t: integer;
-   chkBox: TCheckBox;
+procedure TSelectImportForm.SetComponents;
 begin
-   t := 10;
+   var t := 10;
    if FList <> nil then
    begin
-      for i := 0 to FList.Count-1 do
+      for var i := 0 to FList.Count-1 do
       begin
-         chkBox := TCheckBox.Create(pnlImports);
+         var chkBox := TCheckBox.Create(pnlImports);
          chkBox.Parent := pnlImports;
          chkBox.Caption := FList[i];
          chkBox.Checked := true;
@@ -109,13 +96,22 @@ begin
    chkSelectAll.Top := pnlImports.Top + pnlImports.Height + 11;
    btnOk.Top := chkSelectAll.Top - 4;
    btnCancel.Top := btnOk.Top;
-   Height := btnCancel.Top + btnCancel.Height + 45;
 end;
 
-procedure TSelectImportForm.ClearCheckBoxList;
+procedure TSelectImportForm.ClearCheckBoxes;
 begin
    while pnlImports.ControlCount > 0 do
       pnlImports.Controls[0].Free;
+end;
+
+procedure TSelectImportForm.SetHeight(AHeight: integer);
+begin
+   var h := MulDiv(Screen.Height, 9, 10);
+   if AHeight < h then
+      h := AHeight;
+   Constraints.MaxHeight := h;
+   Constraints.MinHeight := h;
+   Height := h;
 end;
 
 end.

@@ -42,7 +42,7 @@ type
 implementation
 
 uses
-   System.SysUtils, System.StrUtils, System.UITypes, Infrastructure, YaccLib, Constants;
+   System.SysUtils, System.StrUtils, Infrastructure, YaccLib, Constants;
 
 constructor TMultiInstrBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
@@ -100,29 +100,24 @@ end;
 function TMultiInstrBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
 var
    i: integer;
-   template, line: string;
+   template: string;
    tmpList: TStringList;
 begin
-   result := 0;
-   if (fsStrikeOut in Font.Style) or (FStatements.Text = '') then
-      exit;
+   if fsStrikeOut in Font.Style then
+      Exit(0);
    template := GetBlockTemplate(ALangId);
-   if not template.IsEmpty then
+   if template.IsEmpty then
+      result := inherited GenerateCode(ALines, ALangId, ADeep, AFromLine)
+   else
    begin
       tmpList := TStringList.Create;
       try
          for i := 0 to FStatements.Lines.Count-1 do
-         begin
-            line := FStatements.Lines.Strings[i].Trim;
-            if not line.IsEmpty then
-               GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, line), ALangId, ADeep)
-            else
-               tmpList.AddObject('', Self);
-         end;
+            GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, FStatements.Lines.Strings[i].Trim), ALangId, ADeep);
          if tmpList.Text.IsEmpty then
             GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, ''), ALangId, ADeep);
          if EndsText(sLineBreak, FStatements.Text) then
-            tmpList.AddObject('', Self);
+            tmpList.AddObject(GSettings.IndentString(ADeep), Self);
          TInfra.InsertLinesIntoList(ALines, tmpList, AFromLine);
          result := tmpList.Count;
       finally

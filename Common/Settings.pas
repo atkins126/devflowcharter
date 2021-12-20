@@ -104,6 +104,7 @@ type
       procedure ResetCurrentLangName;
       function GetShapeColor(const shape: TColorShape): TColor;
       function UpdateEditor: boolean;
+      function IndentString(ATimes: integer = 1): string;
       property ParseInput: boolean read FParseInput;
       property ParseOutput: boolean read FParseOutput;
       property ParseAssign: boolean read FParseAssign;
@@ -136,7 +137,6 @@ type
       property EditorAutoSelectBlock: boolean read FEditorAutoSelectBlock;
       property EditorAutoUpdate: boolean read FEditorAutoUpdate write FEditorAutoUpdate;
       property IndentLength: integer read FIndentLength;
-      property IndentSpaces: string read FIndentSpaces;
       property IndentChar: char read FIndentChar;
       property FlowchartFontName: string read FFlowchartFontName;
       property FlowchartFontSize: integer read FFlowchartFontSize;
@@ -168,7 +168,7 @@ uses
    System.Win.Registry,
 {$ENDIF}
    System.SysUtils, Vcl.Forms, Vcl.Controls, System.Math, System.Classes, System.IOUtils,
-   Infrastructure, Main_Form, Navigator_Form, Constants;
+   System.StrUtils, Infrastructure, Main_Form, Navigator_Form, Constants;
 
 const
    KEY_HIGHLIGHT_COLOR = 'HighlightColor';
@@ -456,6 +456,14 @@ begin
    end;
 end;
 
+function TSettings.IndentString(ATimes: integer = 1): string;
+begin
+   if ATimes = 1 then
+      result := FIndentSpaces
+   else
+      result := DupeString(FIndentSpaces, ATimes);
+end;
+
 procedure TSettings.UpdateForHLighter(AHLighter: TSynCustomHighlighter);
 begin
    FEditorShowRichText := FEditorShowRichText and (AHLighter <> nil);
@@ -557,7 +565,8 @@ begin
          colorChanged := true;
          FPenColor := pnlPen.Color;
       end;
-      FHighlightColor := pnlFill.Color;
+      if (FHighlightColor <> pnlFill.Color) and  (pnlFill.Color <> pnlDesktop.Color) then
+         FHighlightColor := pnlFill.Color;
       FConfirmRemove := chkConfirmRemove.Checked;
       FPrintMultPages := chkMultiPrint.Checked;
       FPrintMultPagesHorz := chkMultiPrintHorz.Checked;

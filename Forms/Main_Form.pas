@@ -205,7 +205,7 @@ type
     procedure FuncMenuClick(Sender: TObject);
     procedure miIsHeaderClick(Sender: TObject);
     procedure miPasteTextClick(Sender: TObject);
-    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
   private
     { Private declarations }
     FClockPos: TClockPos;
@@ -279,10 +279,31 @@ begin
    end;
 end;
 
-procedure TMainForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+procedure TMainForm.KeyDown(var Key: Word; Shift: TShiftState);
 begin
-   if GProject <> nil then
-      GProject.GetActivePage.Box.BoxKeyDown(Sender, Key, Shift);
+   if GProject = nil then
+      Exit;
+   if Key in TO_MAIN_FORM_KEYS then
+   begin
+      var selectedBlock := GProject.FindSelectedBlock;
+      if selectedBlock <> nil then
+      begin
+         pmPages.PopupComponent := selectedBlock;
+         case Key of
+            vkDelete: miRemove.Click;
+            vkF12: miFoldUnfold.Click;
+            vkF11:
+            begin
+               miFrame.Click;
+               var p := selectedBlock.ScreenToClient(Mouse.CursorPos);
+               selectedBlock.OnMouseMove(selectedBlock, Shift, p.X, p.Y);
+            end;
+         end;
+         Key := 0;
+      end;
+   end
+   else
+      GProject.GetActivePage.Box.BoxKeyDown(Self, Key, Shift);
 end;
 
 procedure TMainForm.ResetForm;
@@ -396,6 +417,7 @@ begin
     GProject.ChangingOn := true;
     GProject.SetNotChanged;
     Screen.Cursor := tmpCursor;
+    SetFocus;
     if not filePath.IsEmpty then
        AcceptFile(filePath)
     else

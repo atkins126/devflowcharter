@@ -31,7 +31,8 @@ type
 
    TForDoBlock = class(TGroupBlock)
       protected
-         FDescOrder: boolean;
+         FDescOrder,
+         FIsInitialized: boolean;
          FForLabel: string;
          procedure Paint; override;
          procedure VarOnClick(Sender: TObject);
@@ -43,7 +44,6 @@ type
          procedure PutTextControls; override;
          function GetTextTop: integer;
          function FillExpression(const AExpression: string; const ALangId: string): string;
-         function IsInitialized: boolean;
       public
          edtStart, edtStop: TStatement;
          cbVar: TComboBox;
@@ -151,6 +151,7 @@ begin
    Constraints.MinHeight := DEFAULT_HEIGHT;
    FStatement.Free;
    FStatement := nil;
+   FIsInitialized := true;
 end;
 
 procedure TForDoBlock.CloneFrom(ABlock: TBlock);
@@ -232,7 +233,7 @@ var
    lShapeColor: TColor;
 begin
    inherited;
-   if Expanded and IsInitialized then
+   if Expanded and FIsInitialized then
    begin
 
       bhx := Branch.Hook.X;
@@ -413,7 +414,7 @@ begin
    result := 0;
    if fsStrikeOut in Font.Style then
       exit;
-   indent := DupeString(GSettings.IndentSpaces, ADeep);
+   indent := GSettings.IndentString(ADeep);
    tmpList := TStringList.Create;
    try
       if (ALangId = PYTHON_LANG_ID) or (ALangId = JAVA_LANG_ID) then   // for Java and Python it's impossible to create suitable for..do XML template so hardcoded template must be used
@@ -591,11 +592,6 @@ begin
    end
    else
       result := FillCodedTemplate(lang.Name);
-end;
-
-function TForDoBlock.IsInitialized: boolean;
-begin
-   result := (edtStart <> nil) and (edtStop <> nil) and (edtVar <> nil) and (cbVar <> nil);
 end;
 
 function TForDoBlock.GetFromXML(ATag: IXMLElement): TError;
