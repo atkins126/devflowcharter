@@ -98,7 +98,7 @@ uses
 var
    pascalLang: TLangDefinition;
 
-procedure Pascal_ExecuteBeforeGeneration;
+procedure Pascal_BeforeProgramGenerator;
 begin
    // execute parse to set _flag variables
    rand_flag := 0;
@@ -210,16 +210,13 @@ begin
 end;
 
 procedure Pascal_MainFunctionSectionGenerator(ALines: TStringList; deep: integer);
-var
-   block: TMainBlock;
-   idx: integer;
 begin
    if GProject <> nil then
    begin
-      block := GProject.GetMainBlock;
+      var block := GProject.GetMainBlock;
       if block <> nil then
       begin
-         idx := ALines.Count;
+         var idx := ALines.Count;
          block.GenerateCode(ALines, pascalLang.Name, deep);
          if rand_flag <> 0 then
             ALines.Insert(idx+1, GSettings.IndentString(deep+1) + 'Randomize;');
@@ -237,14 +234,11 @@ begin
 end;
 
 procedure Pascal_SetHLighterAttrs;
-var
-   pascalHighlighter: TSynPasSyn;
-   bkgColor: TColor;
 begin
    if (pascalLang <> nil) and (pascalLang.HighLighter is TSynPasSyn) then
    begin
-      bkgColor := GSettings.EditorBkgColor;
-      pascalHighlighter := TSynPasSyn(pascalLang.HighLighter);
+      var bkgColor := GSettings.EditorBkgColor;
+      var pascalHighlighter := TSynPasSyn(pascalLang.HighLighter);
       pascalHighlighter.StringAttri.Foreground     := GSettings.EditorStringColor;
       pascalHighlighter.StringAttri.Background     := bkgColor;
       pascalHighlighter.NumberAttri.Foreground     := GSettings.EditorNumberColor;
@@ -355,7 +349,7 @@ initialization
    if pascalLang <> nil then
    begin
       pascalLang.Parser := TPascalParser.Create;
-      pascalLang.ExecuteBeforeGeneration :=  Pascal_ExecuteBeforeGeneration;
+      pascalLang.BeforeProgramGenerator :=  Pascal_BeforeProgramGenerator;
       pascalLang.ProgramHeaderSectionGenerator := Pascal_ProgramHeaderSectionGenerator;
       pascalLang.VarSectionGenerator := Pascal_VarSectionGenerator;
       pascalLang.MainFunctionSectionGenerator := Pascal_MainFunctionSectionGenerator;

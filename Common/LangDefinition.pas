@@ -51,14 +51,14 @@ type
       FConstTemplate,
       FDataTypesTemplate,
       FFunctionsTemplate,
-      FFileContentsTemplate,
+      FProgramTemplate,
       FLibTemplate,
       FProgramHeaderTemplate: string;
       function GetVarTemplate: string;
       function GetConstTemplate: string;
       function GetDataTypesTemplate: string;
       function GetFunctionsTemplate: string;
-      function GetFileContentsTemplate: string;
+      function GetProgramTemplate: string;
       function GetLibTemplate: string;
       function GetProgramHeaderTemplate: string;
       procedure InitBlockTemplates;
@@ -91,7 +91,6 @@ type
       LabelFuncCall,
       LabelInstr,
       LabelMultiInstr,
-      LabelReturn,
       LabelCase,
       LabelText,
       LabelFolder,
@@ -219,8 +218,8 @@ type
       InOutCursorPos,
       FuncBracketsCursorPos: integer;
       BlockTemplates: array[TBlockType] of string;
-      ExecuteBeforeGeneration: procedure;
-      ExecuteAfterGeneration: procedure;
+      BeforeProgramGenerator: procedure;
+      AfterProgramGenerator: procedure;
       ProgramHeaderSectionGenerator: procedure (ALines: TStringList);
       LibSectionGenerator: procedure (ALines: TStringList);
       UserDataTypesSectionGenerator: procedure (ALines: TStringList);
@@ -228,7 +227,7 @@ type
       ConstSectionGenerator: procedure (ALines: TStringList; AConstList: TConstDeclareList);
       UserFunctionsSectionGenerator: procedure (ALines: TStringList; ASkipBodyGenerate: boolean);
       MainFunctionSectionGenerator: procedure (ALines: TStringList; ADeep: integer);
-      FileContentsGenerator: function (ALines: TStringList; ASkipBodyGenerate: boolean): boolean;
+      ProgramGenerator: procedure (ALines: TStringList);
       GetUserFuncDesc: function (AHeader: TUserFunctionHeader; AFullParams: boolean = true; AIncludeDesc: boolean = true): string;
       GetUserFuncHeaderDesc: function (AHeader: TUserFunctionHeader): string;
       GetUserTypeDesc: function (ADataType: TUserDataType): string;
@@ -254,7 +253,7 @@ type
       property ConstTemplate: string read GetConstTemplate;
       property DataTypesTemplate: string read GetDataTypesTemplate;
       property FunctionsTemplate: string read GetFunctionsTemplate;
-      property FileContentsTemplate: string read GetFileContentsTemplate;
+      property ProgramTemplate: string read GetProgramTemplate;
       property LibTemplate: string read GetLibTemplate;
       property ProgramHeaderTemplate: string read GetProgramHeaderTemplate;
    end;
@@ -282,15 +281,15 @@ begin
    KeyWords := TStringList.Create;
    UpperCaseConstId := true;
    EnabledPointers := true;
-   ExecuteBeforeGeneration := nil;
-   ExecuteAfterGeneration := nil;
+   BeforeProgramGenerator := nil;
+   AfterProgramGenerator := nil;
    ProgramHeaderSectionGenerator := nil;
    LibSectionGenerator := nil;
    UserDataTypesSectionGenerator := nil;
    ConstSectionGenerator := nil;
    UserFunctionsSectionGenerator := nil;
    MainFunctionSectionGenerator := nil;
-   FileContentsGenerator := nil;
+   ProgramGenerator := nil;
    GetUserFuncDesc := nil;
    GetUserFuncHeaderDesc := nil;
    GetUserTypeDesc := nil;
@@ -495,7 +494,6 @@ begin
       LabelIf                        := GetTextFromChild(ATag, 'LabelIf');
       LabelIfElse                    := GetTextFromChild(ATag, 'LabelIfElse');
       LabelFuncCall                  := GetTextFromChild(ATag, 'LabelFuncCall');
-      LabelReturn                    := GetTextFromChild(ATag, 'LabelReturn');
       LabelText                      := GetTextFromChild(ATag, 'LabelText');
       LabelFolder                    := GetTextFromChild(ATag, 'LabelFolder');
       LabelIn                        := GetTextFromChild(ATag, 'LabelIn');
@@ -510,7 +508,7 @@ begin
       ProgramReturnTemplate          := GetTextFromChild(ATag, 'ProgramReturnTemplate');
       FDataTypesTemplate             := GetTextFromChild(ATag, 'DataTypesTemplate');
       FFunctionsTemplate             := GetTextFromChild(ATag, 'FunctionsTemplate');
-      FFileContentsTemplate          := GetTextFromChild(ATag, FILE_CONTENTS_TAG);
+      FProgramTemplate               := GetTextFromChild(ATag, PROGRAM_TEMPLATE_TAG);
       DataTypeIntMask                := GetTextFromChild(ATag, 'DataTypeIntMask');
       DataTypeRealMask               := GetTextFromChild(ATag, 'DataTypeRealMask');
       DataTypeOtherMask              := GetTextFromChild(ATag, 'DataTypeOtherMask');
@@ -719,20 +717,16 @@ begin
 end;
 
 procedure TLangDefinition.LoadCompilerData;
-var
-   sFile: TCustomIniFile;
 begin
-   sFile := GSettings.SettingsFile;
+   var sFile := GSettings.SettingsFile;
    CompilerCommand := sFile.ReadString(SETTINGS_SECTION, FCompilerKey, '');
    CompilerCommandNoMain := sFile.ReadString(SETTINGS_SECTION, FCompilerNoMainKey, '');
    CompilerFileEncoding := sFile.ReadString(SETTINGS_SECTION, FCompilerFileEncodingKey, '');
 end;
 
 procedure TLangDefinition.SaveCompilerData;
-var
-   sFile: TCustomIniFile;
 begin
-   sFile := GSettings.SettingsFile;
+   var sFile := GSettings.SettingsFile;
    sFile.WriteString(SETTINGS_SECTION, FCompilerKey, CompilerCommand);
    sFile.WriteString(SETTINGS_SECTION, FCompilerNoMainKey, CompilerCommandNoMain);
    sFile.WriteString(SETTINGS_SECTION, FCompilerFileEncodingKey, CompilerFileEncoding);
@@ -744,15 +738,12 @@ begin
 end;
 
 function TLangDefinition.GetArraySizes(ASizeEdit: TSizeEdit): string;
-var
-   i: integer;
-   dims: TArray<string>;
 begin
    result := '';
    if ASizeEdit <> nil then
    begin
-      dims := ASizeEdit.GetDimensions;
-      for i := 0 to High(dims) do
+      var dims := ASizeEdit.GetDimensions;
+      for var i := 0 to High(dims) do
          result := result + Format(VarEntryArraySize, [dims[i]]);
       if VarEntryArraySizeStripCount > 0 then
          SetLength(result, result.Length - VarEntryArraySizeStripCount);
@@ -795,9 +786,9 @@ begin
    result := TInfra.ReplaceXMLIndents(FFunctionsTemplate);
 end;
 
-function TLangDefinition.GetFileContentsTemplate: string;
+function TLangDefinition.GetProgramTemplate: string;
 begin
-   result := TInfra.ReplaceXMLIndents(FFileContentsTemplate);
+   result := TInfra.ReplaceXMLIndents(FProgramTemplate);
 end;
 
 function TLangDefinition.GetLibTemplate: string;

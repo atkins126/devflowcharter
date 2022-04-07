@@ -40,10 +40,11 @@ type
          procedure VarListOnCloseUp(Sender: TObject);
          procedure SetWidth(AMinX: integer); override;
          procedure SetDescOrder(AValue: boolean);
-         procedure OnChangeExtend(AStatement: TStatement);
          procedure PutTextControls; override;
          function GetTextTop: integer;
          function FillExpression(const AExpression: string; const ALangId: string): string;
+         procedure OnChangeAll;
+         procedure OnChangeEdit(AEdit: TCustomEdit);
       public
          edtStart, edtStop: TStatement;
          cbVar: TComboBox;
@@ -65,16 +66,17 @@ type
          function FillTemplate(const ALangId: string; const ATemplate: string = ''): string; override;
          function FillCodedTemplate(const ALangId: string): string; override;
          function GetDescTemplate(const ALangId: string): string; override;
+         procedure ResizeVert(AContinue: boolean); override;
    end;
 
 implementation
 
 uses
-   Vcl.Controls, Vcl.Forms, System.SysUtils, System.StrUtils, System.Math,
+   Vcl.Controls, Vcl.Forms, System.SysUtils, System.StrUtils, System.Math, YaccLib,
    Infrastructure, Constants, XMLProcessor, Main_Block, UserFunction, Return_Block;
 
 const
-   DEFAULT_WIDTH = 240;
+   DEFAULT_WIDTH = 246;
    DEFAULT_HEIGHT = 91;
    DEFAULT_BOTTOM_HOOK = DEFAULT_WIDTH div 2;
    RIGHT_MARGIN = 11;
@@ -82,7 +84,7 @@ const
 constructor TForDoBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpRoadSign, yymFor);
 
    FInitParms.Width := DEFAULT_WIDTH;
    FInitParms.Height := DEFAULT_HEIGHT;
@@ -92,45 +94,36 @@ begin
    FInitParms.P2X := 0;
    FInitParms.HeightAffix := 22;
 
-   FShape := shpRoadSign;
-
+   var sColor := GSettings.GetShapeColor(FShape);
    FForLabel := i18Manager.GetString('CaptionFor');
 
-   edtStart := TStatement.Create(Self);
-   edtStart.Color := GSettings.GetShapeColor(FShape);
-   edtStart.Font.Size := FStatement.Font.Size;
-   edtStart.DoubleBuffered := true;
-   edtStart.OnChangeExtend := OnChangeExtend;
+   edtStart := TStatement.Create(Self, yymFor);
+   edtStart.Color := sColor;
+   edtStart.OnChangeExtend := OnChangeEdit;
 
-   edtStop := TStatement.Create(Self);
-   edtStop.Color := edtStart.Color;
-   edtStop.Font.Size := FStatement.Font.Size;
-   edtStop.DoubleBuffered := true;
-   edtStop.OnChangeExtend := OnChangeExtend;
+   edtStop := TStatement.Create(Self, yymFor);
+   edtStop.Color := sColor;
+   edtStop.OnChangeExtend := OnChangeEdit;
 
    cbVar := TComboBox.Create(Self);
    cbVar.Parent := Self;
    cbVar.Visible := False;
    cbVar.Font.Color := GSettings.FontColor;
-   cbVar.Font.Size := FStatement.Font.Size;
-   cbVar.Font.Name := GSettings.FlowchartFontName;
    cbVar.Ctl3D := False;
    cbVar.BevelInner := bvRaised;
    cbVar.BevelKind := bkSoft;
    cbVar.BevelOuter := bvNone;
    cbVar.OnCloseUp := VarListOnCloseUp;
    cbVar.Style := csOwnerDrawFixed;
-   cbVar.Color := edtStart.Color;
+   cbVar.Color := sColor;
 
    edtVar := TEdit.Create(Self);
    edtVar.Parent := Self;
    edtVar.ReadOnly := GInfra.CurrentLang.ForDoVarList;
    edtVar.ShowHint := True;
    edtVar.AutoSelect := False;
-   edtVar.Color := edtStart.Color;
-   edtVar.Font.Size := FStatement.Font.Size;
-   edtVar.Font.Name := GSettings.FlowchartFontName;
    edtVar.DoubleBuffered := true;
+   edtVar.Color := sColor;
    
    PopulateComboBoxes;
 
@@ -140,9 +133,7 @@ begin
    edtVar.OnClick := VarOnClick;
    edtVar.OnChange := VarOnChange;
 
-   edtStart.OnChangeExtend(edtStart);
-   edtStop.OnChangeExtend(edtStop);
-   edtVar.OnChange(edtVar);
+   OnChangeAll;
 
    BottomPoint := Point(Width-RIGHT_MARGIN, 20);
    TopHook := Point(ABlockParms.br.X, 39);
@@ -155,12 +146,10 @@ begin
 end;
 
 procedure TForDoBlock.CloneFrom(ABlock: TBlock);
-var
-   forBlock: TForDoBlock;
 begin
    if ABlock is TForDoBlock then
    begin
-      forBlock := TForDoBlock(ABlock);
+      var forBlock := TForDoBlock(ABlock);
       edtStart.Text := forBlock.edtStart.Text;
       edtStop.Text := forBlock.edtStop.Text;
       edtVar.Text := forBlock.edtVar.Text;
@@ -175,6 +164,7 @@ begin
       end;
    end;
    inherited CloneFrom(ABlock);
+   PutTextControls;
 end;
 
 constructor TForDoBlock.Create(ABranch: TBranch);
@@ -182,18 +172,17 @@ begin
    Create(ABranch, TBlockParms.New(blFor, 0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_BOTTOM_HOOK, 69, DEFAULT_BOTTOM_HOOK));
 end;
 
-procedure TForDoBlock.OnChangeExtend(AStatement: TStatement);
-var
-   w: integer;
+procedure TForDoBlock.OnChangeEdit(AEdit: TCustomEdit);
 begin
-   w := Max(TInfra.GetAutoWidth(AStatement), 30);
-   if w <> AStatement.Width then
+   var w := TInfra.GetAutoWidth(AEdit, 30);
+   if w <> AEdit.Width then
    begin
-      AStatement.Width := w;
+      AEdit.Width := w;
       PutTextControls;
-      FInitParms.Width := edtStop.Left + edtStop.Width + 76;
+      FInitParms.Width := edtStop.Left + edtStop.Width + 82;
       FInitParms.BottomPoint.X := FInitParms.Width - RIGHT_MARGIN;
    end;
+   UpdateEditor(AEdit);
 end;
 
 procedure TForDoBlock.SetDescOrder(AValue: boolean);
@@ -213,45 +202,27 @@ begin
 end;
 
 procedure TForDoBlock.PutTextControls;
-var
-   t, r: integer;
 begin
-   t := GetTextTop;
-   r := DrawTextLabel(Branch.Hook.X-97, t, FForLabel, false, true, false).Right;
-   cbVar.SetBounds(r+4, 34-t, edtVar.Width+5, cbVar.Height);
+   var t := GetTextTop;
+   var r := DrawTextLabel(Branch.Hook.X-97, t, FForLabel, false, true, false).Right;
+   cbVar.SetBounds(r+1, 34-t, edtVar.Width+5, cbVar.Height);
    edtVar.SetBounds(cbVar.Left+4, 38-t, edtVar.Width, edtVar.Height);
-   r := DrawTextLabel(edtVar.Left + edtVar.Width+3, t, GInfra.CurrentLang.ForDoVarString, false, true, false).Right;
+   r := DrawTextLabel(edtVar.Left + edtVar.Width + 3, t, GInfra.CurrentLang.ForDoVarString, false, true, false).Right;
    edtStart.SetBounds(r+4, 38-t, edtStart.Width, edtStart.Height);
-   r := DrawTextLabel(edtStart.Left+edtStart.Width+3, t, IfThen(FDescOrder, '«', '»'), false, true, false).Right;
+   r := DrawTextLabel(edtStart.Left + edtStart.Width + 3, t, IfThen(FDescOrder, '«', '»'), false, true, false).Right;
    edtStop.SetBounds(r+4, 38-t, edtStop.Width, edtStop.Height);
-   Repaint;
+   Invalidate;
 end;
 
 procedure TForDoBlock.Paint;
-var
-   bhx, br0, br1, br2, t, a, b: integer;
-   lShapeColor: TColor;
 begin
    inherited;
    if Expanded and FIsInitialized then
    begin
-
-      bhx := Branch.Hook.X;
-      t := GetTextTop;
-
-      a := edtStart.Left - edtVar.Left - edtVar.Width;
-      b := edtStop.Left - edtStart.Left - edtStart.Width;
-
-      cbVar.Left := bhx - 79;
-      edtVar.Left := cbVar.Left + 4;
-      br0 := edtVar.Left + edtVar.Width;
-      edtStart.Left := br0 + a;
-      br1 := edtStart.Left + edtStart.Width;
-      edtStop.Left := br1 + b;
-      br2 := edtStop.Left + edtStop.Width;
-
-      IPoint.X := br2 + 16;
-      IPoint.Y := 35;
+      var bhx := Branch.Hook.X;
+      var t := GetTextTop;
+      var bst := edtStop.BoundsRect.Right + 6;
+      IPoint := Point(bst + 16, 35);
       DrawArrow(bhx, TopHook.Y, Branch.Hook);
       DrawArrow(Width-11, 19, Width-RIGHT_MARGIN, Height-1);
       if Branch.FindInstanceOf(TReturnBlock) = -1 then
@@ -262,20 +233,20 @@ begin
                           Point(5, 19),
                           Point(bhx-100, 19)]);
       end;
-      Canvas.MoveTo(br2+30, 19);
+      Canvas.MoveTo(bst+30, 19);
       Canvas.LineTo(Width-RIGHT_MARGIN, 19);
       Canvas.Brush.Style := bsClear;
-      lShapeColor := GSettings.GetShapeColor(FShape);
-      if lShapeColor <> GSettings.DesktopColor then
-         Canvas.Brush.Color := lShapeColor;
+      var shpColor := GSettings.GetShapeColor(FShape);
+      if shpColor <> GSettings.DesktopColor then
+         Canvas.Brush.Color := shpColor;
       Canvas.Polygon([Point(bhx-100, 0),
-                      Point(br2-9, 0),
-                      Point(br2+30, 19),
-                      Point(br2-9, TopHook.Y),
+                      Point(bst-9, 0),
+                      Point(bst+30, 19),
+                      Point(bst-9, TopHook.Y),
                       Point(bhx-100, TopHook.Y),
                       Point(bhx-100, 0)]);
-      DrawTextLabel(br0+3, t, GInfra.CurrentLang.ForDoVarString, false, true);
-      DrawTextLabel(br1+3, t, IfThen(FDescOrder, '«', '»'), false, true);
+      DrawTextLabel(edtVar.BoundsRect.Right+3, t, GInfra.CurrentLang.ForDoVarString, false, true);
+      DrawTextLabel(edtStart.BoundsRect.Right+3, t, IfThen(FDescOrder, '«', '»'), false, true);
       DrawTextLabel(bhx-97, t, FForLabel, false, true);
       DrawBlockLabel(bhx-100, 40, GInfra.CurrentLang.LabelFor);
    end;
@@ -339,7 +310,7 @@ begin
             edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
       end;
    end;
-   w := Max(TInfra.GetAutoWidth(edtVar), IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
+   w := TInfra.GetAutoWidth(edtVar, IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
    if w <> edtVar.Width then
    begin
       edtVar.Width := w;
@@ -397,11 +368,9 @@ begin
 end;
 
 function TForDoBlock.GetDescTemplate(const ALangId: string): string;
-var
-   lang: TLangDefinition;
 begin
    result := '';
-   lang := GInfra.GetLangDefinition(ALangId);
+   var lang := GInfra.GetLangDefinition(ALangId);
    if lang <> nil then
       result := lang.ForDoDescTemplate;
 end;
@@ -413,7 +382,7 @@ var
 begin
    result := 0;
    if fsStrikeOut in Font.Style then
-      exit;
+      Exit;
    indent := GSettings.IndentString(ADeep);
    tmpList := TStringList.Create;
    try
@@ -467,25 +436,21 @@ begin
 end;
 
 function TForDoBlock.CountErrWarn: TErrWarnCount;
-var
-   lTextControl: TCustomEdit;
 begin
    result := inherited CountErrWarn;
-   lTextControl := GetTextControl;
-   if (lTextControl <> edtVar) and (edtVar.Font.Color = NOK_COLOR) then
+   var tc := GetTextControl;
+   if (tc <> edtVar) and (edtVar.Font.Color = NOK_COLOR) then
       Inc(result.ErrorCount);
-   if (lTextControl <> edtStart) and (edtStart.GetFocusColor = NOK_COLOR) then
+   if (tc <> edtStart) and (edtStart.GetFocusColor = NOK_COLOR) then
       Inc(result.ErrorCount);
-   if (lTextControl <> edtStop) and (edtStop.GetFocusColor = NOK_COLOR) then
+   if (tc <> edtStop) and (edtStop.GetFocusColor = NOK_COLOR) then
       Inc(result.ErrorCount);
 end;
 
 procedure TForDoBlock.ChangeColor(AColor: TColor);
-var
-   lColor: TColor;
 begin
    inherited ChangeColor(AColor);
-   lColor := GSettings.GetShapeColor(FShape);
+   var lColor := GSettings.GetShapeColor(FShape);
    if lColor = GSettings.DesktopColor then
    begin
       edtStart.Color := AColor;
@@ -503,8 +468,6 @@ begin
 end;
 
 procedure TForDoBlock.PopulateComboBoxes;
-var
-   header: TUserFunctionHeader;
 begin
    inherited PopulateComboBoxes;
    if GInfra.CurrentLang.ForDoVarList then
@@ -514,7 +477,7 @@ begin
          Items.Clear;
          if GProject.GlobalVars <> nil then
             GProject.GlobalVars.FillForList(Items);
-         header := TInfra.GetFunctionHeader(Self);
+         var header := TInfra.GetFunctionHeader(Self);
          if header <> nil then
             header.LocalVars.FillForList(Items);
          ItemIndex := Items.IndexOf(edtVar.Text);
@@ -555,15 +518,18 @@ begin
    result := inherited RetrieveFocus(AInfo);
 end;
 
-procedure TForDoBlock.UpdateEditor(AEdit: TCustomEdit);
-var
-   chLine: TChangeLine;
-   langName: string;
+procedure TForDoBlock.ResizeVert(AContinue: boolean);
 begin
-   langName := GInfra.CurrentLang.Name;
+   inherited ResizeVert(AContinue);
+   PutTextControls;
+end;
+
+procedure TForDoBlock.UpdateEditor(AEdit: TCustomEdit);
+begin
+   var langName := GInfra.CurrentLang.Name;
    if PerformEditorUpdate then
    begin
-      chLine := TInfra.GetChangeLine(Self);
+      var chLine := TInfra.GetChangeLine(Self);
       if chLine.Row <> ROW_NOT_FOUND then
       begin
          if GetBlockTemplate(langName).IsEmpty then
@@ -578,10 +544,8 @@ begin
 end;
 
 function TForDoBlock.FillExpression(const AExpression: string; const ALangId: string): string;
-var
-   lang: TLangDefinition;
 begin
-   lang := GInfra.GetLangDefinition(ALangId);
+   var lang := GInfra.GetLangDefinition(ALangId);
    if not AExpression.IsEmpty then
    begin
       result := ReplaceStr(AExpression, PRIMARY_PLACEHOLDER, Trim(edtVar.Text));
@@ -595,13 +559,11 @@ begin
 end;
 
 function TForDoBlock.GetFromXML(ATag: IXMLElement): TError;
-var
-   tag: IXMLElement;
 begin
    inherited GetFromXML(ATag);
    if ATag <> nil then
    begin
-      tag := TXMLProcessor.FindChildTag(ATag, 'i_var');
+      var tag := TXMLProcessor.FindChildTag(ATag, 'i_var');
       if tag <> nil then
       begin
          cbVar.Text := tag.Text;
@@ -616,17 +578,16 @@ begin
          edtStop.Text := ReplaceStr(tag.Text, '#' , ' ');
       FRefreshMode := false;
       FDescOrder := ATag.GetAttribute('order') = 'ordDesc';
-   end
+   end;
+   OnChangeAll;
 end;
 
 procedure TForDoBlock.SaveInXML(ATag: IXMLElement);
-var
-   tag: IXMLElement;
 begin
    inherited SaveInXML(ATag);
    if ATag <> nil then
    begin
-      tag := ATag.OwnerDocument.CreateElement('i_var');
+      var tag := ATag.OwnerDocument.CreateElement('i_var');
       TXMLProcessor.AddText(tag, edtVar.Text);
       ATag.AppendChild(tag);
       tag := ATag.OwnerDocument.CreateElement('init_val');
@@ -637,6 +598,13 @@ begin
       ATag.AppendChild(tag);
       ATag.SetAttribute('order', IfThen(FDescOrder, 'ordDesc', 'ordAsc'));
    end;
+end;
+
+procedure TForDoBlock.OnChangeAll;
+begin
+   edtStart.OnChangeExtend(edtStart);
+   edtStop.OnChangeExtend(edtStop);
+   edtVar.OnChange(edtVar);
 end;
 
 end.

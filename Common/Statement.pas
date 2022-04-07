@@ -27,19 +27,21 @@ uses
 
 type
 
-  TStatement = class;
-
-  TOnChangeExtend = procedure(AStatement: TStatement) of object;
+  TWinControlHack = class(TWinControl);
+  TOnChangeExtend = procedure(AEdit: TCustomEdit) of object;
 
   TStatement = class(TCustomEdit, IWithId, IWithFocus)
   private
     { Private declarations }
-    FExecuteParse: boolean;
+    FExecuteParse,
+    FHasFocusParent: boolean;
     FParserMode: TYYMode;
     FId,
     FLMargin,
     FRMargin: integer;
+    FFocusParent: IWithFocus;
     function GetId: integer;
+    function HasFocusParent: boolean;
     procedure ApplyMargins;
   protected
     procedure WndProc(var msg: TMessage); override;
@@ -47,15 +49,13 @@ type
   public
     { Public declarations }
     OnChangeExtend: TOnChangeExtend;
-    property ParserMode: TYYMode read FParserMode default yymUndefined;
     property Id: integer read GetId;
+    constructor Create(AParent: TWinControl; AParserMode: TYYMode; AId: integer = ID_INVALID);
+    destructor Destroy; override;
     procedure Change; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer); override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure DoEnter; override;
-    constructor Create(AOwner: TComponent); overload; override;
-    constructor Create(AOwner: TComponent; const AId: integer); overload;
-    destructor Destroy; override;
     function RetrieveFocus(AInfo: TFocusInfo): boolean;
     function CanBeFocused: boolean;
     function GetFocusColor: TColor;
@@ -121,49 +121,24 @@ type
 implementation
 
 uses
-   WinApi.Windows, System.SysUtils, Vcl.Forms, Infrastructure, Base_Block, Navigator_Form, Constants;
+   WinApi.Windows, System.SysUtils, Vcl.Forms, Infrastructure, Navigator_Form, Constants;
 
-constructor TStatement.Create(AOwner: TComponent);
-const
-   BlockToParserMapping: array[TBlockType] of TYYMode = (yymUndefined, yymAssign, yymAssign,
-                         yymInput, yymOutput, yymFuncCall, yymCondition, yymCondition, yymCondition,
-                         yymCondition, yymFor, yymCase, yymUndefined, yymUndefined, yymReturn, yymUndefined, yymUndefined);
-var
-   block: TBlock;
+constructor TStatement.Create(AParent: TWinControl; AParserMode: TYYMode; AId: integer = ID_INVALID);
 begin
-   inherited Create(AOwner);
-   Parent := TWinControl(AOwner);
-   block := TBlock(AOwner);
-   Color := block.Color;
-   PopupMenu := block.Page.Form.pmEdits;
-   FParserMode := BlockToParserMapping[block.BType];
-   if Parent.ControlCount > 0 then
-   begin
-      if Parent.Controls[0] = Self then
-      begin
-         if Parent.Parent is TBlock then
-            block := TBlock(Parent.Parent);
-      end
-      else if FParserMode = yymCase then
-         FParserMode := yymCaseValue;
-   end;
-   Font.Assign(block.GetFont);
+   inherited Create(AParent);
+   Parent := AParent;
+   FHasFocusParent := Supports(AParent, IWithFocus, FFocusParent);
+   PopupMenu := TInfra.GetMainForm.pmEdits;
    BorderStyle := bsNone;
    ShowHint := True;
    AutoSelect := False;
    DoubleBuffered := true;
-   FId := GProject.Register(Self);
    OnChangeExtend := nil;
-   Font.Name := GSettings.FlowchartFontName;
    ControlStyle := ControlStyle + [csOpaque];
+   FParserMode := AParserMode;
+   FId := GProject.Register(Self, AId);
    if CanFocus then
       SetFocus;
-end;
-
-constructor TStatement.Create(AOwner: TComponent; const AId: integer);
-begin
-   Create(AOwner);
-   FId := GProject.Register(Self, AId);
 end;
 
 destructor TStatement.Destroy;
@@ -199,30 +174,13 @@ begin
    ApplyMargins;
 end;
 
-function TStatement.RetrieveFocus(AInfo: TFocusInfo): boolean;
-begin
-   AInfo.FocusEdit := Self;
-   result := TBlock(Parent).RetrieveFocus(AInfo);
-end;
-
-function TStatement.CanBeFocused: boolean;
-begin
-   result := TBlock(Parent).CanBeFocused;
-end;
-
 procedure TStatement.Change;
-var
-   txt: string;
 begin
-
    inherited Change;
-   
-   txt := Trim(Text);
-   Font.Color := GSettings.FontColor;
    GProject.SetChanged;
-   Hint := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
-   TBlock(Parent).UpdateEditor(Self);
-
+   var txt := Trim(Text);
+   var h := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
+   var c := GSettings.FontColor;
    if FExecuteParse then
    begin
       if txt.IsEmpty then
@@ -230,37 +188,39 @@ begin
          case FParserMode of
             yymFor:
             begin
-               Hint := i18Manager.GetFormattedString('ExpErr', ['', sLineBreak, i18Manager.GetString('IntReq')]);
-               Font.Color := NOK_COLOR;
+               h := i18Manager.GetFormattedString('ExpErr', ['', sLineBreak, i18Manager.GetString('IntReq')]);
+               c := NOK_COLOR;
             end;
             yymCondition:
             begin
-               Hint := i18Manager.GetFormattedString('NoCExp', [sLineBreak]);
-               Font.Color := NOK_COLOR;
+               h := i18Manager.GetFormattedString('NoCExp', [sLineBreak]);
+               c := NOK_COLOR;
             end;
             yymCase:
             begin
-               Hint := i18Manager.GetFormattedString('NoCaseExp', [sLineBreak]);
-               Font.Color := NOK_COLOR;
+               h := i18Manager.GetFormattedString('NoCaseExp', [sLineBreak]);
+               c := NOK_COLOR;
             end;
             yymAssign:
             begin
-               Hint := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
-               Font.Color := WARN_COLOR;
+               h := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
+               c := WARN_COLOR;
             end;
             yymFuncCall:
             begin
-               Hint := i18Manager.GetFormattedString('NoFCall', [sLineBreak]);
-               Font.Color := WARN_COLOR;
+               h := i18Manager.GetFormattedString('NoFCall', [sLineBreak]);
+               c := WARN_COLOR;
             end;
          end;
       end
       else if not TInfra.Parse(Self, FParserMode) then
       begin
-         Hint := i18Manager.GetFormattedString('ExpErr', [txt, sLineBreak, TInfra.GetParserErrMsg]);
-         Font.Color := NOK_COLOR;
+         h := i18Manager.GetFormattedString('ExpErr', [txt, sLineBreak, TInfra.GetParserErrMsg]);
+         c := NOK_COLOR;
       end;
    end;
+   Hint := h;
+   Font.Color := c;
    if Assigned(OnChangeExtend) then
       OnChangeExtend(Self);
    NavigatorForm.DoInvalidate;
@@ -275,13 +235,11 @@ end;
 procedure TStatement.MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer);
 begin
    inherited MouseDown(Button, Shift, X, Y);
-   if (Parent is TBlock) and Assigned(TBlock(Parent).OnMouseDown) then
-      TBlock(Parent).OnMouseDown(Parent, Button, Shift, X, Y);
+   if HasParent and Assigned(TWinControlHack(Parent).OnMouseDown) then
+      TWinControlHack(Parent).OnMouseDown(Parent, Button, Shift, X+Left, Y+Top);
 end;
 
 procedure TStatement.DoEnter;
-var
-   chon: boolean;
 begin
    inherited DoEnter;
    case FParserMode of
@@ -297,7 +255,7 @@ begin
    else
       FExecuteParse := false;
    end;
-   chon := GProject.ChangingOn;
+   var chon := GProject.ChangingOn;
    GProject.ChangingOn := false;
    try
       Change;
@@ -323,12 +281,12 @@ function TStatement.Remove(ANode: TTreeNodeWithFriend = nil): boolean;
 begin
    result := CanRemove;
    if result then
-      result := TBlock(Parent).Remove(ANode);
+      result := FFocusParent.Remove(ANode);
 end;
 
 function TStatement.CanRemove: boolean;
 begin
-   result := HasParent and TBlock(Parent).CanRemove;
+   result := HasFocusParent and FFocusParent.CanRemove;
 end;
 
 function TStatement.IsBoldDesc: boolean;
@@ -339,8 +297,24 @@ end;
 function TStatement.GetTreeNodeText(ANodeOffset: integer = 0): string;
 begin
    result := '';
-   if HasParent then
-      result := TBlock(Parent).GetTreeNodeText(ANodeOffset);
+   if HasFocusParent then
+      result := FFocusParent.GetTreeNodeText(ANodeOffset);
+end;
+
+function TStatement.RetrieveFocus(AInfo: TFocusInfo): boolean;
+begin
+   AInfo.FocusEdit := Self;
+   result := HasFocusParent and FFocusParent.RetrieveFocus(AInfo);
+end;
+
+function TStatement.CanBeFocused: boolean;
+begin
+   result := HasFocusParent and FFocusParent.CanBeFocused;
+end;
+
+function TStatement.HasFocusParent: boolean;
+begin
+   result := HasParent and FHasFocusParent;
 end;
 
 end.

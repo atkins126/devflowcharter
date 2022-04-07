@@ -86,7 +86,7 @@ const   // Global constants
         DATATYPE_TAG      = 'datatype';
         FUNCTION_TAG      = 'routine';
         HEADER_TAG        = 'header';
-        FILE_CONTENTS_TAG = 'FileContentsTemplate';
+        PROGRAM_TEMPLATE_TAG = 'FileContentsTemplate';
 
         LB_PHOLDER  = '#!';
         LB_PHOLDER2  = '##';
@@ -118,6 +118,8 @@ const   // Global constants
         BRANCH_IDX_NOT_FOUND = -1;
 
         FUNCTION_TYPE_IND = -5;
+
+        MAX_SUPPORTED_PPI = 120;
 
         PRIMARY_PLACEHOLDER = '%s1';
 

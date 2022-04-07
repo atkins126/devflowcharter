@@ -24,8 +24,8 @@ unit Settings_Form;
 interface
 
 uses
-  Vcl.Controls, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics, System.Classes, System.Types,
-  Base_Form, Settings, Types;
+  Vcl.Dialogs, Vcl.StdCtrls, Vcl.Graphics, System.Classes, System.Types, Base_Form,
+  Settings, Types, Vcl.Controls, Vcl.ExtCtrls;
 
 type
   TSettingsForm = class(TBaseForm)
@@ -134,6 +134,7 @@ type
     procedure FillShape(const shape: TColorShape; const AColor: TColor);
     procedure DrawShapes(ASettings: TSettings);
     procedure FillAllShapes(const AColor: TColor);
+    procedure SetFontNameSize(const AFontName: string; AFontSize: integer);
   public
     procedure SetDefault;
     procedure ProtectFields;
@@ -147,7 +148,7 @@ var
 implementation
 
 uses
-   System.StrUtils, System.SysUtils, LangDefinition, Constants, Infrastructure;
+   System.StrUtils, System.SysUtils, LangDefinition, Constants, Infrastructure, Math;
 
 const
    SHAPE_BORDER_COLOR = clBlack;
@@ -163,24 +164,23 @@ const
 {$R *.dfm}
 
 procedure TSettingsForm.Localize(AList: TStringList);
-var
-   val: integer;
 begin
+   var w := TInfra.Scaled(449);
    lblFileEncoding.Left := cbFileEncoding.Left - lblFileEncoding.Width - 5;
    lblCompiler.Left := 7;
    edtCompiler.Left := lblCompiler.Width + lblCompiler.Left + 5;
-   edtCompiler.Width := 449 - edtCompiler.Left;
+   edtCompiler.Width := w - edtCompiler.Left;
    lblCompilerNoMain.Left := 7;
    edtCompilerNoMain.Left := lblCompilerNoMain.Width + lblCompilerNoMain.Left + 5;
-   edtCompilerNoMain.Width := 449 - edtCompilerNoMain.Left;
+   edtCompilerNoMain.Width := w - edtCompilerNoMain.Left;
    edtTranslateFile.Left := lblFile.Width + lblFile.Left + 5;;
-   edtTranslateFile.Width := 449 - edtTranslateFile.Left;
-   val := lblDesktop.Width;
+   edtTranslateFile.Width := w - edtTranslateFile.Left;
+   var val := lblDesktop.Width;
    if val < lblBlockColor.Width then
       val := lblBlockColor.Width;
    if val < lblFontColor.Width then
       val := lblFontColor.Width;
-   Inc(val, lblDesktop.Left+10);
+   Inc(val, lblDesktop.Left + 10);
    pnlDesktop.Left := val;
    pnlFill.Left := val;
    pnlFont.Left := val;
@@ -257,12 +257,9 @@ begin
 end;
 
 procedure TSettingsForm.imgShapesClick(Sender: TObject);
-var
-   shape: TColorShape;
-   pnt: TPoint;
 begin
-   pnt := imgShapes.ScreenToClient(Mouse.CursorPos);
-   shape := High(TColorShape);
+   var pnt := imgShapes.ScreenToClient(Mouse.CursorPos);
+   var shape := High(TColorShape);
    repeat
       if SHAPE_RECTS[shape].Contains(pnt) then
          break;
@@ -273,15 +270,12 @@ begin
 end;
 
 procedure TSettingsForm.FillShape(const shape: TColorShape; const AColor: TColor);
-var
-   pnt: TPoint;
-   rect: TRect;
 begin
    if shape <> shpNone then
    begin
       imgShapes.Canvas.Brush.Color := AColor;
-      rect := SHAPE_RECTS[shape];
-      pnt := rect.CenterPoint;
+      var rect := SHAPE_RECTS[shape];
+      var pnt := rect.CenterPoint;
       imgShapes.Canvas.FloodFill(pnt.X, pnt.Y, SHAPE_BORDER_COLOR, fsBorder);
       if shape = shpFolder then
          imgShapes.Canvas.FloodFill(rect.Left+1, rect.Top+1, SHAPE_BORDER_COLOR, fsBorder)
@@ -294,10 +288,8 @@ begin
 end;
 
 function TSettingsForm.GetShapeColor(const shape: TColorShape): TColor;
-var
-   pnt: TPoint;
 begin
-   pnt := SHAPE_RECTS[shape].CenterPoint;
+   var pnt := SHAPE_RECTS[shape].CenterPoint;
    if pnt.IsZero then
       result := clNone
    else
@@ -305,27 +297,21 @@ begin
 end;
 
 procedure TSettingsForm.FillAllShapes(const AColor: TColor);
-var
-   shape: TColorShape;
 begin
-   for shape := Low(TColorShape) to High(TColorShape) do
+   for var shape := Low(TColorShape) to High(TColorShape) do
       FillShape(shape, AColor);
 end;
 
 procedure TSettingsForm.DrawShapes(ASettings: TSettings);
-var
-   shape: TColorShape;
-   rect: TRect;
-   p: TPoint;
 begin
    with imgShapes.Canvas do
    begin
       Pen.Color := SHAPE_BORDER_COLOR;
-      for shape := Low(TColorShape) to High(TColorShape) do
+      for var shape := Low(TColorShape) to High(TColorShape) do
       begin
          if shape <> shpNone then
          begin
-            rect := SHAPE_RECTS[shape];
+            var rect := SHAPE_RECTS[shape];
             Brush.Color := ASettings.GetShapeColor(shape);
             case shape of
                shpEllipse:
@@ -334,7 +320,7 @@ begin
                   Rectangle(rect);
                shpParallel:
                begin
-                  p := Point(rect.Left+10, rect.Top);
+                  var p := Point(rect.Left+10, rect.Top);
                   Polygon([p,
                            Point(rect.Right, rect.Top),
                            Point(rect.Right-10, rect.Bottom),
@@ -343,7 +329,7 @@ begin
                end;
                shpDiamond:
                begin
-                  p := rect.CenterPoint;
+                  var p := rect.CenterPoint;
                   Polygon([Point(rect.Left, p.Y),
                            Point(p.X, rect.Top),
                            Point(rect.Right, p.Y),
@@ -437,19 +423,16 @@ begin
    chkAutoUpdateCode.Checked := false;
    edtEditorIndent.Text := IntToStr(EDITOR_DEFAULT_INDENT_LENGTH);
    SetComboBoxItem(cbFontSize, IntToStr(EDITOR_DEFAULT_FONT_SIZE));
+   SetFontNameSize(FLOWCHART_DEFAULT_FONT_NAME, FLOWCHART_MIN_FONT_SIZE);
    cbIndentChar.ItemIndex := 0;
-   edtFontNameSize.Text := FLOWCHART_DEFAULT_FONT_NAME + FLOWCHART_FONT_NAMESIZE_SEP + IntToStr(FLOWCHART_MIN_FONT_SIZE);
    FillAllShapes(DEFAULT_DESKTOP_COLOR);
 end;
 
 procedure TSettingsForm.ProtectFields;
-var
-   parserOn: boolean;
-   lang: TLangDefinition;
 begin
-   lang := GInfra.GetLangDefinition(cbLanguage.Text);
+   var lang := GInfra.GetLangDefinition(cbLanguage.Text);
+   var parserOn := lang.Parser <> nil;
    cbLanguage.Hint := lang.DefFile;
-   parserOn := lang.Parser <> nil;
    chkParseInput.Enabled := parserOn;
    chkParseOutput.Enabled := parserOn;
    chkParseAssign.Enabled := parserOn;
@@ -478,16 +461,8 @@ begin
    edtCompilerNoMain.Enabled := lang.EnabledCompiler;
    btnBrowseCompilers.Enabled := lang.EnabledCompiler;
    cbFileEncoding.Enabled := lang.EnabledCompiler;
-   if lang.EnabledCompiler then
-   begin
-      edtCompiler.Text := lang.CompilerCommand;
-      edtCompilerNoMain.Text := lang.CompilerCommandNoMain;
-   end
-   else
-   begin
-      edtCompiler.Text := '';
-      edtCompilerNoMain.Text := '';
-   end;
+   edtCompiler.Text := IfThen(lang.EnabledCompiler, lang.CompilerCommand);
+   edtCompilerNoMain.Text := IfThen(lang.EnabledCompiler, lang.CompilerCommandNoMain);
    SetComboBoxItem(cbFileEncoding, lang.CompilerFileEncoding);
    chkMultiPrintHorz.Enabled := chkMultiPrint.Checked;
    if not chkMultiPrint.Checked then
@@ -537,15 +512,17 @@ begin
    chkValidateConsts.Checked := ASettings.ValidateDeclaration;
    chkAutoSelectCode.Checked := ASettings.EditorAutoSelectBlock;
    chkAutoUpdateCode.Checked := ASettings.EditorAutoUpdate;
-   edtFontNameSize.Text := ASettings.FlowchartFontName + FLOWCHART_FONT_NAMESIZE_SEP + ASettings.FlowchartFontSize.ToString;
-   if ASettings.IndentChar = SPACE_CHAR then
-      cbIndentChar.ItemIndex := 0
-   else
-      cbIndentChar.ItemIndex := 1;
+   cbIndentChar.ItemIndex := IfThen(ASettings.IndentChar = TAB_CHAR, 1);
+   SetFontNameSize(ASettings.FlowchartFontName, ASettings.FlowchartFontSize);
    SetComboBoxItem(cbFontSize, ASettings.EditorFontSize.ToString);
    SetComboBoxItem(cbFileEncoding, GInfra.CurrentLang.CompilerFileEncoding);
    DrawShapes(ASettings);
    ProtectFields;
+end;
+
+procedure TSettingsForm.SetFontNameSize(const AFontName: string; AFontSize: integer);
+begin
+   edtFontNameSize.Text := AFontName + FLOWCHART_FONT_NAMESIZE_SEP + AFontSize.ToString;
 end;
 
 procedure TSettingsForm.chkMultiPrintClick(Sender: TObject);
@@ -567,14 +544,12 @@ begin
    FontDialog.MinFontSize := FLOWCHART_MIN_FONT_SIZE;
    FontDialog.MaxFontSize := FLOWCHART_MAX_FONT_SIZE;
    if FontDialog.Execute then
-      edtFontNameSize.Text := FontDialog.Font.Name + FLOWCHART_FONT_NAMESIZE_SEP + FontDialog.Font.Size.ToString;
+      SetFontNameSize(FontDialog.Font.Name, FontDialog.Font.Size);
 end;
 
 procedure TSettingsForm.SetComboBoxItem(AComboBox: TComboBox; const AText: string);
-var
-   i: integer;
 begin
-   i := AComboBox.Items.IndexOf(AText);
+   var i := AComboBox.Items.IndexOf(AText);
    if i = -1 then
       i := 0;
    AComboBox.ItemIndex := i;

@@ -22,7 +22,7 @@ unit Return_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Classes, Vcl.StdCtrls, Base_Block, Types;
+   Vcl.Graphics, System.Classes, Vcl.StdCtrls, Base_Block, Types, System.Types;
 
 type
 
@@ -38,37 +38,32 @@ type
          FReturnLabel: string;
          procedure Paint; override;
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
-         function GetDefaultWidth: integer;
+         function GetReturnEllipseRect: TRect;
+         procedure PutTextControls; override;
    end;
 
 implementation
 
 uses
-   Vcl.Controls, System.SysUtils, System.Types, System.UITypes, Infrastructure,
-   Project, UserFunction, Main_Block, LangDefinition, Constants;
+   Vcl.Controls, System.SysUtils, System.UITypes, System.Math, Infrastructure,
+   Project, UserFunction, Main_Block, LangDefinition, Constants, YaccLib;
 
 constructor TReturnBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
-var
-   defWidth: integer;
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpEllipse, yymReturn);
 
    FReturnLabel := i18Manager.GetString('CaptionExit');
 
-   defWidth := GetDefaultWidth;
-   if defWidth > Width then
-      Width := defWidth;
+   Width := Max(Width, GetReturnEllipseRect.Width+48);
 
-   FShape := shpEllipse;
    BottomHook := Width div 2;
    BottomPoint.X := BottomHook;
    BottomPoint.Y := 19;
-   IPoint.X := BottomHook + 30;
-   IPoint.Y := 30;
    TopHook.X := BottomHook;
 
-   FStatement.SetBounds(BottomHook-26, 31, 52, 19);
+   PutTextControls;
+
    FStatement.Anchors := [akRight, akLeft, akTop];
    FStatement.Alignment := taCenter;
    FStatement.Color := GSettings.DesktopColor;
@@ -76,34 +71,28 @@ end;
 
 constructor TReturnBlock.Create(ABranch: TBranch);
 begin
-   Create(ABranch, TBlockParms.New(blReturn, 0, 0, 140, 53));
+   Create(ABranch, TBlockParms.New(blReturn, 0, 0, 140, 63));
 end;
 
 procedure TReturnBlock.Paint;
-var
-   fontStyles: TFontStyles;
-   R: TRect;
 begin
    inherited;
-   fontStyles := Canvas.Font.Style;
+   var fontStyles := Canvas.Font.Style;
    Canvas.Font.Style := [];
-   R := DrawEllipsedText(BottomHook, 30, FReturnLabel);
-   DrawBlockLabel(R.Left, R.Bottom, GInfra.CurrentLang.LabelReturn, true);
+   DrawEllipsedText(BottomHook, GetReturnEllipseRect.Height, FReturnLabel);
    Canvas.Font.Style := fontStyles;
    DrawI;
 end;
 
-function TReturnBlock.GetDefaultWidth: integer;
+function TReturnBlock.GetReturnEllipseRect: TRect;
 begin
-   result := GetEllipseTextRect(0, 0, FReturnLabel).Width + 48;
+   result := GetEllipseTextRect(0, 0, FReturnLabel);
 end;
 
 function TReturnBlock.GetDescTemplate(const ALangId: string): string;
-var
-   lang: TLangDefinition;
 begin
    result := '';
-   lang := GInfra.GetLangDefinition(ALangId);
+   var lang := GInfra.GetLangDefinition(ALangId);
    if lang <> nil then
       result := lang.ReturnDescTemplate;
 end;
@@ -117,7 +106,7 @@ var
 begin
    result := 0;
    if fsStrikeOut in Font.Style then
-      exit;
+      Exit;
    if ALangId = PASCAL_LANG_ID then
    begin
       indnt := GSettings.IndentString(ADeep);
@@ -149,16 +138,13 @@ begin
 end;
 
 procedure TReturnBlock.UpdateEditor(AEdit: TCustomEdit);
-var
-   chLine: TChangeLine;
-   list: TStringList;
 begin
    if PerformEditorUpdate then
    begin
-      chLine := TInfra.GetChangeLine(Self, FStatement);
+      var chLine := TInfra.GetChangeLine(Self, FStatement);
       if chLine.Row <> ROW_NOT_FOUND then
       begin
-         list := TStringList.Create;
+         var list := TStringList.Create;
          try
             GenerateCode(list, GInfra.CurrentLang.Name, 0);
             chLine.Text := TInfra.ExtractIndentString(chLine.Text) + list.Text;
@@ -181,6 +167,14 @@ end;
 procedure TReturnBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
 begin
    SelectBlock(Point(X, Y));
+end;
+
+procedure TReturnBlock.PutTextControls;
+begin
+   var y := GetReturnEllipseRect.Height + 1;
+   IPoint.X := BottomHook + 30;
+   IPoint.Y := y;
+   FStatement.SetBounds(BottomHook-26, y, 52, FStatement.Height);
 end;
 
 end.

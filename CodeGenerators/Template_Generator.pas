@@ -553,18 +553,24 @@ begin
    end;
 end;
 
-function Template_FileContentsGenerator(ALines: TStringList; ASkipBodyGenerate: boolean): boolean;
+function Template_SkipFuncBodyGen: boolean;
+begin
+   result := false;
+end;
+
+procedure Template_ProgramGenerator(ALines: TStringList);
 var
-   fileTemplate, headerTemplate, mainFuncTemplate, libTemplate, constTemplate,
+   programTemplate, headerTemplate, mainFuncTemplate, libTemplate, constTemplate,
    varTemplate, funcTemplate, dataTypeTemplate: TStringList;
    currLang: TLangDefinition;
    i: integer;
+   skipFuncBody: boolean;
 begin
 
    currLang := GInfra.CurrentLang;
 
-   if currLang.FileContentsTemplate.IsEmpty then
-      Exit(false);
+   if currLang.ProgramTemplate.IsEmpty then
+      Exit;
 
    try
       // generate program header section
@@ -611,14 +617,19 @@ begin
            Template_UserDataTypesSectionGenerator(dataTypeTemplate);
      end;
 
+     if Assigned(currLang.SkipFuncBodyGen) then
+        skipFuncBody := currLang.SkipFuncBodyGen
+     else
+        skipFuncBody := Template_SkipFuncBodyGen;
+
      // generate user functions section
      funcTemplate := TStringList.Create;
      if currLang.EnabledUserFunctionHeader then
      begin
         if Assigned(currLang.UserFunctionsSectionGenerator) then
-           currLang.UserFunctionsSectionGenerator(funcTemplate, ASkipBodyGenerate)
+           currLang.UserFunctionsSectionGenerator(funcTemplate, skipFuncBody)
         else
-           Template_UserFunctionsSectionGenerator(funcTemplate, ASkipBodyGenerate);
+           Template_UserFunctionsSectionGenerator(funcTemplate, skipFuncBody);
      end;
 
       // generate main function section
@@ -628,20 +639,20 @@ begin
       else
          Template_MainFunctionSectionGenerator(mainFuncTemplate, 0);
 
-      fileTemplate := TStringList.Create;
-      fileTemplate.Text := currLang.FileContentsTemplate;
-      TInfra.InsertTemplateLines(fileTemplate, PRIMARY_PLACEHOLDER, GProject.Name);
-      TInfra.InsertTemplateLines(fileTemplate, '%s2', headerTemplate);
-      i := TInfra.InsertTemplateLines(fileTemplate, '%s3', libTemplate);
+      programTemplate := TStringList.Create;
+      programTemplate.Text := currLang.ProgramTemplate;
+      TInfra.InsertTemplateLines(programTemplate, PRIMARY_PLACEHOLDER, GProject.Name);
+      TInfra.InsertTemplateLines(programTemplate, '%s2', headerTemplate);
+      i := TInfra.InsertTemplateLines(programTemplate, '%s3', libTemplate);
       GProject.SetLibSectionOffset(i);
-      TInfra.InsertTemplateLines(fileTemplate, '%s4', constTemplate);
-      TInfra.InsertTemplateLines(fileTemplate, '%s5', varTemplate);
-      TInfra.InsertTemplateLines(fileTemplate, '%s6', dataTypeTemplate);
-      TInfra.InsertTemplateLines(fileTemplate, '%s7', funcTemplate);
-      TInfra.InsertTemplateLines(fileTemplate, '%s8', mainFuncTemplate);
-      ALines.AddStrings(fileTemplate);
+      TInfra.InsertTemplateLines(programTemplate, '%s4', constTemplate);
+      TInfra.InsertTemplateLines(programTemplate, '%s5', varTemplate);
+      TInfra.InsertTemplateLines(programTemplate, '%s6', dataTypeTemplate);
+      TInfra.InsertTemplateLines(programTemplate, '%s7', funcTemplate);
+      TInfra.InsertTemplateLines(programTemplate, '%s8', mainFuncTemplate);
+      ALines.AddStrings(programTemplate);
    finally
-      fileTemplate.Free;
+      programTemplate.Free;
       headerTemplate.Free;
       mainFuncTemplate.Free;
       libTemplate.Free;
@@ -650,8 +661,6 @@ begin
       funcTemplate.Free;
       dataTypeTemplate.Free;
    end;
-
-   result := true;
 end;
 
 function Template_GetPointerTypeName(const AValue: string): string;
@@ -659,20 +668,13 @@ begin
    result := Format(GInfra.CurrentLang.PointerTypeMask, [AValue]);
 end;
 
-function Template_SkipFuncBodyGen: boolean;
-begin
-   result := false;
-end;
-
 function Template_GetUserTypeDesc(ADataType: TUserDataType): string;
-var
-   kind: string;
 begin
    result := GInfra.CurrentLang.UserTypeDesc;
    if not result.IsEmpty then
    begin
       result := ReplaceStr(result, PRIMARY_PLACEHOLDER, ADataType.edtName.Text);
-      kind := '';
+      var kind := '';
       if ADataType.rgTypeBox.ItemIndex <> -1 then
          kind := ADataType.rgTypeBox.Items[ADataType.rgTypeBox.ItemIndex];
       result := ReplaceStr(result, '%s2', kind);
@@ -802,7 +804,7 @@ initialization
       LibSectionGenerator := Template_LibSectionGenerator;
       ConstSectionGenerator := Template_ConstSectionGenerator;
       UserDataTypesSectionGenerator := Template_UserDataTypesSectionGenerator;
-      FileContentsGenerator := Template_FileContentsGenerator;
+      ProgramGenerator := Template_ProgramGenerator;
       GetConstantType := Template_GetConstantType;
       GetPointerTypeName := Template_GetPointerTypeName;
       GetUserFuncDesc := Template_GetUserFuncDesc;

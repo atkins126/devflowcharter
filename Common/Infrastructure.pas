@@ -46,14 +46,15 @@ type
          class var FParsedEdit: TCustomEdit;
          class var FPPI: integer;
       public
+         class property PPI: integer read FPPI;
          property CurrentLang: TLangDefinition read FCurrentLang;
          property TemplateLang: TLangDefinition read FTemplateLang;
          constructor Create;
          destructor Destroy; override;
-         class procedure ShowWarningBox(const AWarnMsg: string);
-         class procedure ShowFormattedWarningBox(const AKey: string; Args: array of const);
-         class procedure ShowErrorBox(const AErrorMsg: string; AError: TError);
-         class procedure ShowFormattedErrorBox(const AKey: string; Args: array of const; AError: TError);
+         class procedure ShowWarningBox(const AWarnMsg: string); overload;
+         class procedure ShowWarningBox(const AKey: string; Args: array of const); overload;
+         class procedure ShowErrorBox(const AErrorMsg: string; AError: TError); overload;
+         class procedure ShowErrorBox(const AKey: string; Args: array of const; AError: TError); overload;
          class procedure SetInitialSettings;
          class procedure PopulateDataTypeCombo(AcbType: TComboBox; ASkipIndex: integer = 100);
          class procedure PrintBitmap(ABitmap: TBitmap);
@@ -72,8 +73,8 @@ type
          class procedure IndentSpacesToTabs(ALines: TStringList);
          class function GetScrolledPoint(AMemo: TCustomMemo): TPoint;
          class function CreateDOSProcess(const ACommand: string; ADir: string = ''): boolean;
-         class function ShowQuestionBox(const AMsg: string; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
-         class function ShowFormattedQuestionBox(const AKey: string; Args: array of const; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
+         class function ShowQuestionBox(const AMsg: string; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer; overload;
+         class function ShowQuestionBox(const AKey: string; Args: array of const; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer; overload;
          class function FindText(ASubstr, AText: string; idx: integer; ACaseSens: boolean): integer;
          class function IsPrinter: boolean;
          class function IsValidControl(AObject: TObject): boolean;
@@ -107,7 +108,7 @@ type
          class function GetDimensionCount(const AText: string): integer;
          class function GetDimensions(const AText: string): TArray<string>;
          class function GetTextWidth(const AText: string; AControl: TControl): integer;
-         class function GetAutoWidth(AControl: TControl): integer;
+         class function GetAutoWidth(AControl: TControl; AMinWidth: integer = 0): integer;
          class function GetLibObject: TObject;
          class function GetParserErrMsg: string;
          class function FindLastRow(AObject: TObject; AStart: integer; ALines: TStrings): integer;
@@ -124,6 +125,7 @@ type
          function ValidateConstId(const AId: string): integer;
          function ValidateId(const AId: string): integer;
          function ParseVarSize(const ASize: string): boolean;
+         function GenerateProgram: TStringList;
          procedure SetLangHiglighterAttributes;
          procedure GetLangNames(AList: TStrings);
          procedure SetHLighters;
@@ -182,10 +184,8 @@ begin
 end;
 
 destructor TInfra.Destroy;
-var
-   i: integer;
 begin
-   for i := 0 to High(FLangArray) do
+   for var i := 0 to High(FLangArray) do
       FLangArray[i].Free;
    FLangArray := nil;
    inherited Destroy;
@@ -196,6 +196,32 @@ begin
    if GSettings.UpdateEditor then
       GetEditorForm.RefreshEditorForObject(AObject);
    GProject.SetChanged;
+end;
+
+function TInfra.GenerateProgram: TStringList;
+begin
+   result := TStringList.Create;
+   var eMessage := '';
+   try
+      if Assigned(FCurrentLang.BeforeProgramGenerator) then
+         FCurrentLang.BeforeProgramGenerator
+      else if Assigned(FTemplateLang.BeforeProgramGenerator) then
+         FTemplateLang.BeforeProgramGenerator;
+      if Assigned(FCurrentLang.ProgramGenerator) then
+         FCurrentLang.ProgramGenerator(result)
+      else if Assigned(FTemplateLang.ProgramGenerator) then
+         FTemplateLang.ProgramGenerator(result);
+   except on E: Exception do
+      eMessage := E.Message;
+   end;
+   if Assigned(FCurrentLang.AfterProgramGenerator) then
+      FCurrentLang.AfterProgramGenerator
+   else if Assigned(FTemplateLang.AfterProgramGenerator) then
+      FTemplateLang.AfterProgramGenerator;
+   if not eMessage.IsEmpty then
+      ShowErrorBox('CodeGenErr', [sLineBreak, eMessage], errGeneral)
+   else if result.Count = 0 then
+      ShowErrorBox('NoProgTempl', [sLineBreak, FCurrentLang.Name, FCurrentLang.DefFile, PROGRAM_TEMPLATE_TAG], errValidate);
 end;
 
 class function TInfra.ExportToFile(AExport: IExportable): TError;
@@ -235,11 +261,9 @@ begin
 end;
 
 class function TInfra.IndexOf<T>(const AValue: T; const AArray: TArray<T>): integer;
-var
-   i: integer;
 begin
    result := -1;
-   for i := 0 to High(AArray) do
+   for var i := 0 to High(AArray) do
    begin
       if TComparer<T>.Default.Compare(AValue, AArray[i]) = 0 then
       begin
@@ -250,14 +274,12 @@ begin
 end;
 
 function TInfra.SetCurrentLang(const ALangName: string): TLangDefinition;
-var
-   lang: TLangDefinition;
 begin
    if ALangName.IsEmpty then
       FCurrentLang := FLangArray[0]
    else
    begin
-      lang := GetLangDefinition(ALangName);
+      var lang := GetLangDefinition(ALangName);
       if lang <> nil then
          FCurrentLang := lang;
    end;
@@ -265,19 +287,15 @@ begin
 end;
 
 procedure TInfra.GetLangNames(AList: TStrings);
-var
-   i: integer;
 begin
-   for i := 0 to High(FLangArray) do
+   for var i := 0 to High(FLangArray) do
       AList.Add(FLangArray[i].Name);
 end;
 
 function TInfra.GetNativeDataType(const AName: string): PNativeDataType;
-var
-   i: integer;
 begin
    result := nil;
-   for i := 0 to High(FCurrentLang.NativeDataTypes) do
+   for var i := 0 to High(FCurrentLang.NativeDataTypes) do
    begin
       if SameStrings(AName, FCurrentLang.NativeDataTypes[i].Name) then
       begin
@@ -364,12 +382,12 @@ begin
       Application.MessageBox(PChar(AErrorMsg), PChar(i18Manager.GetString(ErrorsTypeArray[AError])), MB_ICONERROR);
 end;
 
-class procedure TInfra.ShowFormattedErrorBox(const AKey: string; Args: array of const; AError: TError);
+class procedure TInfra.ShowErrorBox(const AKey: string; Args: array of const; AError: TError);
 begin
    ShowErrorBox(i18Manager.GetFormattedString(AKey, Args), AError);
 end;
 
-class procedure TInfra.ShowFormattedWarningBox(const AKey: string; Args: array of const);
+class procedure TInfra.ShowWarningBox(const AKey: string; Args: array of const);
 begin
    ShowWarningBox(i18Manager.GetFormattedString(AKey, Args));
 end;
@@ -384,7 +402,7 @@ begin
    result := Application.MessageBox(PChar(AMsg), PChar(i18Manager.GetString('Confirmation')), AFlags);
 end;
 
-class function TInfra.ShowFormattedQuestionBox(const AKey: string; Args: array of const; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
+class function TInfra.ShowQuestionBox(const AKey: string; Args: array of const; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
 begin
    result := ShowQuestionBox(i18Manager.GetFormattedString(AKey, Args), AFlags);
 end;
@@ -615,15 +633,13 @@ begin
 end;
 
 class function TInfra.GetComboMaxWidth(ACombo: TComboBox): integer;
-var
-   i, len: integer;
 begin
    result := 0;
    if ACombo <> nil then
    begin
-      for i := 0 to ACombo.Items.Count-1 do
+      for var i := 0 to ACombo.Items.Count-1 do
       begin
-         len := ACombo.Canvas.TextWidth(ACombo.Items[i]);
+         var len := ACombo.Canvas.TextWidth(ACombo.Items[i]);
          if len > result then
             result := len;
       end;
@@ -682,11 +698,9 @@ begin
 end;
 
 function TInfra.GetLangDefinition(const AName: string): TLangDefinition;
-var
-   i: integer;
 begin
    result := nil;
-   for i := 0 to High(FLangArray) do
+   for var i := 0 to High(FLangArray) do
    begin
       if SameText(FLangArray[i].Name, AName) then
       begin
@@ -697,10 +711,8 @@ begin
 end;
 
 procedure TInfra.SetLangHiglighterAttributes;
-var
-   i: integer;
 begin
-   for i := 0 to High(FLangArray) do
+   for var i := 0 to High(FLangArray) do
    begin
       if Assigned(FLangArray[i].SetHLighterAttrs) then
          FLangArray[i].SetHLighterAttrs;
@@ -708,11 +720,9 @@ begin
 end;
 
 class function TInfra.StripInstrEnd(const ALine: string): string;
-var
-   iend: string;
 begin
    result := ALine;
-   iend := GInfra.CurrentLang.InstrEnd;
+   var iend := GInfra.CurrentLang.InstrEnd;
    if (not result.IsEmpty) and not iend.IsEmpty then
    begin
       if result.Trim = iend then
@@ -723,11 +733,9 @@ begin
 end;
 
 class function TInfra.FindLastRow(AObject: TObject; AStart: integer; ALines: TStrings): integer;
-var
-   i: integer;
 begin
    result := AStart;
-   for i := result+1 to ALines.Count-1 do
+   for var i := result+1 to ALines.Count-1 do
    begin
       if ALines.Objects[i] = AObject then
          result := i;
@@ -803,17 +811,15 @@ begin
 end;
 
 class procedure TInfra.InsertLinesIntoList(ADestList, ASourceList: TStringList; AFromLine: integer);
-var
-   i, lineCount: integer;
 begin
    if AFromLine < 0 then
       ADestList.AddStrings(ASourceList)
    else
    begin
-      lineCount := ADestList.Count + ASourceList.Count;
+      var lineCount := ADestList.Count + ASourceList.Count;
       if ADestList.Capacity < lineCount then
          ADestList.Capacity := lineCount;
-      for i := ASourceList.Count-1 downto 0 do
+      for var i := ASourceList.Count-1 downto 0 do
          ADestList.InsertObject(AFromLine, ASourceList.Strings[i], ASourceList.Objects[i]);
    end;
 end;
@@ -845,15 +851,12 @@ begin
 end;
 
 class procedure TInfra.DecrementNodeSiblingOffsets(ANode: TTreeNode);
-var
-   i: integer;
-   node: TTreeNodeWithFriend;
 begin
    if ANode.Parent <> nil then
    begin
-      for i := ANode.Index+1 to ANode.Parent.Count-1 do
+      for var i := ANode.Index+1 to ANode.Parent.Count-1 do
       begin
-         node := TTreeNodeWithFriend(ANode.Parent.Item[i]);
+         var node := TTreeNodeWithFriend(ANode.Parent.Item[i]);
          if (node.Data <> nil) and (node.Data = ANode.Data) and (node.Offset > 0) then
             node.Offset := node.Offset - 1;
       end;
@@ -926,11 +929,9 @@ begin
 end;
 
 class function TInfra.GetActiveEdit: TCustomEdit;
-var
-   control: TControl;
 begin
    result := nil;
-   control := GetMainForm.ActiveControl;
+   var control := GetMainForm.ActiveControl;
    if (control is TCustomEdit) and control.HasParent then
       result := TCustomEdit(control);
 end;
@@ -1066,25 +1067,21 @@ begin
 end;
 
 class function TInfra.ExtractIndentString(const AText: string): string;
-var
-   i, len: integer;
 begin
    result := AText;
-   i := 1;
-   len := result.Length;
+   var i := 1;
+   var len := result.Length;
    while (i <= len) and result[i].IsWhiteSpace do
       i := i + 1;
    SetLength(result, i-1);
 end;
 
 class function TInfra.GetFunctionHeader(ABlock: TBlock): TUserFunctionHeader;
-var
-   mainBlock: TMainBlock;
 begin
    result := nil;
    if ABlock <> nil then
    begin
-      mainBlock := TMainBlock(ABlock.TopParentBlock);
+      var mainBlock := TMainBlock(ABlock.TopParentBlock);
       if mainBlock.UserFunction is TUserFunction then
          result := TUserFunction(mainBlock.UserFunction).Header;
    end;
@@ -1097,26 +1094,21 @@ begin
 end;
 
 class procedure TInfra.SetFontSize(AControl: TControl; ASize: integer);
-var
-   flag: boolean;
 begin
-   flag := (AControl is TCustomEdit) and (THackCustomEdit(AControl).BorderStyle = bsNone);
+   var flag := (AControl is TCustomEdit) and (THackCustomEdit(AControl).BorderStyle = bsNone);
    if flag then THackCustomEdit(AControl).BorderStyle := bsSingle;
    THackControl(AControl).Font.Size := ASize;
    if flag then THackCustomEdit(AControl).BorderStyle := bsNone;
 end;
 
 class function TInfra.FindDuplicatedPage(APage: TTabSheet; const ACaption: TCaption): TTabSheet;
-var
-   i: integer;
-   page: TTabSheet;
 begin
    result := nil;
    if APage <> nil then
    begin
-      for i := 0 to APage.PageControl.PageCount-1 do
+      for var i := 0 to APage.PageControl.PageCount-1 do
       begin
-         page := APage.PageControl.Pages[i];
+         var page := APage.PageControl.Pages[i];
          if (page <> APage) and SameCaption(page.Caption, ACaption) then
          begin
             result := page;
@@ -1155,26 +1147,24 @@ begin
    end;
 end;
 
-class function TInfra.GetAutoWidth(AControl: TControl): integer;
+class function TInfra.GetAutoWidth(AControl: TControl; AMinWidth: integer = 0): integer;
 begin
-   result := -1;
+   result := 0;
    if AControl is TCheckBox then
       result := GetTextWidth(TCheckBox(AControl).Caption, AControl) + GetSystemMetrics(SM_CXMENUCHECK) + 3
    else if AControl is TCustomEdit then
       result := GetTextWidth(TCustomEdit(AControl).Text, AControl)
    else if AControl is TButton then
       result := GetTextWidth(TButton(AControl).Caption, AControl);
+   result := Max(result, AMinWidth);
 end;
 
 class procedure TInfra.IndentSpacesToTabs(ALines: TStringList);
-var
-   i, a: integer;
-   line: string;
 begin
-   for i := 0 to ALines.Count-1 do
+   for var i := 0 to ALines.Count-1 do
    begin
-      line := ALines[i];
-      a := Length(ExtractIndentString(line));
+      var line := ALines[i];
+      var a := Length(ExtractIndentString(line));
       if a > 0 then
          ALines[i] := StringOfChar(TAB_CHAR, a) + Copy(line, a + 1);
    end;
@@ -1260,10 +1250,8 @@ begin
 end;
 
 class procedure TInfra.DeleteLinesContaining(ALines: TStrings; const AText: string);
-var
-   i: integer;
 begin
-   for i := ALines.Count-1 downto 0 do
+   for var i := ALines.Count-1 downto 0 do
    begin
       if ALines.Strings[i].Contains(AText) then
          ALines.Delete(i);
@@ -1291,12 +1279,10 @@ begin
 end;
 
 class function TInfra.GetPageFromTabIndex(APageControl: TPageControl; ATabIndex: integer): TTabSheet;
-var
-   i, idx: integer;
 begin
    result := nil;
-   idx := ATabIndex;
-   for i := 0 to ATabIndex do
+   var idx := ATabIndex;
+   for var i := 0 to ATabIndex do
    begin
       if not APageControl.Pages[i].TabVisible then
          Inc(idx);
@@ -1307,7 +1293,10 @@ end;
 
 class function TInfra.Scaled(on96: integer): integer;
 begin
-   result := MulDiv(on96, FPPI, 96);
+   if FPPI = 96 then
+      result := on96
+   else
+      result := MulDiv(on96, FPPI, 96);
 end;
 
 class function TInfra.ReplaceXMLIndents(const ALine: string): string;
@@ -1316,14 +1305,12 @@ begin
 end;
 
 function TInfra.ValidateConstId(const AId: string): integer;
-var
-   i: integer;
 begin
    result := ValidateId(AId);
    if (result = INCORRECT_IDENT) and (not CurrentLang.ConstIDSpecChars.IsEmpty) and not AId.Trim.IsEmpty then
    begin
       result := VALID_IDENT;
-      for i := 1 to AId.Length do
+      for var i := 1 to AId.Length do
       begin
          if (Pos(AId[i], CurrentLang.ConstIDSpecChars) = 0) and not CharInSet(AId[i], ID_ALLOW_CHARS) then
          begin
@@ -1335,13 +1322,10 @@ begin
 end;
 
 function TInfra.ParseVarSize(const ASize: string): boolean;
-var
-   lang: TLangDefinition;
-   goParse: boolean;
 begin
    result := true;
-   lang := GetLangDefinition(PASCAL_LANG_ID);
-   goParse := (lang <> nil) and Assigned(lang.Parse);
+   var lang := GetLangDefinition(PASCAL_LANG_ID);
+   var goParse := (lang <> nil) and Assigned(lang.Parse);
    if (ASize <> '') and ((ASize[1] = '0') or (ASize[1] = '-') or (goParse and not lang.Parse(ASize, yymVarSize))) then
       result := false;
 end;

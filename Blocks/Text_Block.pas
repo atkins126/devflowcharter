@@ -38,7 +38,7 @@ type
    TTextBlock = class(TMultiLineBlock)
       public
          constructor Create(ABranch: TBranch); overload;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload; override;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
          procedure ChangeColor(AColor: TColor); override;
       protected
          FCorner: TCorner;
@@ -99,11 +99,9 @@ begin
 end;
 
 procedure TCorner.Paint;
-var
-   r: TRect;
 begin
    inherited;
-   r := ClientRect;
+   var r := ClientRect;
    r.Inflate(0, 0, -1, -1);
 
    Canvas.Pen.Color := THackWinControl(Parent).Color;

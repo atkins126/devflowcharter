@@ -24,8 +24,8 @@ unit MultiLine_Block;
 interface
 
 uses
-   Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics, System.Classes, Vcl.ComCtrls, Base_Block,
-   StatementMemo, MemoEx, Types;
+   Vcl.Controls, Vcl.StdCtrls, System.Classes, Vcl.ComCtrls, Base_Block, StatementMemo,
+   MemoEx, Types;
 
 type
 
@@ -40,7 +40,7 @@ type
          procedure CloneFrom(ABlock: TBlock); override;
       protected
          FErrLine: integer;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload; virtual;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms);
          procedure Paint; override;
          procedure OnDblClickMemo(Sender: TObject);
          procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
@@ -54,12 +54,12 @@ uses
 {$IFDEF USE_CODEFOLDING}
    SynEditCodeFolding,
 {$ENDIF}
-   System.SysUtils, System.Types, System.UITypes, Infrastructure, Constants, LangDefinition;
+   System.UITypes, Infrastructure, Constants, LangDefinition, YaccLib;
 
 constructor TMultiLineBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpRectangle, yymUndefined);
 
    FStatements := TStatementMemo.Create(Self);
    FStatements.Parent := Self;
@@ -207,7 +207,10 @@ end;
 procedure TMultiLineBlock.OnMouseDownMemo(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
    if ssLeft in Shift then
-      OnMouseDown(Sender, Button, Shift, X, Y);
+   begin
+      var p := TControl(Sender).ClientToParent(Point(X, Y));
+      OnMouseDown(TControl(Sender).Parent, Button, Shift, p.X, p.Y);
+   end;
    if Button = mbLeft then
       TInfra.GetEditorForm.SetCaretPos(TInfra.GetChangeLine(Self, FStatements));
 end;

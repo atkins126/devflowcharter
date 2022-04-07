@@ -24,7 +24,7 @@ unit IfElse_Block;
 interface
 
 uses
-   WinApi.Windows, Vcl.Graphics, Vcl.ComCtrls, Base_Block, OmniXML, Types;
+   WinApi.Windows, Vcl.ComCtrls, Base_Block, OmniXML, Types;
 
 type
 
@@ -56,12 +56,12 @@ const
 implementation
 
 uses
-   System.SysUtils, System.Classes, System.Types, System.Math, Return_Block, Infrastructure;
+   System.SysUtils, System.Classes, System.Math, Return_Block, Infrastructure, YaccLib;
 
 constructor TIfElseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpDiamond, yymCondition);
 
    FInitParms.Width := 240;
    FInitParms.Height := 101;
@@ -112,18 +112,14 @@ begin
 end;
 
 procedure TIfElseBlock.Paint;
-var
-   dRight, dLeft: TPoint;
 begin
    inherited;
    if Expanded then
    begin
-      dRight := FDiamond[D_RIGHT];
-      dLeft := FDiamond[D_LEFT];
       IPoint.X := TopHook.X + 40;
       BottomPoint.X := BottomHook;
       BottomPoint.Y := Height - 25;
-      TopHook.Y := dLeft.Y;
+      TopHook.Y := FDiamond.Left.Y;
 
       DrawArrow(BottomHook, Height-30, BottomHook, Height-1);
       DrawArrow(TrueBranch.Hook.X, TopHook.Y, TrueBranch.Hook);
@@ -134,14 +130,14 @@ begin
          DrawArrow(FalseHook, Height-30, BottomHook+4, Height-30);
 
       Canvas.Ellipse(BottomHook-5, Height-34, BottomHook+5, Height-24);
-      Canvas.MoveTo(FalseBranch.Hook.X, dRight.Y);
-      Canvas.LineTo(dRight.X, dRight.Y);
-      Canvas.MoveTo(TrueBranch.Hook.X, dLeft.Y);
-      Canvas.LineTo(dLeft.X, dLeft.Y);
+      Canvas.MoveTo(FalseBranch.Hook.X, FDiamond.Right.Y);
+      Canvas.LineTo(FDiamond.Right.X, FDiamond.Right.Y);
+      Canvas.MoveTo(TrueBranch.Hook.X, FDiamond.Left.Y);
+      Canvas.LineTo(FDiamond.Left.X, FDiamond.Left.Y);
 
-      DrawTextLabel(dLeft.X, dLeft.Y-5, FTrueLabel, true, true);
-      DrawTextLabel(dRight.X, dRight.Y-5, FFalseLabel, false, true);
-      DrawBlockLabel(dLeft.X+5, dLeft.Y+5, GInfra.CurrentLang.LabelIfElse, true);
+      DrawTextLabel(FDiamond.Left.X, FDiamond.Left.Y-5, FTrueLabel, true, true);
+      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, false, true);
+      DrawBlockLabel(FDiamond.Left.X+10, FDiamond.Left.Y+5, GInfra.CurrentLang.LabelIfElse, true);
    end;
    DrawI;
 end;
@@ -226,18 +222,13 @@ begin
 end;
 
 procedure TIfElseBlock.ResizeVert(AContinue: boolean);
-var
-   b1, b2: TBranch;
 begin
+   var b1 := FalseBranch;
+   var b2 := TrueBranch;
    if TrueBranch.Height > FalseBranch.Height then
    begin
       b1 := TrueBranch;
       b2 := FalseBranch;
-   end
-   else
-   begin
-      b1 := FalseBranch;
-      b2 := TrueBranch;
    end;
    b1.Hook.Y := 70;
    Height := b1.Height + b1.Hook.Y + 31;
@@ -276,14 +267,11 @@ begin
 end;
 
 function TIfElseBlock.GenerateTree(AParentNode: TTreeNode): TTreeNode;
-var
-   elseNode: TTreeNodeWithFriend;
-   block: TBlock;
 begin
    result := inherited GenerateTree(AParentNode);
-   elseNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(AParentNode, GInfra.CurrentLang.ElseLabel));
+   var elseNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(AParentNode, GInfra.CurrentLang.ElseLabel));
    TTreeNodeWithFriend(result).Friend := elseNode;
-   for block in FalseBranch do
+   for var block in FalseBranch do
        block.GenerateTree(elseNode);
 end;
 
@@ -302,21 +290,16 @@ begin
 end;
 
 procedure TIfElseBlock.SaveInXML(ATag: IXMLElement);
-var
-   th, fbrx: integer;
 begin
    inherited SaveInXML(ATag);
    if ATag <> nil then
    begin
+      var fbrx := FFoldParms.P2X;
+      var th := FFoldParms.TopHook;
       if Expanded then
       begin
          fbrx := FalseBranch.Hook.X;
          th := TopHook.X;
-      end
-      else
-      begin
-         fbrx := FFoldParms.P2X;
-         th := FFoldParms.TopHook;
       end;
       ATag.SetAttribute('fbrx', fbrx.ToString);
       ATag.SetAttribute('th', th.ToString);

@@ -24,7 +24,7 @@ unit RepeatUntil_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Types, Base_Block, Types;
+   System.Types, Base_Block, Types;
 
 type
 
@@ -44,12 +44,12 @@ type
 implementation
 
 uses
-   System.Classes, System.SysUtils, System.StrUtils, System.Math, Infrastructure, LangDefinition;
+   System.Classes, System.Math, Infrastructure, LangDefinition, YaccLib;
 
 constructor TRepeatUntilBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpDiamond, yymCondition);
 
    FInitParms.Width := 240;
    FInitParms.Height := 111;
@@ -85,41 +85,34 @@ begin
 end;
 
 procedure TRepeatUntilBlock.Paint;
-var
-   dLeft, dRight, dBottom: TPoint;
 begin
    inherited;
    if Expanded then
    begin
       IPoint.X := BottomHook + 40;
       IPoint.Y := Height - 30;
-      dLeft := FDiamond[D_LEFT];
-      dRight := FDiamond[D_RIGHT];
-      dBottom := FDiamond[D_BOTTOM];
-      BottomPoint.Y := dRight.Y;
+      BottomPoint.Y := FDiamond.Right.Y;
 
-      Canvas.PenPos := dLeft;
-      Canvas.LineTo(5, dLeft.Y);
+      Canvas.PenPos := FDiamond.Left;
+      Canvas.LineTo(5, FDiamond.Left.Y);
       DrawArrowTo(5, 0, arrMiddle);
       Canvas.LineTo(Branch.Hook.X, TopHook.Y);
       DrawArrowTo(Branch.Hook);
 
-      DrawTextLabel(dLeft.X, dLeft.Y-5, FLeftLabel, true, true);
-      DrawTextLabel(dRight.X, dRight.Y-5, FRightLabel, false, true);
-      DrawBlockLabel(dBottom.X-30, dBottom.Y-10, GInfra.CurrentLang.LabelRepeat, true);
-      Canvas.PenPos := dRight;
-      Canvas.LineTo(BottomPoint.X, dRight.Y);
+      DrawTextLabel(FDiamond.Left.X, FDiamond.Left.Y-5, FLeftLabel, true, true);
+      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FRightLabel, false, true);
+      DrawBlockLabel(FDiamond.Bottom.X-30, FDiamond.Bottom.Y-10, GInfra.CurrentLang.LabelRepeat, true);
+      Canvas.PenPos := FDiamond.Right;
+      Canvas.LineTo(BottomPoint.X, FDiamond.Right.Y);
       DrawArrowTo(BottomPoint.X, Height-1);
    end;
    DrawI;
 end;
 
 function TRepeatUntilBlock.GetDescTemplate(const ALangId: string): string;
-var
-   lang: TLangDefinition;
 begin
    result := '';
-   lang := GInfra.GetLangDefinition(ALangId);
+   var lang := GInfra.GetLangDefinition(ALangId);
    if lang <> nil then
       result := lang.RepeatUntilDescTemplate;
 end;

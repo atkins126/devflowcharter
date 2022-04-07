@@ -34,7 +34,7 @@ type
          procedure Paint; override;
       public
          constructor Create(ABranch: TBranch); overload;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload; override;
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
          procedure ChangeColor(AColor: TColor); override;
    end;
@@ -62,57 +62,52 @@ begin
 end;
 
 procedure TMultiInstrBlock.OnChangeMemo(Sender: TObject);
-var
-   txt, line: string;
-   i: integer;
 begin
    GProject.SetChanged;
    FErrLine := -1;
-   FStatements.Font.Color := GSettings.FontColor;
-   txt := Trim(FStatements.Text);
-   FStatements.Hint := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
+   var txt := Trim(FStatements.Text);
+   var h := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
+   var c := GSettings.FontColor;
    UpdateEditor(nil);
    if GSettings.ParseMultiAssign then
    begin
       if txt.IsEmpty then
       begin
-         FStatements.Hint := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
-         FStatements.Font.Color := WARN_COLOR
+         h := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
+         c := WARN_COLOR
       end
       else
       begin
-         for i := 0 to FStatements.Lines.Count-1 do
+         for var i := 0 to FStatements.Lines.Count-1 do
          begin
-            line := FStatements.Lines.Strings[i].Trim;
+            var line := FStatements.Lines.Strings[i].Trim;
             if not TInfra.Parse(line, yymAssign) then
             begin
-               FStatements.Font.Color := NOK_COLOR;
-               FStatements.Hint := i18Manager.GetFormattedString('ExpErrMult', [i+1, line, sLineBreak, TInfra.GetParserErrMsg]);
+               h := i18Manager.GetFormattedString('ExpErrMult', [i+1, line, sLineBreak, TInfra.GetParserErrMsg]);
+               c := NOK_COLOR;
                FErrLine := i;
                break;
             end;
          end;
       end;
    end;
+   FStatements.Hint := h;
+   FStatements.Font.Color := c;
    inherited;
 end;
 
 function TMultiInstrBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
-var
-   i: integer;
-   template: string;
-   tmpList: TStringList;
 begin
    if fsStrikeOut in Font.Style then
       Exit(0);
-   template := GetBlockTemplate(ALangId);
+   var template := GetBlockTemplate(ALangId);
    if template.IsEmpty then
       result := inherited GenerateCode(ALines, ALangId, ADeep, AFromLine)
    else
    begin
-      tmpList := TStringList.Create;
+      var tmpList := TStringList.Create;
       try
-         for i := 0 to FStatements.Lines.Count-1 do
+         for var i := 0 to FStatements.Lines.Count-1 do
             GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, FStatements.Lines.Strings[i].Trim), ALangId, ADeep);
          if tmpList.Text.IsEmpty then
             GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, ''), ALangId, ADeep);
@@ -127,13 +122,11 @@ begin
 end;
 
 procedure TMultiInstrBlock.ChangeColor(AColor: TColor);
-var
-   b, chon: boolean;
 begin
    inherited ChangeColor(AColor);
-   chon := GProject.ChangingOn;
+   var chon := GProject.ChangingOn;
    GProject.ChangingOn := false;
-   b := FRefreshMode;
+   var b := FRefreshMode;
    FRefreshMode := true;
    try
       if Assigned(FStatements.OnChange) then

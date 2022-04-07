@@ -24,7 +24,7 @@ unit WhileDo_Block;
 interface
 
 uses
-   Vcl.Graphics, System.Types, Base_Block, Types;
+   System.Types, Base_Block, Types;
 
 type
 
@@ -41,12 +41,12 @@ type
 implementation
 
 uses
-   System.Classes, Return_Block, Infrastructure;
+   System.Classes, Return_Block, Infrastructure, YaccLib;
 
 constructor TWhileDoBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(ABranch, ABlockParms, shpDiamond, yymCondition);
 
    FInitParms.Width := 200;
    FInitParms.Height := 131;
@@ -73,19 +73,13 @@ begin
 end;
 
 procedure TWhileDoBlock.Paint;
-var
-   dRight, dBottom, dTop, dLeft: TPoint;
 begin
    inherited;
    if Expanded then
    begin
       IPoint.X := Branch.Hook.X + 40;
-      dBottom := FDiamond[D_BOTTOM];
-      dRight := FDiamond[D_RIGHT];
-      dTop := FDiamond[D_TOP];
-      dLeft := FDiamond[D_LEFT];
-      BottomPoint.Y := dRight.Y;
-      TopHook := dBottom;
+      BottomPoint.Y := FDiamond.Right.Y;
+      TopHook := FDiamond.Bottom;
 
       DrawArrow(Branch.Hook.X, TopHook.Y, Branch.Hook);
       if Branch.FindInstanceOf(TReturnBlock) = -1 then
@@ -95,12 +89,12 @@ begin
          DrawArrowTo(5, 0, arrMiddle);
          Canvas.LineTo(TopHook.X, 0);
       end;
-      DrawTextLabel(dBottom.X-10, dBottom.Y, FTrueLabel, true);
-      DrawTextLabel(dRight.X, dRight.Y-5, FFalseLabel, false, true);
-      DrawBlockLabel(dLeft.X+5, dLeft.Y-5, GInfra.CurrentLang.LabelWhile, true, true);
+      DrawTextLabel(FDiamond.Bottom.X-10, FDiamond.Bottom.Y, FTrueLabel, true);
+      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, false, true);
+      DrawBlockLabel(FDiamond.Left.X+5, FDiamond.Left.Y-5, GInfra.CurrentLang.LabelWhile, true, true);
       Canvas.MoveTo(TopHook.X, 0);
-      Canvas.LineTo(dTop.X, dTop.Y);
-      Canvas.PenPos := dRight;
+      Canvas.LineTo(FDiamond.Top.X, FDiamond.Top.Y);
+      Canvas.PenPos := FDiamond.Right;
       Canvas.LineTo(BottomPoint.X, BottomPoint.Y);
       DrawArrowTo(BottomPoint.X, Height-1);
    end;
