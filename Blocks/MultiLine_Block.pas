@@ -24,7 +24,7 @@ unit MultiLine_Block;
 interface
 
 uses
-   Vcl.Controls, Vcl.StdCtrls, System.Classes, Vcl.ComCtrls, Base_Block, StatementMemo,
+   Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, System.Classes, Base_Block, StatementMemo,
    MemoEx, Types;
 
 type
@@ -59,7 +59,7 @@ uses
 constructor TMultiLineBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms, shpRectangle, yymUndefined);
+   inherited Create(ABranch, ABlockParms, shpRectangle, yymUndefined, taLeftJustify);
 
    FStatements := TStatementMemo.Create(Self);
    FStatements.Parent := Self;

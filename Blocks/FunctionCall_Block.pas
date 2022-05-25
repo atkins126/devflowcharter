@@ -42,17 +42,16 @@ type
 implementation
 
 uses
-   Vcl.Controls, Vcl.Graphics, System.Types, Infrastructure, YaccLib;
+   Vcl.Controls, Vcl.Graphics, System.Types, System.Classes, Infrastructure, YaccLib;
 
 constructor TFunctionCallBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms, shpRoutine, yymFuncCall);
+   inherited Create(ABranch, ABlockParms, shpRoutine, yymFuncCall, taLeftJustify);
 
    FStatement.SetBounds(10, 1, ABlockParms.w-20, CalculateStatementHeight);
    FStatement.Anchors := [akRight, akLeft, akTop];
    FStatement.SetLRMargins(1, 1);
-   FStatement.Color := GSettings.GetShapeColor(shpRoutine);
 
    BottomHook := ABlockParms.w div 2;
    BottomPoint.X := BottomHook;
@@ -70,21 +69,14 @@ begin
 end;
 
 procedure TFunctionCallBlock.Paint;
-var
-   br: TPoint;
-   lColor: TColor;
-   r: TRect;
 begin
    inherited;
-   Canvas.Brush.Style := bsClear;
-   lColor := GSettings.GetShapeColor(FShape);
-   if lColor <> GSettings.DesktopColor then
-      Canvas.Brush.Color := lColor;
-   br := FStatement.BoundsRect.BottomRight;
+   SetBrushColor(FShape);
+   var br := FStatement.BoundsRect.BottomRight;
    Inc(br.Y);
    BottomPoint.Y := br.Y;
    IPoint.Y := br.Y + 8;
-   r := Rect(0, FStatement.Top-1, Width, br.Y);
+   var r := Rect(0, FStatement.Top-1, Width, br.Y);
    Canvas.Rectangle(r);
    DrawBlockLabel(1, br.Y-2, GInfra.CurrentLang.LabelFuncCall);
    DrawArrow(BottomPoint, BottomPoint.X, Height-1);

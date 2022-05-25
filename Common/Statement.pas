@@ -28,29 +28,28 @@ uses
 type
 
   TWinControlHack = class(TWinControl);
-  TOnChangeExtend = procedure(AEdit: TCustomEdit) of object;
+  TEditorAction = procedure(AEdit: TCustomEdit) of object;
 
   TStatement = class(TCustomEdit, IWithId, IWithFocus)
   private
     { Private declarations }
-    FExecuteParse,
     FHasFocusParent: boolean;
     FParserMode: TYYMode;
     FId,
     FLMargin,
     FRMargin: integer;
     FFocusParent: IWithFocus;
+    procedure ApplyMargins;
     function GetId: integer;
     function HasFocusParent: boolean;
-    procedure ApplyMargins;
   protected
     procedure WndProc(var msg: TMessage); override;
     procedure CreateHandle; override;
   public
     { Public declarations }
-    OnChangeExtend: TOnChangeExtend;
+    EditorAction: TEditorAction;
     property Id: integer read GetId;
-    constructor Create(AParent: TWinControl; AParserMode: TYYMode; AId: integer = ID_INVALID);
+    constructor Create(AParent: TWinControl; AParserMode: TYYMode; AAlignment: TAlignment; AId: integer = ID_INVALID);
     destructor Destroy; override;
     procedure Change; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer); override;
@@ -71,7 +70,7 @@ type
     //property BevelInner;
     //property BevelOuter;
     //property BiDiMode;
-    property BorderStyle;
+    //property BorderStyle;
     //property CharCase;
     property Color;
     //property Constraints;
@@ -123,22 +122,22 @@ implementation
 uses
    WinApi.Windows, System.SysUtils, Vcl.Forms, Infrastructure, Navigator_Form, Constants;
 
-constructor TStatement.Create(AParent: TWinControl; AParserMode: TYYMode; AId: integer = ID_INVALID);
+constructor TStatement.Create(AParent: TWinControl; AParserMode: TYYMode; AAlignment: TAlignment; AId: integer = ID_INVALID);
 begin
    inherited Create(AParent);
    Parent := AParent;
    FHasFocusParent := Supports(AParent, IWithFocus, FFocusParent);
    PopupMenu := TInfra.GetMainForm.pmEdits;
+   AutoSelect := False;
+   Alignment := AAlignment;
    BorderStyle := bsNone;
    ShowHint := True;
-   AutoSelect := False;
    DoubleBuffered := true;
-   OnChangeExtend := nil;
-   ControlStyle := ControlStyle + [csOpaque];
    FParserMode := AParserMode;
    FId := GProject.Register(Self, AId);
    if CanFocus then
       SetFocus;
+   Change;
 end;
 
 destructor TStatement.Destroy;
@@ -181,7 +180,7 @@ begin
    var txt := Trim(Text);
    var h := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
    var c := GSettings.FontColor;
-   if FExecuteParse then
+   if GSettings.ExecuteParse(FParserMode) then
    begin
       if txt.IsEmpty then
       begin
@@ -221,9 +220,10 @@ begin
    end;
    Hint := h;
    Font.Color := c;
-   if Assigned(OnChangeExtend) then
-      OnChangeExtend(Self);
-   NavigatorForm.DoInvalidate;
+   if Assigned(EditorAction) then
+      EditorAction(Self);
+   if NavigatorForm.InvalidateIndicator then
+      NavigatorForm.Invalidate;
 end;
 
 procedure TStatement.KeyDown(var Key: Word; Shift: TShiftState);
@@ -232,36 +232,18 @@ begin
    TInfra.OnKeyDownSelectAll(Self, Key, Shift);
 end;
 
+procedure TStatement.DoEnter;
+begin
+   inherited DoEnter;
+   if Assigned(EditorAction) then
+      EditorAction(Self);
+end;
+
 procedure TStatement.MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer);
 begin
    inherited MouseDown(Button, Shift, X, Y);
    if HasParent and Assigned(TWinControlHack(Parent).OnMouseDown) then
       TWinControlHack(Parent).OnMouseDown(Parent, Button, Shift, X+Left, Y+Top);
-end;
-
-procedure TStatement.DoEnter;
-begin
-   inherited DoEnter;
-   case FParserMode of
-      yymInput:     FExecuteParse := GSettings.ParseInput;
-      yymOutput:    FExecuteParse := GSettings.ParseOutput;
-      yymAssign:    FExecuteParse := GSettings.ParseAssign;
-      yymFuncCall:  FExecuteParse := GSettings.ParseRoutineCall;
-      yymFor:       FExecuteParse := GSettings.ParseFor;
-      yymReturn:    FExecuteParse := GSettings.ParseReturn;
-      yymCondition: FExecuteParse := GSettings.ParseCondition;
-      yymCase,
-      yymCaseValue: FExecuteParse := GSettings.ParseCase;
-   else
-      FExecuteParse := false;
-   end;
-   var chon := GProject.ChangingOn;
-   GProject.ChangingOn := false;
-   try
-      Change;
-   finally
-      GProject.ChangingOn := chon;
-   end;
 end;
 
 function TStatement.GetId: integer;

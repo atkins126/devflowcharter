@@ -310,7 +310,12 @@ end;
 
 function TTabComponent.GetElementCount: integer;
 begin
-   result := sbxElements.ControlCount;
+   result := 0;
+   for var i := 0 to sbxElements.ControlCount-1 do
+   begin
+      if sbxElements.Controls[i].Visible then
+         Inc(result);
+   end;
 end;
 
 function TTabComponent.IsDuplicated(ANameEdit: TEdit): boolean;
@@ -341,10 +346,12 @@ end;
 function TTabComponent.GetElements<T>(AComparer: IComparer<T> = nil): IEnumerable<T>;
 begin
    var list := TList<T>.Create;
-   if list.Capacity < sbxElements.ControlCount then
-      list.Capacity := sbxElements.ControlCount;
    for var i := 0 to sbxElements.ControlCount-1 do
-      list.Add(sbxElements.Controls[i]);
+   begin
+      var control := sbxElements.Controls[i];
+      if control.Visible then
+         list.Add(control);
+   end;
    if AComparer <> nil then
       list.Sort(AComparer);
    result := TEnumeratorFactory<T>.Create(list);
@@ -375,8 +382,7 @@ begin
    if elem.edtName.CanFocus then
    begin
       elem.edtName.SetFocus;
-      if Assigned(elem.edtName.OnChange) then
-         elem.edtName.OnChange(elem.edtName);
+      elem.edtName.OnChange(elem.edtName);
    end;
    PageControl.Refresh;
    UpdateCodeEditor;
@@ -455,10 +461,7 @@ procedure TTabComponent.RefreshElements;
 begin
    FParentForm.UpdateCodeEditor := false;
    for var elem in GetElements<TElement> do
-   begin
-      if Assigned(elem.edtName.OnChange) then
-         elem.edtName.OnChange(elem.edtName);
-   end;
+      elem.edtName.OnChange(elem.edtName);
    FParentForm.UpdateCodeEditor := true;
 end;
 

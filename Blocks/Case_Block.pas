@@ -34,7 +34,7 @@ type
          DefaultBranch: TBranch;
          procedure Paint; override;
          procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
-         procedure OnChangeEdit(AEdit: TCustomEdit);
+         procedure EditorAction(AEdit: TCustomEdit);
          function GetDiamondTop: TPoint; override;
          procedure PlaceBranchStatement(ABranch: TBranch);
          function  GetTemplateByControl(AControl: TControl; var AObject: TObject): string;
@@ -73,7 +73,7 @@ uses
 constructor TCaseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms, shpDiamond, yymCase);
+   inherited Create(ABranch, ABlockParms, shpDiamond, taCenter, yymCase);
 
    FInitParms.Width := 200;
    FInitParms.Height := 131;
@@ -94,8 +94,7 @@ begin
    FCaseLabel := i18Manager.GetString('CaptionCase');
    Constraints.MinWidth := FInitParms.Width;
    Constraints.MinHeight := FInitParms.Height;
-   FStatement.Alignment := taCenter;
-   FStatement.OnChangeExtend := OnChangeEdit;
+   FStatement.EditorAction := EditorAction;
 
 end;
 
@@ -152,7 +151,7 @@ begin
    DrawI;
 end;
 
-procedure TCaseBlock.OnChangeEdit(AEdit: TCustomEdit);
+procedure TCaseBlock.EditorAction(AEdit: TCustomEdit);
 begin
    if GSettings.ParseCase then
    begin
@@ -217,10 +216,9 @@ end;
 
 function TCaseBlock.CreateBranchStatement(ABranchStatementId: integer = ID_INVALID): TStatement;
 begin
-   result := TStatement.Create(Self, yymCaseValue, ABranchStatementId);
+   result := TStatement.Create(Self, yymCaseValue, taRightJustify, ABranchStatementId);
    result.Color := Color;
-   result.Alignment := taRightJustify;
-   result.OnChangeExtend := UpdateEditor;
+   result.EditorAction := UpdateEditor;
 end;
 
 procedure TCaseBlock.PlaceBranchStatement(ABranch: TBranch);
@@ -251,11 +249,11 @@ begin
       leftX := rightX;
       br.Hook.X := leftX;
       x := leftX;
-      LinkBlocks(i);
+      LinkBlocks(br);
       for block in br do
          x := Min(block.Left, x);
       Inc(br.hook.X, leftX-x);
-      LinkBlocks(i);
+      LinkBlocks(br);
       PlaceBranchStatement(br);
       if br.FindInstanceOf(TReturnBlock) = -1 then
       begin
@@ -298,7 +296,7 @@ begin
       if br <> hBranch then
          br.Hook.Y := maxh - br.Height + 99;
    end;
-   LinkBlocks;
+   LinkAllBlocks;
    if AContinue then
       ParentBlock.ResizeVert(AContinue);
 end;
@@ -386,7 +384,7 @@ begin
       if GInfra.CurrentLang.CaseOfFirstValueTemplate.IsEmpty then
          inherited UpdateEditor(AEdit)
       else
-         OnChangeEdit(nil);
+         EditorAction(nil);
    end
    else if (AEdit <> nil) and PerformEditorUpdate then
    begin
@@ -520,7 +518,7 @@ end;
 procedure TCaseBlock.AfterRemovingBranch;
 begin
    for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
-      FBranchList[i].Statement.DoEnter;
+      FBranchList[i].Statement.Change;
    inherited;
 end;
 

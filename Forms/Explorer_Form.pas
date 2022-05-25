@@ -24,8 +24,8 @@ unit Explorer_Form;
 interface
 
 uses
-   Vcl.StdCtrls, Vcl.Menus, Vcl.ComCtrls, System.Classes, System.Types, OmniXML,
-   Base_Form, Types, Interfaces, Vcl.Controls;
+   Vcl.StdCtrls, Vcl.Menus, Vcl.ComCtrls, Vcl.Controls, System.Classes, System.Types,
+   OmniXML, Base_Form, Types, Interfaces;
 
 type
   TExplorerForm = class(TBaseForm)
@@ -117,10 +117,8 @@ begin
 end;
 
 procedure TExplorerForm.ClearTreeViewItems;
-var
-   deletionEvent:  TTVExpandedEvent;
 begin
-   deletionEvent := tvExplorer.OnDeletion;
+   var deletionEvent := tvExplorer.OnDeletion;
    tvExplorer.OnDeletion := nil;
    try
       tvExplorer.Items.Clear;
@@ -144,16 +142,13 @@ begin
 end;
 
 procedure TExplorerForm.tvExplorerChange(Sender: TObject; Node: TTreeNode);
-var
-   withFocus: IWithFocus;
-   focusInfo: TFocusInfo;
 begin
    if chkAutoNav.Checked then
    begin
-      withFocus := GetWithFocus(Node);
+      var withFocus := GetWithFocus(Node);
       if (withFocus <> nil) and withFocus.CanBeFocused then
       begin
-         focusInfo := TFocusInfo.New;
+         var focusInfo := TFocusInfo.New;
          focusInfo.ActiveControl := tvExplorer;
          withFocus.RetrieveFocus(focusInfo);
          GProject.RepaintFlowcharts;
@@ -180,8 +175,6 @@ begin
 end;
 
 procedure TExplorerForm.PopupMenuPopup(Sender: TObject);
-var
-   withFocus: IWithFocus;
 begin
    miExpand.Enabled    := false;
    miCollapse.Enabled  := false;
@@ -194,7 +187,7 @@ begin
       miPrevError.Enabled := miNextError.Enabled;
       miExpand.Enabled := tvExplorer.Selected.HasChildren;
       miCollapse.Enabled := miExpand.Enabled;
-      withFocus := GetWithFocus(tvExplorer.Selected);
+      var withFocus := GetWithFocus(tvExplorer.Selected);
       miRemove.Enabled := (withFocus <> nil) and withFocus.CanRemove;
    end;
 end;
@@ -210,21 +203,16 @@ begin
 end;
 
 procedure TExplorerForm.miRefreshClick(Sender: TObject);
-var
-   i: integer;
-   withFocus: IWithFocus;
-   origText: string;
-   node: TTreeNodeWithFriend;
 begin
    tvExplorer.Items.BeginUpdate;
    try
-      for i := 0 to tvExplorer.Items.Count-1 do
+      for var i := 0 to tvExplorer.Items.Count-1 do
       begin
-         node := TTreeNodeWithFriend(tvExplorer.Items[i]);
-         withFocus := GetWithFocus(node);
+         var node := TTreeNodeWithFriend(tvExplorer.Items[i]);
+         var withFocus := GetWithFocus(node);
          if withFocus <> nil then
          begin
-            origText := withFocus.GetTreeNodeText(node.Offset);
+            var origText := withFocus.GetTreeNodeText(node.Offset);
             if (origText <> '') and (origText <> node.Text) then
                node.Text := origText;
          end;
@@ -235,26 +223,20 @@ begin
 end;
 
 procedure TExplorerForm.miNextErrorClick(Sender: TObject);
-var
-   i, c, last: integer;
-   withFocus: IWithFocus;
 begin
    if tvExplorer.Selected <> nil then
    begin
+      var c := -1;
+      var last := -1;
       if Sender = miNextError then
       begin
          c := 1;
          last := tvExplorer.Items.Count;
-      end
-      else
-      begin
-         c := -1;
-         last := -1;
       end;
-      i := tvExplorer.Selected.AbsoluteIndex + c;
+      var i := tvExplorer.Selected.AbsoluteIndex + c;
       while i <> last do
       begin
-         withFocus := GetWithFocus(tvExplorer.Items[i]);
+         var withFocus := GetWithFocus(tvExplorer.Items[i]);
          if (withFocus <> nil) and TInfra.IsNOkColor(withFocus.GetFocusColor) then
          begin
             if not tvExplorer.Items[i].IsVisible then
@@ -262,41 +244,35 @@ begin
             tvExplorer.Selected := tvExplorer.Items[i];
             break;
          end;
-         i := i + c;
+         Inc(i, c);
       end;
    end;
 end;
 
 procedure TExplorerForm.tvExplorerCustomDrawItem(Sender: TCustomTreeView;
   Node: TTreeNode; State: TCustomDrawState; var DefaultDraw: Boolean);
-var
-   nodeRect: TRect;
-   withFocus: IWithFocus;
-   lColor, lColor2: TColor;
-   x, y: integer;
-   lFont: TFont;
 begin
-   x := 0;
-   y := 0;
-   lFont := Sender.Canvas.Font;
-   lColor := OK_COLOR;
+   var x := 0;
+   var y := 0;
+   var lFont := Sender.Canvas.Font;
+   var lColor := OK_COLOR;
    if cdsSelected in State then
    begin
       Sender.Canvas.Brush.Style := bsClear;
       x := 2;
       y := 1;
    end;
-   withFocus := GetWithFocus(Node);
+   var withFocus := GetWithFocus(Node);
    if withFocus <> nil then
    begin
-      lColor2 := withFocus.GetFocusColor;
+      var lColor2 := withFocus.GetFocusColor;
       if TInfra.IsNOkColor(lColor2) or (lColor2 = TEXT_COLOR) then
          lColor := lColor2;
       if withFocus.IsBoldDesc then
          lFont.Style := lFont.Style + [fsBold];
    end;
    lFont.Color := lColor;
-   nodeRect := Node.DisplayRect(True);
+   var nodeRect := Node.DisplayRect(True);
    Sender.Canvas.TextOut(nodeRect.Left+x, nodeRect.Top+y, Node.Text);
    DefaultDraw := true;
 end;
@@ -352,8 +328,6 @@ begin
 end;
 
 procedure TExplorerForm.ImportSettingsFromXMLTag(ATag: IXMLElement);
-var
-   topY: integer;
 begin
    if TXMLProcessor.GetBoolFromAttr(ATag, 'tree_win_show') and GInfra.CurrentLang.EnabledExplorer then
    begin
@@ -365,7 +339,7 @@ begin
       if TXMLProcessor.GetBoolFromAttr(ATag, 'tree_win_min') then
          WindowState := wsMinimized;
       Show;
-      topY := TXMLProcessor.GetIntFromAttr(ATag, 'tree_top_y', -2);
+      var topY := TXMLProcessor.GetIntFromAttr(ATag, 'tree_top_y', -2);
       if (topY >= 0) and (topY < tvExplorer.Items.Count) then
          tvExplorer.TopItem := tvExplorer.Items[topY];
    end;

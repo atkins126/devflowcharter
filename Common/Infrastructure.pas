@@ -24,12 +24,10 @@ unit Infrastructure;
 interface
 
 uses
-   WinApi.Windows, Vcl.Forms, Vcl.StdCtrls, Vcl.Grids, Vcl.Controls, Vcl.Graphics,
-   System.SysUtils, System.Classes, System.StrUtils,
-   Vcl.ComCtrls, LocalizationManager, Project, Settings, LangDefinition, Types,
-   Base_Form, Interfaces, Functions_Form, DataTypes_Form, Declarations_Form,
-   Main_Form, Base_Block, SynEditTypes, Settings_Form, Editor_Form, Explorer_Form,
-   UserFunction, BlockTabSheet, About_Form, YaccLib;
+   WinApi.Windows, Vcl.StdCtrls, Vcl.Controls, Vcl.Graphics, Vcl.ComCtrls, System.Classes,
+   LocalizationManager, Project, Settings, LangDefinition, Types, Base_Form, Interfaces,
+   Functions_Form, DataTypes_Form, Declarations_Form, Main_Form, Base_Block, SynEditTypes,
+   Settings_Form, Editor_Form, Explorer_Form, UserFunction, BlockTabSheet, About_Form, YaccLib;
 
 type
 
@@ -55,7 +53,7 @@ type
          class procedure ShowWarningBox(const AKey: string; Args: array of const); overload;
          class procedure ShowErrorBox(const AErrorMsg: string; AError: TError); overload;
          class procedure ShowErrorBox(const AKey: string; Args: array of const; AError: TError); overload;
-         class procedure SetInitialSettings;
+         class procedure Reset;
          class procedure PopulateDataTypeCombo(AcbType: TComboBox; ASkipIndex: integer = 100);
          class procedure PrintBitmap(ABitmap: TBitmap);
          class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; const ATemplateString: string; AObject: TObject = nil): integer; overload;
@@ -144,13 +142,14 @@ type
 implementation
 
 uses
-   Vcl.Printers, WinApi.Messages, Vcl.Menus, Vcl.Dialogs, Vcl.Imaging.jpeg, Vcl.Imaging.PngImage,
-   System.Math, Generics.Collections, System.IOUtils, System.Rtti, Constants, UserDataType,
-   XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator, System.Character, System.Generics.Defaults;
+   Vcl.Printers, Vcl.Menus, Vcl.Dialogs, Vcl.Imaging.jpeg, Vcl.Imaging.PngImage,
+   Vcl.Forms, System.Math, System.IOUtils, System.Rtti, System.Character, System.StrUtils,
+   System.Generics.Defaults, System.SysUtils, Generics.Collections, WinApi.Messages,
+   Constants, UserDataType, XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator;
 
 type
-   THackCustomEdit = class(TCustomEdit);
-   THackControl = class(TControl);
+   TCustomEditHack = class(TCustomEdit);
+   TControlHack = class(TControl);
 
 constructor TInfra.Create;
 var
@@ -225,22 +224,18 @@ begin
 end;
 
 class function TInfra.ExportToFile(AExport: IExportable): TError;
-var
-   graphic: TGraphic;
-   dialog: TSaveDialog;
-   filterKey: string;
 begin
    result := errNone;
    if AExport <> nil then
    begin
-      dialog := GetMainForm.ExportDialog;
+      var dialog := GetMainForm.ExportDialog;
       dialog.FileName := AExport.GetExportFileName;
       dialog.Filter := i18Manager.GetJoinedString('|', PROJECT_DIALOG_FILTER_KEYS);
       dialog.FilterIndex := 1;
       if dialog.Execute then
       begin
-         graphic := nil;
-         filterKey := PROJECT_DIALOG_FILTER_KEYS[dialog.FilterIndex-1];
+         var graphic: TGraphic := nil;
+         var filterKey := PROJECT_DIALOG_FILTER_KEYS[dialog.FilterIndex-1];
          if filterKey = XML_FILES_FILTER_KEY then
             result := AExport.ExportToXMLFile(dialog.Filename)
          else if filterKey = BMP_FILES_FILTER_KEY then
@@ -257,6 +252,8 @@ begin
             graphic.Free;
          end;
       end;
+      dialog.FileName := '';
+      dialog.Filter := '';
    end;
 end;
 
@@ -306,11 +303,9 @@ begin
 end;
 
 function TInfra.GetNativeFunction(const AName: string): PNativeFunction;
-var
-   i: integer;
 begin
    result := nil;
-   for i := 0 to High(FCurrentLang.NativeFunctions) do
+   for var i := 0 to High(FCurrentLang.NativeFunctions) do
    begin
       if SameStrings(AName, FCurrentLang.NativeFunctions[i].Name) then
       begin
@@ -321,15 +316,11 @@ begin
 end;
 
 procedure TInfra.SetHLighters;
-var
-   i: integer;
-   comp: TComponent;
-   lang: TLangDefinition;
 begin
-   for i := 0 to High(FLangArray)-1 do
+   for var i := 0 to High(FLangArray)-1 do
    begin
-      lang := FLangArray[i];
-      comp := GetEditorForm.FindComponent(lang.HighLighterVarName);
+      var lang := FLangArray[i];
+      var comp := GetEditorForm.FindComponent(lang.HighLighterVarName);
       if comp is TSynCustomHighlighter then
          lang.HighLighter := TSynCustomHighlighter(comp);
       if lang = GInfra.CurrentLang then
@@ -407,9 +398,7 @@ begin
    result := ShowQuestionBox(i18Manager.GetFormattedString(AKey, Args), AFlags);
 end;
 
-class procedure TInfra.SetInitialSettings;
-var
-   baseForm: TBaseForm;
+class procedure TInfra.Reset;
 begin
    with GClpbrd do
    begin
@@ -422,20 +411,16 @@ begin
    GProject := nil;
    GCustomCursor := crNormal;
    Screen.Cursor := crDefault;
-   for baseForm in GetBaseForms do
+   for var baseForm in GetBaseForms do
       baseForm.ResetForm;
 end;
 
 class function TInfra.GetBaseForms: IEnumerable<TBaseForm>;
-var
-   list: TList<TBaseForm>;
-   i: integer;
-   comp: TComponent;
 begin
-   list := TList<TBaseForm>.Create;
-   for i := 0 to Application.ComponentCount-1 do
+   var list := TList<TBaseForm>.Create;
+   for var i := 0 to Application.ComponentCount-1 do
    begin
-      comp := Application.Components[i];
+      var comp := Application.Components[i];
       if comp is TBaseForm then
          list.Add(TBaseForm(comp));
    end;
@@ -904,23 +889,19 @@ begin
 end;
 
 class function TInfra.CompareProgramVersion(const AVersion: string): integer;
-var
-   currVersion: string;
-   nums, numsCurr: TArray<string>;
-   i, e1, e2: integer;
 begin
    result := 0;
-   currVersion := GetAboutForm.GetProgramVersion;
+   var currVersion := GetAboutForm.GetProgramVersion;
    if AVersion.IsEmpty or (currVersion = UNKNOWN_VERSION) or (currVersion = AVersion) then
       Exit;
-   nums := AVersion.Split([VERSION_NUMBER_SEP], 4);
-   numsCurr := currVersion.Split([VERSION_NUMBER_SEP], 4);
-   for i := 0 to High(numsCurr) do
+   var nums := AVersion.Split([VERSION_NUMBER_SEP], 4);
+   var numsCurr := currVersion.Split([VERSION_NUMBER_SEP], 4);
+   for var i := 0 to High(numsCurr) do
    begin
       if (result <> 0) or (i > High(nums)) then
          break;
-      e1 := StrToIntDef(nums[i], -1);
-      e2 := StrToIntDef(numsCurr[i], -1);
+      var e1 := StrToIntDef(nums[i], -1);
+      var e2 := StrToIntDef(numsCurr[i], -1);
       if e1 > e2 then
          result := 1
       else if e1 < e2 then
@@ -937,11 +918,9 @@ begin
 end;
 
 class function TInfra.GetParsedBlock: TBlock;
-var
-   edit: TCustomEdit;
 begin
    result := nil;
-   edit := GetParsedEdit;
+   var edit := GetParsedEdit;
    if (edit <> nil) and (edit.Parent is TBlock) then
       result := TBlock(edit.Parent);
 end;
@@ -985,22 +964,18 @@ begin
 end;
 
 class function TInfra.GetChangeLine(AObject: TObject; AEdit: TCustomEdit = nil; const ATemplate: string = ''): TChangeLine;
-var
-   templateLines: TStringList;
-   i, p: integer;
-   indent, template: string;
 begin
-   p := 0;
    result := TChangeLine.New;
    result.EditCaretXY := TInfra.GetCaretPos(AEdit);
+   var p := 0;
    if AObject <> nil then
    begin
       result.CodeRange := GetEditorForm.SelectCodeRange(AObject, false);
       if result.CodeRange.FirstRow <> ROW_NOT_FOUND then
       begin
-         templateLines := TStringList.Create;
+         var templateLines := TStringList.Create;
          try
-            template := ATemplate;
+            var template := ATemplate;
             if template.IsEmpty then
             begin
                if AObject is TBlock then
@@ -1009,7 +984,7 @@ begin
                   template := PRIMARY_PLACEHOLDER;
             end;
             templateLines.Text := template;
-            for i := 0 to templateLines.Count-1 do
+            for var i := 0 to templateLines.Count-1 do
             begin
                p := Pos(PRIMARY_PLACEHOLDER, templateLines[i]);
                if p <> 0 then
@@ -1022,7 +997,7 @@ begin
                   break;
                end;
             end;
-            indent := TInfra.ExtractIndentString(result.CodeRange.Lines[result.Row]);
+            var indent := TInfra.ExtractIndentString(result.CodeRange.Lines[result.Row]);
             result.Col := indent.Length;
             if result.Row = ROW_NOT_FOUND then    // row with placeholder not found
             begin
@@ -1095,10 +1070,14 @@ end;
 
 class procedure TInfra.SetFontSize(AControl: TControl; ASize: integer);
 begin
-   var flag := (AControl is TCustomEdit) and (THackCustomEdit(AControl).BorderStyle = bsNone);
-   if flag then THackCustomEdit(AControl).BorderStyle := bsSingle;
-   THackControl(AControl).Font.Size := ASize;
-   if flag then THackCustomEdit(AControl).BorderStyle := bsNone;
+   var flag := (AControl is TCustomEdit)
+               and not (AControl is TCustomMemo)
+               and not (csFixedHeight in AControl.ControlStyle);
+   if flag then
+      AControl.ControlStyle := AControl.ControlStyle + [csFixedHeight];
+   TControlHack(AControl).Font.Size := ASize;
+   if flag then
+      AControl.ControlStyle := AControl.ControlStyle - [csFixedHeight];
 end;
 
 class function TInfra.FindDuplicatedPage(APage: TTabSheet; const ACaption: TCaption): TTabSheet;
@@ -1140,7 +1119,7 @@ begin
    with TControlCanvas.Create do
    try
       Control := AControl;
-      Font.Assign(THackControl(AControl).Font);
+      Font.Assign(TControlHack(AControl).Font);
       result := TextWidth(AText);
    finally
       Free;
@@ -1171,18 +1150,15 @@ begin
 end;
 
 class function TInfra.GetDimensions(const AText: string): TArray<string>;
-var
-   txt, s: string;
-   d, i: integer;
 begin
-   txt := ReplaceStr(AText, ' ', '');
-   d := GetDimensionCount(txt);
+   var txt := ReplaceStr(AText, ' ', '');
+   var d := GetDimensionCount(txt);
    if d < 1 then
       Exit(nil);
    SetLength(result, d);
-   s := '';
+   var s := '';
    d := 0;
-   for i := 1 to txt.Length do
+   for var i := 1 to txt.Length do
    begin
       if txt[i] = ']' then
       begin
@@ -1196,13 +1172,9 @@ begin
 end;
 
 class function TInfra.GetDimensionCount(const AText: string): integer;
-var
-   i, len: integer;
-   txt: string;
-   nextOpen: boolean;
 begin
-   txt := ReplaceStr(AText, ' ', '');
-   len := txt.Length;
+   var txt := ReplaceStr(AText, ' ', '');
+   var len := txt.Length;
    if len = 0 then
       Exit(-1);
    if txt[1] = '[' then
@@ -1210,8 +1182,8 @@ begin
       if txt[len] <> ']' then
          Exit(-1);
       result := 0;
-      nextOpen := true;
-      for i := 1 to len do
+      var nextOpen := true;
+      for var i := 1 to len do
       begin
          if txt[i] = '[' then
          begin

@@ -56,6 +56,7 @@ type
          FParentBranch: TBranch;
          FId: integer;
          function IsInSelect(const APoint: TPoint): boolean;
+         procedure RefreshStatements;
       protected
          FType: TBlockType;
          FStatement: TStatement;
@@ -66,7 +67,7 @@ type
          FFrame,
          FMouseLeave: boolean;
          FShape: TColorShape;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode);
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode; AAlignment: TAlignment);
          procedure MyOnMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
          procedure MyOnMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); virtual;
@@ -112,6 +113,7 @@ type
          function GetErrorMsg(AEdit: TCustomEdit): string;
          procedure SaveInXML2(ATag: IXMLElement);
          procedure ExitSizeMove;
+         procedure SetBrushColor(AShape: TColorShape);
          function GetBlockParms: TBlockParms; virtual;
          function GetBlockTemplate(const ALangId: string): string;
          function GetBlockTemplateExpr(const ALangId: string): string;
@@ -136,7 +138,7 @@ type
          procedure SetFontSize(ASize: integer);
          function GetFont: TFont;
          procedure SetFont(AFont: TFont);
-         procedure RefreshStatements;
+         procedure PerformRefreshStatements;
          procedure PopulateComboBoxes; virtual;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; virtual;
          function GetFromXML(ATag: IXMLElement): TError; virtual;
@@ -208,11 +210,12 @@ type
          FFalseLabel: string;
          FFixedBranches: integer;
          FDiamond: TDiamond;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode = yymUndefined);
+         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
          procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
          procedure SetWidth(AMinX: integer); virtual;
-         procedure LinkBlocks(const idx: integer = PRIMARY_BRANCH_IDX-1);
+         procedure LinkAllBlocks;
+         procedure LinkBlocks(ABranch: TBranch);
          procedure Paint; override;
          function ExtractBranchIndex(const AStr: string): integer;
          function GetDiamondTop: TPoint; virtual;
@@ -241,7 +244,7 @@ type
          function GetFromXML(ATag: IXMLElement): TError; override;
          procedure SaveInXML(ATag: IXMLElement); override;
          procedure GenerateTemplateSection(ALines: TStringList; ATemplate: TStringList; const ALangId: string; ADeep: integer); override;
-         function GetBlocks(AIndex: integer = PRIMARY_BRANCH_IDX-1): IEnumerable<TBlock>;
+         function GetAllBlocks: IEnumerable<TBlock>;
          procedure ResizeWithDrawLock;
          function GetFoldedText: string;
          procedure SetFoldedText(const AText: string);
@@ -294,7 +297,11 @@ type
    TControlHack = class(TControl);
    TCustomEditHack = class(TCustomEdit);
 
-constructor TBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode);
+constructor TBlock.Create(ABranch: TBranch;
+                          const ABlockParms: TBlockParms;
+                          AShape: TColorShape;
+                          AParserMode: TYYMode;
+                          AAlignment: TAlignment);
 begin
 
    FType := ABlockParms.bt;
@@ -331,8 +338,8 @@ begin
    FId := GProject.Register(Self, ABlockParms.bid);
    FMouseLeave := true;
    FShape := AShape;
-   FStatement := TStatement.Create(Self, AParserMode);
-   FStatement.OnChangeExtend := UpdateEditor;
+   FStatement := TStatement.Create(Self, AParserMode, AAlignment);
+   FStatement.EditorAction := UpdateEditor;
    FStatement.Color := GSettings.GetShapeColor(FShape);
 
    OnMouseDown := MyOnMouseDown;
@@ -344,10 +351,10 @@ begin
    OnDragDrop  := MyOnDragDrop;
 end;
 
-constructor TGroupBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode = yymUndefined);
+constructor TGroupBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
 begin
 
-   inherited Create(ABranch, ABlockParms, AShape, AParserMode);
+   inherited Create(ABranch, ABlockParms, AShape, AParserMode, AAlignment);
 
    FStatement.Width := 65;
 
@@ -507,7 +514,7 @@ begin
          if FVResize then
          begin
             if Self is TGroupBlock then
-               TGroupBlock(Self).LinkBlocks;
+               TGroupBlock(Self).LinkAllBlocks;
             if FParentBlock <> nil then
                FParentBlock.ResizeVert(true);
             FVResize := false;
@@ -827,18 +834,13 @@ begin
 end;
 
 function TBlock.Clone(ABranch: TBranch): TBlock;
-var
-  blockType: TRttiType;
-  method: TRttiMethod;
-  params: TArray<TRttiParameter>;
-  ctx: TRttiContext;
 begin
    result := nil;
-   ctx := TRttiContext.Create;
-   blockType := ctx.GetType(ClassInfo);
-   for method in blockType.GetMethods do
+   var ctx := TRttiContext.Create;
+   var blockType := ctx.GetType(ClassInfo);
+   for var method in blockType.GetMethods do
    begin
-      params := method.GetParameters;
+      var params := method.GetParameters;
       if method.IsConstructor
          and (method.Visibility = mvPublic)
          and (Length(params) = 2)
@@ -925,20 +927,17 @@ end;
 procedure TGroupBlock.ResizeVert(AContinue: boolean);
 begin
    Height := Branch.Height + Branch.Hook.Y + FInitParms.HeightAffix;
-   LinkBlocks;
+   LinkAllBlocks;
    if AContinue and (FParentBlock <> nil) then
       FParentBlock.ResizeVert(AContinue);
 end;
 
 procedure TGroupBlock.ResizeHorz(AContinue: boolean);
-var
-   xLeft, xRight: integer;
-   block: TBlock;
 begin
 
    Branch.Hook.X := FInitParms.BranchPoint.X;
    TopHook.X := Branch.Hook.X;
-   LinkBlocks;
+   LinkAllBlocks;
 
    if Branch.Count = 0 then   // case if primary branch is empty
    begin
@@ -949,18 +948,18 @@ begin
    else
    begin
       // resize in left direction
-      xLeft := 30;   // 30 - left margin
-      for block in Branch do
+      var xLeft := 30;   // 30 - left margin
+      for var block in Branch do
           xLeft := Min(xLeft, block.Left);
 
       Branch.Hook.X := Branch.Hook.X + 30 - xLeft;
       TopHook.X := Branch.Hook.X;
-      LinkBlocks;
+      LinkAllBlocks;
       BottomHook := Branch.Last.Left + Branch.Last.BottomPoint.X;
 
       // resize in right direction
-      xRight := 0;
-      for block in Branch do
+      var xRight := 0;
+      for var block in Branch do
           xRight := Max(xRight, block.BoundsRect.Right);
 
       SetWidth(xRight);  // set final width
@@ -979,39 +978,6 @@ end;
 procedure TGroupBlock.SetWidth(AMinX: integer);
 begin
 {}
-end;
-
-procedure TGroupBlock.LinkBlocks(const idx: integer = PRIMARY_BRANCH_IDX-1);
-var
-   block, blockPrev: TBlock;
-   i, first, last: integer;
-   p: TPoint;
-   br: TBranch;
-begin
-   if GetBranch(idx) <> nil then
-   begin
-      first := idx;
-      last := idx;
-   end
-   else
-   begin
-      first := PRIMARY_BRANCH_IDX;
-      last := FBranchList.Count - 1;
-   end;
-   for i := first to last do
-   begin
-      blockPrev := nil;
-      br := FBranchList[i];
-      for block in br do
-      begin
-         if blockPrev <> nil then
-            p := Point(blockPrev.BottomPoint.X+blockPrev.Left-block.TopHook.X, blockPrev.BoundsRect.Bottom)
-         else
-            p := Point(br.Hook.X-block.TopHook.X, br.Hook.Y+1);
-         TInfra.MoveWin(block, p);
-         blockPrev := block;
-      end;
-   end;
 end;
 
 function TGroupBlock.GetFoldedText: string;
@@ -1179,32 +1145,33 @@ end;
 
 function TGroupBlock.GetDiamondTop: TPoint;
 begin
-   result := Point(-1, -1);
+   result := TPoint.Zero;
+end;
+
+procedure TBlock.PerformRefreshStatements;
+begin
+    var b := NavigatorForm.InvalidateIndicator;
+    NavigatorForm.InvalidateIndicator := false;
+    RefreshStatements;
+    NavigatorForm.InvalidateIndicator := b;
 end;
 
 procedure TBlock.RefreshStatements;
 begin
-    var b := NavigatorForm.InvalidateInd;
-    NavigatorForm.InvalidateInd := false;
     var b1 := FRefreshMode;
     FRefreshMode := true;
     try
        for var i := 0 to ControlCount-1 do
        begin
           var control := Controls[i];
-          if control is TStatement then
-             TStatement(control).DoEnter
-          else if (control is TMemoEx) and Assigned(TMemoEx(control).OnChange) then
-             TMemoEx(control).OnChange(control)
-          else if (control is TEdit) and Assigned(TEdit(control).OnChange) then
-             TEdit(control).OnChange(control)
+          if control is TCustomEdit then
+             TCustomEditHack(control).Change
           else if (control is TBlock) and (control <> GClpbrd.UndoObject) then
              TBlock(control).RefreshStatements;
        end;
     finally
        FRefreshMode := b1;
     end;
-    NavigatorForm.InvalidateInd := b;
 end;
 
 function TBlock.GetId: integer;
@@ -1213,25 +1180,21 @@ begin
 end;
 
 procedure TBlock.ChangeColor(AColor: TColor);
-var
-   comment: TComment;
-   lEdit: TCustomEditHack;
-   lColor: TColor;
 begin
    Color := AColor;
-   for comment in GetComments do
+   for var comment in GetComments do
    begin
       if comment.Visible then
          comment.Color := AColor;
    end;
-   lEdit := TCustomEditHack(GetTextControl);
-   if lEdit <> nil then
+   var edit := TCustomEditHack(GetTextControl);
+   if edit <> nil then
    begin
-      lColor := GSettings.GetShapeColor(FShape);
+      var lColor := GSettings.GetShapeColor(FShape);
       if lColor = GSettings.DesktopColor then
-         lEdit.Color := AColor
+         edit.Color := AColor
       else
-         lEdit.Color := lColor;
+         edit.Color := lColor;
    end;
 end;
 
@@ -1255,14 +1218,9 @@ begin
    result := inherited FindSelectedBlock;
    if result = nil then
    begin
-      for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+      for var block in GetAllBlocks do
       begin
-         for var block in FBranchList[i] do
-         begin
-            result := block.FindSelectedBlock;
-            if result <> nil then
-               break;
-         end;
+         result := block.FindSelectedBlock;
          if result <> nil then
             break;
       end;
@@ -1270,21 +1228,14 @@ begin
 end;
 
 procedure TGroupBlock.ChangeColor(AColor: TColor);
-var
-   i: integer;
-   block: TBlock;
-   lColor: TColor;
 begin
    inherited ChangeColor(AColor);
    if Expanded then
    begin
-      for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
-      begin
-         for block in FBranchList[i] do
-             block.ChangeColor(AColor);
-      end;
+      for var block in GetAllBlocks do
+         block.ChangeColor(AColor);
    end;
-   lColor := GSettings.GetShapeColor(shpFolder);
+   var lColor := GSettings.GetShapeColor(shpFolder);
    if lColor = GSettings.DesktopColor then
       FMemoFolder.Color := AColor
    else
@@ -1316,13 +1267,10 @@ procedure TGroupBlock.ExpandAll;
 begin
    if not Expanded then
       ExpandFold(true);
-   for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+   for var block in GetAllBlocks do
    begin
-      for var block in FBranchList[i] do
-      begin
-         if block is TGroupBlock then
-            TGroupBlock(block).ExpandAll;
-      end;
+      if block is TGroupBlock then
+         TGroupBlock(block).ExpandAll;
    end;
 end;
 
@@ -1344,17 +1292,14 @@ begin
    result := not Expanded;
    if Expanded then
    begin
-      for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+      for var block in GetAllBlocks do
       begin
-         for var block in FBranchList[i] do
+         if block is TGroupBlock then
          begin
-            if block is TGroupBlock then
-            begin
-               result := TGroupBlock(block).HasFoldedBlocks;
-               if result then break;
-            end;
+            result := TGroupBlock(block).HasFoldedBlocks;
+            if result then
+               break;
          end;
-         if result then break;
       end;
    end;
 end;
@@ -1377,6 +1322,14 @@ begin
       Pen.Style := psSolid;
       Font.Color := Pen.Color;
    end;
+end;
+
+procedure TBlock.SetBrushColor(AShape: TColorShape);
+begin
+   Canvas.Brush.Style := bsClear;
+   var lColor := GSettings.GetShapeColor(AShape);
+   if lColor <> GSettings.DesktopColor then
+      Canvas.Brush.Color := lColor;
 end;
 
 procedure TBlock.DrawI;
@@ -1540,10 +1493,7 @@ end;
 function TBlock.DrawEllipsedText(ax, ay: integer; const AText: string): TRect;
 begin
    result := GetEllipseTextRect(ax, ay, AText);
-   Canvas.Brush.Style := bsClear;
-   var lColor := GSettings.GetShapeColor(shpEllipse);
-   if lColor <> GSettings.DesktopColor then
-      Canvas.Brush.Color := lColor;
+   SetBrushColor(shpEllipse);
    Canvas.Ellipse(result);
    DrawText(Canvas.Handle, PChar(AText), -1, result, DT_CENTER or DT_SINGLELINE or DT_VCENTER);
 end;
@@ -1575,7 +1525,7 @@ end;
 function TGroupBlock.CountErrWarn: TErrWarnCount;
 begin
    result := inherited CountErrWarn;
-   for var block in GetBlocks do
+   for var block in GetAllBlocks do
    begin
       var errWarnCount := block.CountErrWarn;
       Inc(result.ErrorCount, errWarnCount.ErrorCount);
@@ -1591,25 +1541,19 @@ begin
    var w := Canvas.Pen.Width;
    if Expanded then
    begin
-      var dTop := GetDiamondTop;
       var edit := GetTextControl;
-      if (edit <> nil) and not InvalidPoint(dTop) then
+      if (edit <> nil) and (FShape = shpDiamond) then
       begin
-         FDiamond := TDiamond.New(dTop, edit);
+         FDiamond := TDiamond.New(GetDiamondTop, edit);
          TInfra.MoveWin(edit, FDiamond.Top.X - edit.Width div 2,
                               FDiamond.Top.Y - edit.Height div 2 + FDiamond.Height div 2);
-         Canvas.Brush.Style := bsClear;
-         var lColor2 := GSettings.GetShapeColor(FShape);
-         if lColor2 <> GSettings.DesktopColor then
-            Canvas.Brush.Color := lColor2;
+         SetBrushColor(shpDiamond);
          Canvas.Polygon(FDiamond.Polygon);
       end;
    end
    else
    begin
-      var lColor2 := GSettings.GetShapeColor(shpFolder);
-      if lColor2 <> GSettings.DesktopColor then
-         Canvas.Brush.Color := lColor2;
+      SetBrushColor(shpFolder);
       Canvas.Pen.Width := 2;
       var r := FMemoFolder.BoundsRect;
       r.Inflate(3, 3, 4, 4);
@@ -1737,17 +1681,17 @@ end;
 
 procedure TBlock.MyOnChange(Sender: TObject);
 begin
-   NavigatorForm.DoInvalidate;
+   if NavigatorForm.InvalidateIndicator then
+      NavigatorForm.Invalidate;
 end;
 
 procedure TBlock.OnChangeMemo(Sender: TObject);
-var
-   memo: TMemoEx;
 begin
-   memo := GetMemoEx;
+   var memo := GetMemoEx;
    if memo <> nil then
       memo.UpdateScrolls;
-   NavigatorForm.DoInvalidate;
+   if NavigatorForm.InvalidateIndicator then
+      NavigatorForm.Invalidate;
 end;
 
 function TBlock.CanBeFocused: boolean;
@@ -2063,11 +2007,8 @@ begin
       textControl.Visible := Expanded;
    FMemoFolder.Visible := not Expanded;
 
-   for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
-   begin
-      for block in FBranchList[i] do
-          block.Visible := Expanded;
-   end;
+   for block in GetAllBlocks do
+      block.Visible := Expanded;
 
    if Expanded then
    begin
@@ -2086,7 +2027,7 @@ begin
       IPoint.Y := FFoldParms.IPoint.Y;
       Constraints.MinWidth := FInitParms.Width;
       Constraints.MinHeight := FInitParms.Height;
-      RefreshStatements;
+      PerformRefreshStatements;
    end
    else
    begin
@@ -2195,7 +2136,7 @@ begin
             TXMLProcessor.AddText(tag1, br.hook.Y.ToString);
             tag2.AppendChild(tag1);
 
-            for block in GetBlocks(i) do
+            for block in br do
                 TXMLProcessor.ExportBlockToXML(block, tag2);
          end;
       finally
@@ -2496,27 +2437,23 @@ begin
 end;
 
 procedure TBlock.ExportToGraphic(AGraphic: TGraphic);
-var
-   bitmap: TBitmap;
-   comment: TComment;
-   pnt: TPoint;
-   lPage: TBlockTabSheet;
 begin
    ClearSelection;
+   var bitmap: TBitmap := nil;
    if AGraphic is TBitmap then
       bitmap := TBitmap(AGraphic)
    else
       bitmap := TBitmap.Create;
    bitmap.Width := Width + 2;
    bitmap.Height := Height + 2;
-   lPage := Page;
+   var lPage := Page;
    lPage.DrawI := false;
    bitmap.Canvas.Lock;
    try
       PaintTo(bitmap.Canvas.Handle, 1, 1);
-      for comment in GetComments do
+      for var comment in GetComments do
       begin
-         pnt := ParentToClient(comment.BoundsRect.TopLeft, lPage.Box);
+         var pnt := ParentToClient(comment.BoundsRect.TopLeft, lPage.Box);
          comment.PaintTo(bitmap.Canvas.Handle, pnt.X, pnt.Y);
       end;
    finally
@@ -2533,46 +2470,44 @@ end;
 procedure TGroupBlock.PopulateComboBoxes;
 begin
    inherited PopulateComboBoxes;
+   for var block in GetAllBlocks do
+      block.PopulateComboBoxes;
+end;
+
+function TGroupBlock.GetAllBlocks: IEnumerable<TBlock>;
+begin
+   var list := TList<TBlock>.Create;
    for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
    begin
       for var block in FBranchList[i] do
-          block.PopulateComboBoxes;
-   end;
-end;
-
-function TGroupBlock.GetBlocks(AIndex: integer = PRIMARY_BRANCH_IDX-1): IEnumerable<TBlock>;
-var
-   first, last, i, a: integer;
-   block: TBlock;
-   list: TList<TBlock>;
-begin
-   list := TList<TBlock>.Create;
-   if GetBranch(AIndex) <> nil then
-   begin
-      first := AIndex;
-      last := AIndex;
-   end
-   else if AIndex < PRIMARY_BRANCH_IDX then
-   begin
-      first := PRIMARY_BRANCH_IDX;
-      last := FBranchList.Count - 1;
-   end
-   else
-   begin
-      first := 0;
-      last := -1;
-   end;
-   a := 0;
-   for i := first to last do
-      a := a + FBranchList[i].Count;
-   if list.Capacity < a then
-      list.Capacity := a;
-   for i := first to last do
-   begin
-      for block in FBranchList[i] do
           list.Add(block);
    end;
    result := TEnumeratorFactory<TBlock>.Create(list);
+end;
+
+procedure TGroupBlock.LinkBlocks(ABranch: TBranch);
+var
+   p: TPoint;
+begin
+   if ABranch <> nil then
+   begin
+      var blockPrev: TBlock := nil;
+      for var block in ABranch do
+      begin
+         if blockPrev <> nil then
+            p := Point(blockPrev.BottomPoint.X+blockPrev.Left-block.TopHook.X, blockPrev.BoundsRect.Bottom)
+         else
+            p := Point(ABranch.Hook.X-block.TopHook.X, ABranch.Hook.Y+1);
+         TInfra.MoveWin(block, p);
+         blockPrev := block;
+      end;
+   end;
+end;
+
+procedure TGroupBlock.LinkAllBlocks;
+begin
+   for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+      LinkBlocks(FBranchList[i]);
 end;
 
 function TBlock.SkipUpdateEditor: boolean;

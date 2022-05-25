@@ -11,11 +11,9 @@ type
     scbAlphaVal: TScrollBar;
     procedure FormCreate(Sender: TObject);
     procedure FormPaint(Sender: TObject);
-    procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
+    procedure FormMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure FormResize(Sender: TObject);
-    procedure FormMouseMove(Sender: TObject; Shift: TShiftState; X,
-      Y: Integer);
+    procedure FormMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
     procedure chkAlphaVisibleClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure scbAlphaValChange(Sender: TObject);
@@ -26,11 +24,10 @@ type
     procedure SetAlphaValVisible(AValue: boolean);
   public
     { Public declarations }
-    InvalidateInd: boolean;
+    InvalidateIndicator: boolean;
     procedure ResetForm; override;
     procedure ExportSettingsToXMLTag(ATag: IXMLElement); override;
     procedure ImportSettingsFromXMLTag(ATag: IXMLElement); override;
-    procedure DoInvalidate;
   end;
 
 var
@@ -47,7 +44,7 @@ uses
 procedure TNavigatorForm.FormCreate(Sender: TObject);
 begin
    DoubleBuffered := true;
-   InvalidateInd := true;
+   InvalidateIndicator := true;
    SetBounds(50, 50, 426, 341);
    Constraints.MinWidth := 150;
    Constraints.MinHeight := 150;
@@ -63,44 +60,37 @@ procedure TNavigatorForm.FormPaint(Sender: TObject);
 const
    EXTENT_X = 1024;
    EXTENT_Y = 1024;
-var
-   lhdc: HDC;
-   xExt, yExt: integer;
-   box: TScrollBoxEx;
-   r: TRect;
 begin
    if GProject <> nil then
    begin
-      lhdc := SaveDC(Canvas.Handle);
+      var hdc := SaveDC(Canvas.Handle);
       try
-         box := GProject.GetActivePage.Box;
-         xExt := MulDiv(EXTENT_X, box.HorzScrollBar.Range, ClientWidth);
-         yExt := MulDiv(EXTENT_Y, box.VertScrollBar.Range, ClientHeight);
+         var box := GProject.GetActivePage.Box;
+         var xExt := MulDiv(EXTENT_X, box.HorzScrollBar.Range, ClientWidth);
+         var yExt := MulDiv(EXTENT_Y, box.VertScrollBar.Range, ClientHeight);
          SetMapMode(Canvas.Handle, MM_ANISOTROPIC);
          SetWindowExtEx(Canvas.Handle, xExt, yExt, nil);
          SetViewPortExtEx(Canvas.Handle, EXTENT_X, EXTENT_Y, nil);
          box.PaintToCanvas(Canvas);
          Canvas.Pen.Width := 2;
          Canvas.Pen.Color := clRed;
-         r := box.GetDisplayRect;
+         var r := box.GetDisplayRect;
          Canvas.Polyline([r.TopLeft,
                           Point(r.Right, r.Top),
                           r.BottomRight,
                           Point(r.Left, r.Bottom),
                           r.TopLeft]);
       finally
-         RestoreDC(Canvas.Handle, lhdc);
+         RestoreDC(Canvas.Handle, hdc);
       end;
    end;
 end;
 
 procedure TNavigatorForm.FormMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-var
-   box: TScrollBox;
 begin
    if (Button = mbLeft) and (GProject <> nil) then
    begin
-      box := GProject.GetActivePage.Box;
+      var box := GProject.GetActivePage.Box;
       box.HorzScrollBar.Position := MulDiv(X, box.HorzScrollBar.Range, ClientWidth) - (box.ClientWidth div 2);
       box.VertScrollBar.Position := MulDiv(Y, box.VertScrollBar.Range, ClientHeight) - (box.ClientHeight div 2);
       Repaint;
@@ -113,7 +103,7 @@ procedure TNavigatorForm.ResetForm;
 begin
    inherited ResetForm;
    Position := poDesigned;
-   InvalidateInd := true;
+   InvalidateIndicator := true;
    SetBounds(50, 50, 426, 341);
 end;
 
@@ -188,12 +178,6 @@ begin
       scbAlphaVal.Width := 1;
       scbAlphaVal.Height := 1;
    end;
-end;
-
-procedure TNavigatorForm.DoInvalidate;
-begin
-   if InvalidateInd then
-      Invalidate;
 end;
 
 procedure TNavigatorForm.scbAlphaValChange(Sender: TObject);

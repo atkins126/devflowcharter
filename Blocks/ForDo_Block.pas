@@ -44,7 +44,7 @@ type
          function GetTextTop: integer;
          function FillExpression(const AExpression: string; const ALangId: string): string;
          procedure OnChangeAll;
-         procedure OnChangeEdit(AEdit: TCustomEdit);
+         procedure EditorAction(AEdit: TCustomEdit);
       public
          edtStart, edtStop: TStatement;
          cbVar: TComboBox;
@@ -67,6 +67,7 @@ type
          function FillCodedTemplate(const ALangId: string): string; override;
          function GetDescTemplate(const ALangId: string): string; override;
          procedure ResizeVert(AContinue: boolean); override;
+         procedure ResizeHorz(AContinue: boolean); override;
    end;
 
 implementation
@@ -84,7 +85,7 @@ const
 constructor TForDoBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
 
-   inherited Create(ABranch, ABlockParms, shpRoadSign, yymFor);
+   inherited Create(ABranch, ABlockParms, shpRoadSign, taLeftJustify, yymFor);
 
    FInitParms.Width := DEFAULT_WIDTH;
    FInitParms.Height := DEFAULT_HEIGHT;
@@ -97,13 +98,13 @@ begin
    var sColor := GSettings.GetShapeColor(FShape);
    FForLabel := i18Manager.GetString('CaptionFor');
 
-   edtStart := TStatement.Create(Self, yymFor);
+   edtStart := TStatement.Create(Self, yymFor, taLeftJustify);
    edtStart.Color := sColor;
-   edtStart.OnChangeExtend := OnChangeEdit;
+   edtStart.EditorAction := EditorAction;
 
-   edtStop := TStatement.Create(Self, yymFor);
+   edtStop := TStatement.Create(Self, yymFor, taLeftJustify);
    edtStop.Color := sColor;
-   edtStop.OnChangeExtend := OnChangeEdit;
+   edtStop.EditorAction := EditorAction;
 
    cbVar := TComboBox.Create(Self);
    cbVar.Parent := Self;
@@ -172,7 +173,7 @@ begin
    Create(ABranch, TBlockParms.New(blFor, 0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_BOTTOM_HOOK, 69, DEFAULT_BOTTOM_HOOK));
 end;
 
-procedure TForDoBlock.OnChangeEdit(AEdit: TCustomEdit);
+procedure TForDoBlock.EditorAction(AEdit: TCustomEdit);
 begin
    var w := TInfra.GetAutoWidth(AEdit, 30);
    if w <> AEdit.Width then
@@ -235,10 +236,7 @@ begin
       end;
       Canvas.MoveTo(bst+30, 19);
       Canvas.LineTo(Width-RIGHT_MARGIN, 19);
-      Canvas.Brush.Style := bsClear;
-      var shpColor := GSettings.GetShapeColor(FShape);
-      if shpColor <> GSettings.DesktopColor then
-         Canvas.Brush.Color := shpColor;
+      SetBrushColor(FShape);
       Canvas.Polygon([Point(bhx-100, 0),
                       Point(bst-9, 0),
                       Point(bst+30, 19),
@@ -524,6 +522,12 @@ begin
    PutTextControls;
 end;
 
+procedure TForDoBlock.ResizeHorz(AContinue: boolean);
+begin
+   inherited ResizeHorz(AContinue);
+   PutTextControls;
+end;
+
 procedure TForDoBlock.UpdateEditor(AEdit: TCustomEdit);
 begin
    var langName := GInfra.CurrentLang.Name;
@@ -602,8 +606,8 @@ end;
 
 procedure TForDoBlock.OnChangeAll;
 begin
-   edtStart.OnChangeExtend(edtStart);
-   edtStop.OnChangeExtend(edtStop);
+   edtStart.EditorAction(edtStart);
+   edtStop.EditorAction(edtStop);
    edtVar.OnChange(edtVar);
 end;
 

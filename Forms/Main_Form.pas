@@ -30,10 +30,6 @@ uses
   System.Classes, Vcl.Dialogs, WinApi.Messages, Vcl.ComCtrls, System.ImageList,
   Base_Form, History, Interfaces, OmniXML, Vcl.Controls;
 
-const
-   CM_MENU_CLOSED = CM_BASE + 1001;
-   WM_PPI_DIALOG = WM_USER + 1;
-
 type
 
   TClockPos = (cp12, cp3, cp6, cp9);
@@ -212,8 +208,11 @@ type
     FClockPos: TClockPos;
     FHistoryMenu: THistoryMenu;
     function BuildFuncMenu: integer;
-    procedure CM_MenuClosed(var msg: TMessage); message CM_MENU_CLOSED;
-    procedure WM_PPIDialog(var Msg: TMessage); message WM_PPI_DIALOG;
+    function CreateNewProject: boolean;
+    function CloseExistingProject: boolean;
+    function CanCloseExistingProject: boolean;
+    procedure PopupMenuClosed;
+    procedure PPIDialog;
   public
     { Public declarations }
     function ConfirmSave: integer;
@@ -240,9 +239,6 @@ uses
    Return_Block, Project, Declarations_Form, Base_Block, Comment, Case_Block, Navigator_Form,
    Types, LangDefinition, EditMemo_Form, BlockFactory, BlockTabSheet, MemoEx, Constants;
 
-type
-   TDerivedControl = class(TControl);
-
 var
    ByCaptionMenuItemComparer: IComparer<TMenuItem>;
 
@@ -252,11 +248,8 @@ procedure TMainForm.FormCreate(Sender: TObject);
 const
    CursorIDs: array[TCustomCursor] of PChar = (' ', 'IFELSE', 'FOR', 'REPEAT', 'WHILE', 'ASSIGN',
               'MULTIASSIGN', 'IF', 'SUBROUTINE', 'INPUT', 'OUTPUT', 'CASE', 'RETURN', 'TEXT', 'FOLDER');
-var
-   lCursor: TCustomCursor;
-   menuItem: TMenuItem;
 begin
-   lCursor := crNormal;
+   var lCursor := crNormal;
    repeat
       Inc(lCursor);
       Screen.Cursors[Ord(lCursor)] := LoadCursor(HInstance, CursorIDs[lCursor]);
@@ -273,7 +266,7 @@ begin
    FClockPos := Low(TClockPos);
    for var i := FLOWCHART_MIN_FONT_SIZE to FLOWCHART_MAX_FONT_SIZE do
    begin
-      menuItem := TMenuItem.Create(miFontSize);
+      var menuItem := TMenuItem.Create(miFontSize);
       menuItem.Caption := i.ToString;
       menuItem.OnClick := miFontSizeClick;
       miFontSize.Add(menuItem);
@@ -340,13 +333,10 @@ begin
 end;
 
 procedure TMainForm.SetProjectMenu(AEnabled: boolean);
-var
-   clang: TLangDefinition;
-   mMenu: TMainMenu;
 begin
-   mMenu := Menu;
+   var mMenu := Menu;
    Menu := nil;
-   clang := GInfra.CurrentLang;
+   var clang := GInfra.CurrentLang;
    miSave.Enabled := AEnabled;
    miSaveAs.Enabled := AEnabled;
    miClose.Enabled := AEnabled;
@@ -375,10 +365,10 @@ procedure TMainForm.FormShow(Sender: TObject);
 begin
    SetProjectMenu(false);
    // will display PPI dialog when main form is already visible
-   PostMessage(Handle, WM_PPI_DIALOG, 0, 0);
+   TThread.ForceQueue(nil, PPIDialog);
 end;
 
-procedure TMainForm.WM_PPIDialog(var Msg: TMessage);
+procedure TMainForm.PPIDialog;
 begin
    if TInfra.PPI > MAX_SUPPORTED_PPI then
       TInfra.ShowWarningBox('OverMaxPPI', [TInfra.PPI, MAX_SUPPORTED_PPI, sLineBreak]);
@@ -404,54 +394,73 @@ begin
    FClockPos := nextPos[FClockPos];
 end;
 
-procedure TMainForm.miNewClick(Sender: TObject);
-var
-   mBlock: TMainBlock;
+function TMainForm.CanCloseExistingProject: boolean;
 begin
+   result := true;
    if (GProject <> nil) and GProject.IsChanged then
    begin
       case ConfirmSave of
          IDYES: miSave.Click;
-         IDCANCEL: Exit;
+         IDCANCEL: result := false;
       end;
    end;
-   TInfra.SetInitialSettings;
-   GProject := TProject.GetInstance;
-   mBlock := TMainBlock.Create(GProject.GetMainPage, GetMainBlockNextTopLeft);
-   mBlock.OnResize(mBlock);
-   TUserFunction.Create(nil, mBlock);
-   ExportDialog.FileName := '';
-   GProject.ChangingOn := true;
+end;
+
+function TMainForm.CloseExistingProject: boolean;
+begin
+   result := CanCloseExistingProject;
+   if result then
+      TInfra.Reset;
+end;
+
+procedure TMainForm.miCloseClick(Sender: TObject);
+begin
+   CloseExistingProject;
+end;
+
+procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+   CanClose := CanCloseExistingProject;
+end;
+
+function TMainForm.CreateNewProject: boolean;
+begin
+   result := CloseExistingProject;
+   if result then
+   begin
+      GProject := TProject.GetInstance;
+      SetProjectMenu(true);
+   end;
+end;
+
+procedure TMainForm.miNewClick(Sender: TObject);
+begin
+   if CreateNewProject then
+   begin
+      var mBlock := TMainBlock.Create(GProject.GetMainPage, GetMainBlockNextTopLeft);
+      mBlock.OnResize(mBlock);
+      TUserFunction.Create(nil, mBlock);
+      GProject.ChangingOn := true;
+   end;
 end;
 
 procedure TMainForm.miOpenClick(Sender: TObject);
-var
-   tmpCursor: TCursor;
-   filePath: string;
 begin
-    if (GProject <> nil) and GProject.IsChanged then
-    begin
-       case ConfirmSave of
-          IDYES: miSave.Click;
-          IDCANCEL: Exit;
-       end;
-    end;
-    filePath := '';
-    if Sender <> miOpen then
-       filePath := StripHotKey(TMenuItem(Sender).Caption);
-    TInfra.SetInitialSettings;
-    tmpCursor := Screen.Cursor;
-    Screen.Cursor := crHourGlass;
-    GProject := TProject.GetInstance;
-    filePath := TXMLProcessor.ImportFromXMLFile(GProject.ImportFromXMLTag, impAll, filePath);
-    GProject.ChangingOn := true;
-    GProject.SetNotChanged;
-    Screen.Cursor := tmpCursor;
-    SetFocus;
-    if not filePath.IsEmpty then
-       AcceptFile(filePath)
-    else
-       TInfra.SetInitialSettings;
+   if CreateNewProject then
+   begin
+      var tmpCursor := Screen.Cursor;
+      Screen.Cursor := crHourGlass;
+      var filePath := IfThen(Sender <> miOpen, StripHotKey(TMenuItem(Sender).Caption));
+      filePath := TXMLProcessor.ImportFromXMLFile(GProject.ImportFromXMLTag, impAll, filePath);
+      GProject.ChangingOn := true;
+      GProject.SetNotChanged;
+      Screen.Cursor := tmpCursor;
+      SetFocus;
+      if not filePath.IsEmpty then
+         AcceptFile(filePath)
+      else
+         TInfra.Reset;
+   end;
 end;
 
 procedure TMainForm.miSaveAsClick(Sender: TObject);
@@ -482,18 +491,6 @@ begin
    Close;
 end;
 
-procedure TMainForm.miCloseClick(Sender: TObject);
-begin
-   if GProject.IsChanged then
-   begin
-      case ConfirmSave of
-         IDYES: miSave.Click;
-         IDCANCEL: Exit;
-      end;
-   end;
-   TInfra.SetInitialSettings;
-end;
-
 procedure TMainForm.miSaveClick(Sender: TObject);
 begin
     if GProject.IsNew then
@@ -522,23 +519,12 @@ begin
    AboutForm.ShowModal;
 end;
 
-procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-begin
-   if (GProject <> nil) and GProject.IsChanged then
-   begin
-      case ConfirmSave of
-         IDYES: miSave.Click;
-         IDCANCEL: CanClose := false;
-      end;
-   end;
-end;
-
 procedure TMainForm.OnException(Sender: TObject; E: Exception);
 begin
    Application.ShowException(E);
    if GProject <> nil then
       miSaveAs.Click;
-   TInfra.SetInitialSettings;
+   TInfra.Reset;
 end;
 
 procedure TMainForm.miUndoRemoveClick(Sender: TObject);
@@ -856,7 +842,7 @@ begin
                if not newBlock.Visible then
                begin
                   newBlock.Show;
-                  newBlock.RefreshStatements;
+                  newBlock.PerformRefreshStatements;
                end;
                if srcBlock <> nil then
                   newBlock.CloneComments(srcBlock);
@@ -937,14 +923,11 @@ begin
 end;
 
 procedure TMainForm.miFontSizeClick(Sender: TObject);
-var
-   comp: TComponent;
-   fontSize: integer;
 begin
-   comp := pmPages.PopupComponent;
+   var comp := pmPages.PopupComponent;
    if (comp is TBlock) or (comp is TComment) then
    begin
-      fontSize := StripHotKey(TMenuItem(Sender).Caption).ToInteger;
+      var fontSize := StripHotKey(TMenuItem(Sender).Caption).ToInteger;
       if comp is TBlock then
          TBlock(comp).SetFontSize(fontSize)
       else if comp is TComment then
@@ -990,10 +973,8 @@ begin
 end;
 
 procedure TMainForm.miSubRoutinesClick(Sender: TObject);
-var
-   form: TForm;
 begin
-   form := nil;
+   var form: TForm := nil;
    if Sender = miSubRoutines then
       form := TInfra.GetFunctionsForm
    else if Sender = miToolbox then
@@ -1052,36 +1033,25 @@ begin
 end;
 
 procedure TMainForm.miAddBranchClick(Sender: TObject);
-var
-   caseBlock: TCaseBlock;
-   branch: TBranch;
-   i: integer;
 begin
    if pmPages.PopupComponent is TCaseBlock then
    begin
-      caseBlock := TCaseBlock(pmPages.PopupComponent);
-      if Sender = miInsertBranch then
-         i := caseBlock.Ired
-      else
-         i := -1;
-      branch := caseBlock.InsertNewBranch(i);
-      TInfra.UpdateCodeEditor(branch);
+      var caseBlock := TCaseBlock(pmPages.PopupComponent);
+      var i := IfThen(Sender = miInsertBranch, caseBlock.Ired, -1);
+      TInfra.UpdateCodeEditor(caseBlock.InsertNewBranch(i));
    end;
 end;
 
 procedure TMainForm.miRemoveBranchClick(Sender: TObject);
-var
-   res: integer;
-   caseBlock: TCaseBlock;
 begin
    if pmPages.PopupComponent is TCaseBlock then
    begin
-      res := IDYES;
+      var res := IDYES;
       if GSettings.ConfirmRemove then
          res := TInfra.ShowQuestionBox(i18Manager.GetString('ConfirmRemove'));
       if res = IDYES then
       begin
-         caseBlock := TCaseBlock(pmPages.PopupComponent);
+         var caseBlock := TCaseBlock(pmPages.PopupComponent);
          caseBlock.RemoveBranch(caseBlock.Ired);
          TInfra.UpdateCodeEditor(caseBlock.Branch);
       end;
@@ -1089,15 +1059,12 @@ begin
 end;
 
 procedure TMainForm.miUnfoldAllClick(Sender: TObject);
-var
-   block: TGroupBlock;
-   lock: boolean;
 begin
    if pmPages.PopupComponent is TGroupBlock then
    begin
-      block := TGroupBlock(pmPages.PopupComponent);
+      var block := TGroupBlock(pmPages.PopupComponent);
       block.ClearSelection;
-      lock := block.LockDrawing;
+      var lock := block.LockDrawing;
       try
          block.ExpandAll;
       finally
@@ -1115,14 +1082,11 @@ begin
 end;
 
 procedure TMainForm.miPrint2Click(Sender: TObject);
-var
-   bitmap: TBitmap;
-   block: TBlock;
 begin
    if pmPages.PopupComponent is TBlock then
    begin
-      block := TBlock(pmPages.PopupComponent);
-      bitmap := TBitmap.Create;
+      var block := TBlock(pmPages.PopupComponent);
+      var bitmap := TBitmap.Create;
       try
          block.ExportToGraphic(bitmap);
          TInfra.PrintBitmap(bitmap);
@@ -1149,14 +1113,11 @@ begin
 end;
 
 procedure TMainForm.miNewFlowchartClick(Sender: TObject);
-var
-   mainBlock: TMainBlock;
-   page: TBlockTabSheet;
 begin
    if GProject <> nil then
    begin
-      page := GProject.GetActivePage;
-      mainBlock := TMainBlock.Create(page, page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint));
+      var page := GProject.GetActivePage;
+      var mainBlock := TMainBlock.Create(page, page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint));
       mainBlock.OnResize(mainBlock);
       TUserFunction.Create(nil, mainBlock);
       GProject.SetChanged;
@@ -1250,10 +1211,8 @@ begin
 end;
 
 procedure TMainForm.miRemovePageClick(Sender: TObject);
-var
-   res: integer;
 begin
-   res := IDYES;
+   var res := IDYES;
    if GSettings.ConfirmRemove then
       res := TInfra.ShowQuestionBox(i18Manager.GetString('ConfirmRemove'));
    if res = IDYES then
@@ -1471,7 +1430,7 @@ begin
       TCustomEdit(pmPages.PopupComponent).PasteFromClipboard;
 end;
 
-procedure TMainForm.CM_MenuClosed(var msg: TMessage);
+procedure TMainForm.PopupMenuClosed;
 begin
    if pmPages.PopupComponent is TBlock then
       TBlock(pmPages.PopupComponent).OnMouseLeave(false);
@@ -1489,7 +1448,7 @@ begin
    begin
       var mform := TMainForm(Screen.ActiveForm);
       if msg.WParam = mform.pmPages.Handle then
-         PostMessage(mForm.Handle, CM_MENU_CLOSED, msg.WParam, msg.LParam);
+         TThread.ForceQueue(nil, mForm.PopupMenuClosed);
    end;
    inherited;
 end;
