@@ -55,7 +55,6 @@ type
          FParentBlock: TGroupBlock;
          FParentBranch: TBranch;
          FId: integer;
-         function IsInSelect(const APoint: TPoint): boolean;
          procedure RefreshStatements;
       protected
          FType: TBlockType;
@@ -89,16 +88,14 @@ type
          procedure DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = false; downJust: boolean = false);
          function GetId: integer;
          function PerformEditorUpdate: boolean;
-         procedure SelectBlock(const APoint: TPoint);
+         procedure Select;
+         function IsAtSelectPos(const APoint: TPoint): boolean;
          procedure SetCursor(const APoint: TPoint);
          procedure SetFrame(AValue: boolean);
          procedure PutTextControls; virtual;
-         procedure DrawArrowTo(const aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          procedure DrawArrowTo(toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          procedure DrawArrow(const aFrom, aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          procedure DrawArrow(fromX, fromY, toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
-         procedure DrawArrow(fromX, fromY: integer; const aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
-         procedure DrawArrow(const aFrom: TPoint; toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          function GetEllipseTextRect(ax, ay: integer; const AText: string): TRect;
          function DrawEllipsedText(ax, ay: integer; const AText: string): TRect;
          procedure MoveComments(x, y: integer);
@@ -109,7 +106,7 @@ type
          procedure CreateParams(var Params: TCreateParams); override;
          procedure OnWindowPosChanged(x, y: integer); virtual;
          function ProcessComments: boolean;
-         function IsForeParent(AParent: TObject): boolean;
+         function IsAncestor(AParent: TObject): boolean;
          function GetErrorMsg(AEdit: TCustomEdit): string;
          procedure SaveInXML2(ATag: IXMLElement);
          procedure ExitSizeMove;
@@ -148,7 +145,7 @@ type
          function GetDescTemplate(const ALangId: string): string; virtual;
          function GetTextControl: TCustomEdit; virtual;
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; virtual;
-         function IsCursorSelect: boolean;
+         function IsMouseAtSelectPos: boolean;
          function IsCursorResize: boolean;
          function CanInsertReturnBlock: boolean; virtual;
          procedure ExportToXMLTag(ATag: IXMLElement);
@@ -165,7 +162,7 @@ type
          procedure GenerateTemplateSection(ALines: TStringList; const ATemplate: string; const ALangId: string; ADeep: integer); overload;
          function GetMemoEx: TMemoEx; virtual;
          function FocusOnTextControl(AInfo: TFocusInfo): boolean;
-         procedure ClearSelection;
+         procedure DeSelect;
          procedure ChangeFrame;
          procedure RepaintAll;
          function Next: TBlock;
@@ -356,18 +353,15 @@ begin
    FStatement.Width := 65;
 
    FMemoFolder := TMemoEx.Create(Self);
-   with FMemoFolder do
-   begin
-      Parent := Self;
-      Visible := false;
-      SetBounds(4, 4, 132, 55);
-      DoubleBuffered := true;
-      Color := GSettings.GetShapeColor(shpFolder);
-      Font.Assign(FStatement.Font);
-      OnMouseDown := Self.OnMouseDown;
-      Font.Color := clNavy;
-      OnChange := Self.OnChangeMemo;
-   end;
+   FMemoFolder.Parent := Self;
+   FMemoFolder.Visible := false;
+   FMemoFolder.SetBounds(4, 4, 132, 55);
+   FMemoFolder.DoubleBuffered := true;
+   FMemoFolder.Color := GSettings.GetShapeColor(shpFolder);
+   FMemoFolder.Font.Assign(FStatement.Font);
+   FMemoFolder.OnMouseDown := OnMouseDown;
+   FMemoFolder.Font.Color := clNavy;
+   FMemoFolder.OnChange := OnChangeMemo;
 
    Expanded := true;
 
@@ -548,31 +542,28 @@ end;
 
 procedure TBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
 begin
+
    var p := Point(X, Y);
-   SelectBlock(p);
+
+   if IsAtSelectPos(p) then
+      Select
+   else
+      DeSelect;
+
    SetCursor(p);
+
    if Rect(BottomPoint.X-5, BottomPoint.Y, BottomPoint.X+5, Height).Contains(p) then
    begin
-      DrawArrow(BottomPoint, BottomPoint.X, Height-1, arrEnd, clRed);
+      DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1), arrEnd, clRed);
       Ired := 0;
       Cursor := TCursor(GCustomCursor);
    end
    else if Ired = 0 then
    begin
-      DrawArrow(BottomPoint, BottomPoint.X, Height-1);
+      DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1));
       Ired := -1;
       Cursor := crDefault;
    end;
-end;
-
-function TBlock.GetBlockParms: TBlockParms;
-begin
-   result := TBlockParms.New(FType, Left, Top, Width, Height);
-end;
-
-function TGroupBlock.GetBlockParms: TBlockParms;
-begin
-   result := TBlockParms.New(FType, Left, Top, Width, Height, Branch.Hook.X, Branch.Hook.Y, BottomHook);
 end;
 
 procedure TGroupBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
@@ -584,14 +575,14 @@ begin
          var p := FBranchList[i].Hook;
          if Rect(p.X-5, TopHook.Y, p.X+5, p.Y).Contains(Point(X, Y)) then
          begin
-            DrawArrow(p.X, TopHook.Y, p, arrEnd, clRed);
+            DrawArrow(Point(p.X, TopHook.Y), p, arrEnd, clRed);
             Ired := i;
             Cursor := TCursor(GCustomCursor);
             break;
          end
          else if Ired = i then
          begin
-            DrawArrow(p.X, TopHook.Y, p);
+            DrawArrow(Point(p.X, TopHook.Y), p);
             Ired := -1;
             Cursor := crDefault;
             break;
@@ -599,6 +590,16 @@ begin
       end;
    end;
    inherited MyOnMouseMove(Sender, Shift, X, Y);
+end;
+
+function TBlock.GetBlockParms: TBlockParms;
+begin
+   result := TBlockParms.New(FType, Left, Top, Width, Height);
+end;
+
+function TGroupBlock.GetBlockParms: TBlockParms;
+begin
+   result := TBlockParms.New(FType, Left, Top, Width, Height, Branch.Hook.X, Branch.Hook.Y, BottomHook);
 end;
 
 procedure TBlock.SetCursor(const APoint: TPoint);
@@ -613,7 +614,7 @@ begin
       Cursor := crDefault;
 end;
 
-function TBlock.IsForeParent(AParent: TObject): boolean;
+function TBlock.IsAncestor(AParent: TObject): boolean;
 begin
    result := false;
    if AParent <> nil then
@@ -632,17 +633,13 @@ begin
 end;
 
 procedure TBlock.MyOnDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
-var
-   isShift: boolean;
-   shiftState: TShiftState;
 begin
-   isShift := GetAsyncKeyState(vkShift) <> 0;
+   var shiftState: TShiftState := [];
+   var isShift := GetAsyncKeyState(vkShift) <> 0;
    if isShift then
-      shiftState := [ssShift]
-   else
-      shiftState := [];
+      shiftState := [ssShift];
    MyOnMouseMove(Sender, shiftState, X, Y);
-   if (Ired < 0) or (not (Source is TBlock)) or (Source is TMainBlock) or (Source is TReturnBlock) or ((not isShift) and ((Source = Self) or IsForeParent(Source))) then
+   if (Ired < 0) or (not (Source is TBlock)) or (Source is TMainBlock) or (Source is TReturnBlock) or ((not isShift) and ((Source = Self) or IsAncestor(Source))) then
       Accept := false;
 end;
 
@@ -697,9 +694,9 @@ end;
 procedure TBlock.OnMouseLeave(AClearRed: boolean = true);
 begin
    Cursor := crDefault;
-   ClearSelection;
+   DeSelect;
    if Ired = 0 then
-      DrawArrow(BottomPoint, BottomPoint.X, Height-1);
+      DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1));
    if AClearRed then
       Ired := -1;
    if FVResize or FHResize then
@@ -710,7 +707,7 @@ procedure TGroupBlock.OnMouseLeave(AClearRed: boolean = true);
 begin
    var br := GetBranch(Ired);
    if br <> nil then
-      DrawArrow(br.Hook.X, TopHook.Y, br.Hook);
+      DrawArrow(Point(br.Hook.X, TopHook.Y), br.Hook);
    inherited OnMouseLeave(AClearRed);
 end;
 
@@ -753,7 +750,7 @@ end;
 
 procedure TBlock.MyOnDblClick(Sender: TObject);
 begin
-   if IsCursorSelect then
+   if IsMouseAtSelectPos then
       ChangeFrame;
 end;
 
@@ -778,7 +775,7 @@ begin
    result := FStatement;
 end;
 
-function TBlock.IsInSelect(const APoint: TPoint): boolean;
+function TBlock.IsAtSelectPos(const APoint: TPoint): boolean;
 begin
    result := Bounds(IPoint.X-5, IPoint.Y, 10, 10).Contains(APoint);
 end;
@@ -787,7 +784,7 @@ procedure TBlock.MyOnMouseDown(Sender: TObject; Button: TMouseButton; Shift: TSh
 begin
    if Button = mbLeft then
    begin
-      if IsInSelect(Point(X, Y)) then
+      if IsAtSelectPos(Point(X, Y)) then
          BeginDrag(false, 3)
       else if not IsCursorResize then
       begin
@@ -823,10 +820,15 @@ begin
          end
          else          // drag entire flowchart
          begin
+            var br := FTopParentBlock.BoundsRect;
+            var b := br.Bottom;
+            var r := br.Right;
             ReleaseCapture;
             FTopParentBlock.BringAllToFront;
             SendMessage(FTopParentBlock.Handle, WM_SYSCOMMAND, $F012, 0);
-            FTopParentBlock.OnResize(FTopParentBlock);
+            br := FTopParentBlock.BoundsRect;
+            if (b <> br.Bottom) or (r <> br.Right) then
+               FTopParentBlock.OnResize(FTopParentBlock);
          end;
       end;
    end;
@@ -902,7 +904,7 @@ begin
    begin
       FFrame := AValue;
       GProject.SetChanged;
-      ClearSelection;
+      DeSelect;
       Invalidate;
       if FFrame then
          TInfra.GetEditorForm.SelectCodeRange(Self)
@@ -1196,18 +1198,10 @@ begin
    end;
 end;
 
-procedure TBlock.ClearSelection;
-begin
-   var lColor := Page.Box.Color;
-   if Color <> lColor then
-      ChangeColor(lColor);
-   NavigatorForm.Invalidate;
-end;
-
 function TBlock.FindSelectedBlock: TBlock;
 begin
    result := nil;
-   if Color = GSettings.HighlightColor then
+   if Color = GSettings.SelectColor then
       result := Self;
 end;
 
@@ -1240,19 +1234,20 @@ begin
       FMemoFolder.Color := lColor;
 end;
 
-procedure TBlock.SelectBlock(const APoint: TPoint);
+procedure TBlock.Select;
 begin
-   if IsInSelect(APoint) then
+   if Color <> GSettings.SelectColor then
    begin
-      if Color <> GSettings.HighlightColor then
-      begin
-         ChangeColor(GSettings.HighlightColor);
-         if GSettings.EditorAutoSelectBlock then
-            TInfra.GetEditorForm.SelectCodeRange(Self);
-         NavigatorForm.Invalidate;
-      end;
-   end
-   else if Color <> Page.Box.Color then
+      ChangeColor(GSettings.SelectColor);
+      if GSettings.EditorAutoSelectBlock then
+         TInfra.GetEditorForm.SelectCodeRange(Self);
+      NavigatorForm.Invalidate;
+   end;
+end;
+
+procedure TBlock.DeSelect;
+begin
+   if Color = GSettings.SelectColor then
    begin
       ChangeColor(Page.Box.Color);
       if GSettings.EditorAutoSelectBlock and not FFrame then
@@ -1306,20 +1301,17 @@ procedure TBlock.Paint;
 begin
    inherited;
    var r := ClientRect;
-   with Canvas do
-   begin
-      Brush.Style := bsSolid;
-      Brush.Color := Self.Color;
-      Pen.Style := psClear;
-      Pen.Color := GSettings.PenColor;
-      if FFrame then
-         Pen.Style := psDashDot
-      else
-         r.Inflate(0, 0, 1, 1);
-      Rectangle(r);
-      Pen.Style := psSolid;
-      Font.Color := Pen.Color;
-   end;
+   Canvas.Brush.Style := bsSolid;
+   Canvas.Brush.Color := Color;
+   Canvas.Pen.Style := psClear;
+   Canvas.Pen.Color := GSettings.PenColor;
+   if FFrame then
+      Canvas.Pen.Style := psDashDot
+   else
+      r.Inflate(0, 0, 1, 1);
+   Canvas.Rectangle(r);
+   Canvas.Pen.Style := psSolid;
+   Canvas.Font.Color := Canvas.Pen.Color;
 end;
 
 procedure TBlock.SetBrushColor(AShape: TColorShape);
@@ -1384,31 +1376,15 @@ begin
    result := TRect.Create(Point(x, y), te.Width, te.Height);
 end;
 
-procedure TBlock.DrawArrow(const aFrom, aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
-begin
-   DrawArrow(aFrom.X, aFrom.Y, aTo.X, aTo.Y, AArrowPos, AColor);
-end;
-
-procedure TBlock.DrawArrow(fromX, fromY: integer; const aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
-begin
-   DrawArrow(fromX, fromY, aTo.X, aTo.Y, AArrowPos, AColor);
-end;
-
-procedure TBlock.DrawArrow(const aFrom: TPoint; toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
-begin
-   DrawArrow(aFrom.X, aFrom.Y, toX, toY, AArrowPos, AColor);
-end;
-
 // this method draw arrow line from current pen position
 procedure TBlock.DrawArrowTo(toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
 begin
-   DrawArrow(Canvas.PenPos, toX, toY, AArrowPos, AColor);
+   DrawArrow(Canvas.PenPos, Point(toX, toY), AArrowPos, AColor);
 end;
 
-// this method draw arrow line from current pen position
-procedure TBlock.DrawArrowTo(const aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
+procedure TBlock.DrawArrow(const aFrom, aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
 begin
-   DrawArrow(Canvas.PenPos, aTo, AArrowPos, AColor);
+   DrawArrow(aFrom.X, aFrom.Y, aTo.X, aTo.Y, AArrowPos, AColor);
 end;
 
 procedure TBlock.DrawArrow(fromX, fromY, toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
@@ -1558,7 +1534,7 @@ begin
       Canvas.Rectangle(r);
       Canvas.Pen.Width := 1;
       if FTopParentBlock <> Self then
-         DrawArrow(BottomPoint, BottomPoint.X, Height-1);
+         DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1));
       r.Inflate(-2, -2, -3, -3);
       Canvas.Rectangle(r);
    end;
@@ -1594,9 +1570,9 @@ begin
       Msg.MinMaxInfo.ptMaxTrackSize.Y := box.ClientHeight - p.Y;
 end;
 
-function TBlock.IsCursorSelect: boolean;
+function TBlock.IsMouseAtSelectPos: boolean;
 begin
-   result := IsInSelect(ScreenToClient(Mouse.CursorPos));
+   result := IsAtSelectPos(ScreenToClient(Mouse.CursorPos));
 end;
 
 function TBlock.IsCursorResize: boolean;
@@ -1640,9 +1616,8 @@ end;
 
 procedure TBlock.OnChangeMemo(Sender: TObject);
 begin
-   var memo := GetMemoEx;
-   if memo <> nil then
-      memo.UpdateScrolls;
+   if Sender is TMemoEx then
+      TMemoEx(Sender).UpdateScrolls;
    if NavigatorForm.InvalidateIndicator then
       NavigatorForm.Invalidate;
 end;
@@ -1705,6 +1680,7 @@ begin
       box.Show;
       FTopParentBlock.BringAllToFront;
       box.ScrollInView(AInfo.FocusEdit);
+      box.Repaint;
       idx2 := 0;
       if AInfo.FocusEdit is TCustomMemo then
       begin
@@ -1822,7 +1798,7 @@ begin
    if result then
    begin
       GClpbrd.UndoObject.Free;
-      ClearSelection;
+      DeSelect;
       SetVisible(false);
       if FParentBranch <> nil then
       begin
@@ -2127,11 +2103,6 @@ begin
 end;
 
 procedure TBlock.SaveInXML2(ATag: IXMLElement);
-var
-   txtControl: TCustomEdit;
-   txt: string;
-   tag: IXMLElement;
-   memo: TMemoEx;
 begin
    if ATag <> nil then
    begin
@@ -2144,16 +2115,16 @@ begin
       ATag.SetAttribute('bh', BottomHook.ToString);
       ATag.SetAttribute('brx', BottomPoint.X.ToString);
       ATag.SetAttribute(ID_ATTR, FId.ToString);
-      memo := GetMemoEx;
+      var memo := GetMemoEx;
       if memo <> nil then
          memo.SaveInXML(ATag);
       ATag.SetAttribute(FONT_SIZE_ATTR, Font.Size.ToString);
       ATag.SetAttribute(FONT_STYLE_ATTR, TInfra.EncodeFontStyle(Font.Style).ToString);
-      txtControl := GetTextControl;
+      var txtControl := GetTextControl;
       if (txtControl <> nil) and (txtControl.Text <> '') then
       begin
-         txt := ReplaceStr(txtControl.Text, sLineBreak, LB_PHOLDER);
-         tag := ATag.OwnerDocument.CreateElement(TEXT_TAG);
+         var txt := ReplaceStr(txtControl.Text, sLineBreak, LB_PHOLDER);
+         var tag := ATag.OwnerDocument.CreateElement(TEXT_TAG);
          TXMLProcessor.AddCDATA(tag, txt);
          ATag.AppendChild(tag);
       end;
@@ -2176,17 +2147,12 @@ begin
 end;
 
 function TBlock.GetFromXML(ATag: IXMLElement): TError;
-var
-   tag: IXMLElement;
-   textControl: TCustomEdit;
-   i: integer;
-   memo: TMemoEx;
 begin
    result := errNone;
    if ATag <> nil then
    begin
-      tag := TXMLProcessor.FindChildTag(ATag, TEXT_TAG);
-      textControl := GetTextControl;
+      var tag := TXMLProcessor.FindChildTag(ATag, TEXT_TAG);
+      var textControl := GetTextControl;
       if (tag <> nil) and (textControl <> nil) then
       begin
          FRefreshMode := true;
@@ -2194,7 +2160,7 @@ begin
          FRefreshMode := false;
       end;
 
-      i := TXMLProcessor.GetIntFromAttr(ATag, FONT_SIZE_ATTR);
+      var i := TXMLProcessor.GetIntFromAttr(ATag, FONT_SIZE_ATTR);
       if i in FLOWCHART_VALID_FONT_SIZES then
          SetFontSize(i);
 
@@ -2203,7 +2169,7 @@ begin
 
       Frame := TXMLProcessor.GetBoolFromAttr(ATag, FRAME_ATTR);
 
-      memo := GetMemoEx;
+      var memo := GetMemoEx;
       if memo <> nil then
          memo.GetFromXML(ATag);
 
@@ -2407,7 +2373,7 @@ end;
 
 procedure TBlock.ExportToGraphic(AGraphic: TGraphic);
 begin
-   ClearSelection;
+   DeSelect;
    var bitmap: TBitmap := nil;
    if AGraphic is TBitmap then
       bitmap := TBitmap(AGraphic)

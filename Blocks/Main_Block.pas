@@ -34,27 +34,27 @@ type
          FPage: TBlockTabSheet;
          FLabelRect: TRect;
          FHandle: HDC;
-         function GetMaxBounds: TPoint;
          procedure DrawStartEllipse;
          procedure DrawStopEllipse;
+         function GetMaxBounds: TPoint;
       public
          UserFunction: TObject;
          constructor Create(APage: TBlockTabSheet; const ABlockParms: TBlockParms); overload;
          constructor Create(APage: TBlockTabSheet; const ATopLeft: TPoint); overload;
-         function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
-         function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
-         function GetFromXML(ATag: IXMLElement): TError; override;
          procedure SaveInXML(ATag: IXMLElement); override;
          procedure ExportToGraphic(AGraphic: TGraphic); override;
          procedure SetWidth(AMinX: integer); override;
-         function GetHandle: THandle;
          procedure SetZOrder(AValue: integer);
-         function GetZOrder: integer;
-         function IsBoldDesc: boolean; override;
-         function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
          procedure DrawLabel;
          function ExportToXMLFile(const AFile: string): TError; override;
          function GetExportFileName: string; override;
+         function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
+         function GetFromXML(ATag: IXMLElement): TError; override;
+         function GetHandle: THandle;
+         function GetZOrder: integer;
+         function IsBoldDesc: boolean; override;
+         function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
+         function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
       protected
          FZOrder: integer;
          FStartLabel,
@@ -62,13 +62,13 @@ type
          procedure MyOnResize(Sender: TObject);
          procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
          procedure Paint; override;
+         procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
+         procedure SetPage(APage: TBlockTabSheet); override;
+         procedure OnWindowPosChanged(x, y: integer); override;
          function GetFunctionLabel(var ARect: TRect): string;
          function GetDefaultWidth: integer;
-         procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
-         function GetUndoObject: TObject; override;
-         procedure SetPage(APage: TBlockTabSheet); override;
          function GetPage: TBlockTabSheet; override;
-         procedure OnWindowPosChanged(x, y: integer); override;
+         function GetUndoObject: TObject; override;
    end;
 
 const
@@ -228,7 +228,7 @@ var
    selStart: integer;
    pdi: boolean;
 begin
-   ClearSelection;
+   DeSelect;
    if AGraphic is TBitmap then
       bitmap := TBitmap(AGraphic)
    else
@@ -241,24 +241,27 @@ begin
    pdi := FPage.DrawI;
    FPage.DrawI := false;
    bitmap.Canvas.Lock;
-   PaintTo(bitmap.Canvas, 1, 1);
-   if Expanded then
-   begin
-      for comment in GetComments do
+   try
+      PaintTo(bitmap.Canvas, 1, 1);
+      if Expanded then
       begin
-         if comment.Visible then
+         for comment in GetComments do
          begin
-            bStyle := comment.BorderStyle;
-            selStart := comment.SelStart;
-            comment.BorderStyle := bsNone;
-            comment.PaintTo(bitmap.Canvas, comment.Left-Left, comment.Top-Top);
-            comment.BorderStyle := bStyle;
-            comment.SelStart := selStart;
+            if comment.Visible then
+            begin
+               bStyle := comment.BorderStyle;
+               selStart := comment.SelStart;
+               comment.BorderStyle := bsNone;
+               comment.PaintTo(bitmap.Canvas, comment.Left-Left, comment.Top-Top);
+               comment.BorderStyle := bStyle;
+               comment.SelStart := selStart;
+            end;
          end;
       end;
+   finally
+      bitmap.Canvas.Unlock;
+      FPage.DrawI := pdi;
    end;
-   bitmap.Canvas.Unlock;
-   FPage.DrawI := pdi;
    if AGraphic <> bitmap then
    begin
       AGraphic.Assign(bitmap);
@@ -297,7 +300,7 @@ begin
       if Branch.FindInstanceOf(TReturnBlock) = -1 then
          DrawStopEllipse;
       Canvas.Font.Style := fontStyles;
-      DrawArrow(Branch.Hook.X, TopHook.Y, Branch.Hook);
+      DrawArrow(Point(Branch.Hook.X, TopHook.Y), Branch.Hook);
    end;
    DrawI;
 end;
@@ -406,18 +409,18 @@ begin
       inherited MyOnMouseMove(Sender, Shift, X, Y)
    else
    begin
-      SelectBlock(Point(X, Y));
-      SetCursor(Point(X, Y));
+      var p := Point(X, Y);
+      if IsAtSelectPos(p) then
+         Select
+      else
+         DeSelect;
+      SetCursor(p);
    end;
 end;
 
 procedure TMainBlock.MyOnResize(Sender: TObject);
 begin
    FPage.Box.SetScrollbars;
-   if FPage.Box.HorzScrollBar.Position + BoundsRect.Right < MARGIN_X then
-      Left := 0;
-   if FPage.Box.VertScrollBar.Position + BoundsRect.Bottom < MARGIN_Y then
-      Top := 0;
    BringAllToFront;
    FPage.Box.Invalidate;
 end;

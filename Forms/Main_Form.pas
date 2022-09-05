@@ -256,6 +256,8 @@ begin
    until lCursor = High(TCustomCursor);
    InitialiseVariables;
    SystemParametersInfo(SPI_SETDRAGFULLWINDOWS, Ord(True), nil, 0);
+   Application.DefaultFont.Name := APPLICATION_DEFAULT_FONT_NAME;
+   Application.DefaultFont.Size := APPLICATION_DEFAULT_FONT_SIZE;
    Application.HintHidePause := HINT_PAUSE;
    Application.OnException := OnException;
    Application.Title := PROGRAM_NAME;
@@ -318,7 +320,7 @@ begin
       end;
    end
    else
-      GProject.GetActivePage.Box.BoxKeyDown(Self, Key, Shift);
+      GProject.ActivePage.Box.BoxKeyDown(Self, Key, Shift);
 end;
 
 procedure TMainForm.ResetForm;
@@ -437,7 +439,7 @@ procedure TMainForm.miNewClick(Sender: TObject);
 begin
    if CreateNewProject then
    begin
-      var mBlock := TMainBlock.Create(GProject.GetMainPage, GetMainBlockNextTopLeft);
+      var mBlock := TMainBlock.Create(GProject.MainPage, GetMainBlockNextTopLeft);
       mBlock.OnResize(mBlock);
       TUserFunction.Create(nil, mBlock);
       GProject.ChangingOn := true;
@@ -632,7 +634,7 @@ begin
           if (GClpbrd.Instance is TComment) or ((GClpbrd.Instance is TReturnBlock) and not miReturn.Enabled) then
              miPaste.Enabled := False;
        end
-       else if block.IsCursorSelect then
+       else if block.IsMouseAtSelectPos then
        begin
           miRemove.Visible := True;
           miFont.Visible := True;
@@ -721,7 +723,7 @@ procedure TMainForm.miCommentClick(Sender: TObject);
 begin
    if GProject <> nil then
    begin
-      var page := GProject.GetActivePage;
+      var page := GProject.ActivePage;
       var p := page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint);
       TComment.Create(page, p.X, p.Y, 150, 50);
       GProject.SetChanged;
@@ -753,7 +755,7 @@ begin
 
    if (Sender = miPaste) and ((func <> nil) or (comment <> nil)) then
    begin
-      page := GProject.GetActivePage;
+      page := GProject.ActivePage;
       p := page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint);
       if func <> nil then
       begin
@@ -1025,7 +1027,7 @@ begin
    if pmPages.PopupComponent is TGroupBlock then
    begin
       var block := TGroupBlock(pmPages.PopupComponent);
-      block.ClearSelection;
+      block.DeSelect;
       block.ExpandFold(true);
    end;
 end;
@@ -1061,7 +1063,7 @@ begin
    if pmPages.PopupComponent is TGroupBlock then
    begin
       var block := TGroupBlock(pmPages.PopupComponent);
-      block.ClearSelection;
+      block.DeSelect;
       block.TopParentBlock.LockDrawing;
       try
          block.ExpandAll;
@@ -1103,7 +1105,7 @@ procedure TMainForm.miAddMainClick(Sender: TObject);
 begin
    if GProject <> nil then
    begin
-      var body := TMainBlock.Create(GProject.GetActivePage, GetMainBlockNextTopLeft);
+      var body := TMainBlock.Create(GProject.ActivePage, GetMainBlockNextTopLeft);
       TUserFunction.Create(nil, body);
       TInfra.UpdateCodeEditor(body);
    end;
@@ -1113,7 +1115,7 @@ procedure TMainForm.miNewFlowchartClick(Sender: TObject);
 begin
    if GProject <> nil then
    begin
-      var page := GProject.GetActivePage;
+      var page := GProject.ActivePage;
       var mainBlock := TMainBlock.Create(page, page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint));
       mainBlock.OnResize(mainBlock);
       TUserFunction.Create(nil, mainBlock);
@@ -1174,7 +1176,7 @@ procedure TMainForm.miNewFunctionClick(Sender: TObject);
 begin
    if GProject <> nil then
    begin
-      var box := GProject.GetActivePage.Box;
+      var box := GProject.ActivePage.Box;
       TInfra.GetFunctionsForm.AddUserFunction(box.ScreenToClient(box.PopupMenu.PopupPoint));
    end;
 end;

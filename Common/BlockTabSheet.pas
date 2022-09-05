@@ -96,7 +96,7 @@ end;
 
 function TBlockTabSheet.IsMain: boolean;
 begin
-   result := (GProject <> nil) and (GProject.GetMainPage = Self);
+   result := (GProject <> nil) and (GProject.MainPage = Self);
 end;
 
 procedure TBlockTabSheet.ExportToXMLTag(ATag: IXMLElement);
@@ -179,8 +179,12 @@ begin
    if Parent <> nil then
    begin
       var pnt := GetBottomRight;
-      HorzScrollBar.Range := Max(pnt.X, ClientWidth);
-      VertScrollBar.Range := Max(pnt.Y, ClientHeight);
+      var hr := Max(pnt.X, ClientWidth);
+      var vr := Max(pnt.Y, ClientHeight);
+      if HorzScrollBar.Range <> hr then
+         HorzScrollBar.Range := hr;
+      if VertScrollBar.Range <> vr then
+         VertScrollBar.Range := vr;
    end;
    NavigatorForm.Invalidate;
 end;
@@ -240,19 +244,21 @@ end;
 
 procedure TScrollBoxEx.PaintToCanvas(ACanvas: TCanvas);
 begin
-   with ACanvas do
-   begin
-      Brush.Style := bsSolid;
-      Brush.Color := Self.Color;
-      FillRect(ClipRect);
-   end;
-   var hnd := GetWindow(GetTopWindow(Handle), GW_HWNDLAST);
-   while hnd <> 0 do
-   begin
-      var winCtrl := FindControl(hnd);
-      if (winCtrl <> nil) and winCtrl.Visible then
-         winCtrl.PaintTo(ACanvas, winCtrl.Left + HorzScrollBar.Position, winCtrl.Top + VertScrollBar.Position);
-      hnd := GetNextWindow(hnd, GW_HWNDPREV);
+   ACanvas.Brush.Style := bsSolid;
+   ACanvas.Brush.Color := Color;
+   ACanvas.FillRect(ACanvas.ClipRect);
+   ACanvas.Lock;
+   try
+      var hnd := GetWindow(GetTopWindow(Handle), GW_HWNDLAST);
+      while hnd <> 0 do
+      begin
+         var winCtrl := FindControl(hnd);
+         if (winCtrl <> nil) and winCtrl.Visible then
+            winCtrl.PaintTo(ACanvas, winCtrl.Left + HorzScrollBar.Position, winCtrl.Top + VertScrollBar.Position);
+         hnd := GetNextWindow(hnd, GW_HWNDPREV);
+      end;
+   finally
+      ACanvas.Unlock;
    end;
 end;
 
