@@ -46,6 +46,7 @@ type
          procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
          procedure WMExitSizeMove(var Msg: TWMMove); message WM_EXITSIZEMOVE;
          procedure SetActive(AValue: boolean);
+         procedure SetAlignment(AValue: TAlignment); override;
          function GetActive: boolean;
          procedure OnChangeComment(Sender: TObject);
          procedure SetPage(APage: TBlockTabSheet);
@@ -165,6 +166,15 @@ begin
    result := FActive;
 end;
 
+procedure TComment.SetAlignment(AValue: TAlignment);
+begin
+   if AValue <> Alignment then
+   begin
+      inherited SetAlignment(AValue);
+      NavigatorForm.Invalidate;
+   end;
+end;
+
 procedure TComment.BringAllToFront;
 begin
    BringToFront;
@@ -217,9 +227,14 @@ begin
       else
       begin
          BringToFront;
+         var br := BoundsRect;
+         var b := br.Bottom;
+         var r := br.Right;
          ReleaseCapture;
          SendMessage(Handle, WM_SYSCOMMAND, $F012, 0);
-         FPage.Box.SetScrollBars
+         br := BoundsRect;
+         if (b <> br.Bottom) or (r <> br.Right) then
+            FPage.Box.SetScrollBars;
       end;
    end;
 end;
@@ -279,6 +294,7 @@ begin
    inherited;
    ChangeBorderStyle(bsNone);
    UpdateScrolls;
+   FPage.Box.SetScrollBars;
 end;
 
 procedure TComment.OnContextPopupComment(Sender: TObject; MousePos: TPoint; var Handled: Boolean);

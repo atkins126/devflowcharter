@@ -39,7 +39,7 @@ type
       protected
          procedure SetWordWrap(AValue: boolean);
          procedure SetScrollBars(AValue: TScrollStyle);
-         procedure SetAlignment(AValue: TAlignment);
+         procedure SetAlignment(AValue: TAlignment); virtual;
          procedure ChangeBorderStyle(AStyle: TBorderStyle);
       public
          EditFormWidth,
@@ -75,6 +75,7 @@ uses
 constructor TMemoEx.Create(AOwner: TComponent);
 begin
    inherited Create(AOwner);
+   EditMargins.Auto := true;
    EditFormWidth := 280;
    EditFormHeight := 182;
    FHasVScroll := true;
@@ -111,8 +112,8 @@ begin
    EditFormHeight := AMemo.EditFormHeight;
    HasVScroll := AMemo.HasVScroll;
    HasHScroll := AMemo.HasHScroll;
-   var pnt := TInfra.GetScrolledPoint(AMemo);
-   Perform(EM_LINESCROLL, pnt.X, pnt.Y);
+   var pos := TInfra.GetScrolledPos(AMemo);
+   Perform(EM_LINESCROLL, pos.X, pos.Y);
 end;
 
 
@@ -138,9 +139,9 @@ procedure TMemoEx.SetAlignment(AValue: TAlignment);
 begin
    if AValue <> Alignment then
    begin
-      var pnt := TInfra.GetScrolledPoint(Self);
+      var pos := TInfra.GetScrolledPos(Self);
       inherited SetAlignment(AValue);
-      Perform(EM_LINESCROLL, pnt.X, pnt.Y);
+      Perform(EM_LINESCROLL, pos.X, pos.Y);
    end;
 end;
 
@@ -148,9 +149,9 @@ procedure TMemoEx.SetScrollBars(AValue: TScrollStyle);
 begin
    if AValue <> ScrollBars then
    begin
-      var pnt := TInfra.GetScrolledPoint(Self);
+      var pos := TInfra.GetScrolledPos(Self);
       inherited SetScrollBars(AValue);
-      Perform(EM_LINESCROLL, pnt.X, pnt.Y);
+      Perform(EM_LINESCROLL, pos.X, pos.Y);
    end;
 end;
 
@@ -158,9 +159,9 @@ procedure TMemoEx.ChangeBorderStyle(AStyle: TBorderStyle);
 begin
    if AStyle <> BorderStyle then
    begin
-      var pnt := TInfra.GetScrolledPoint(Self);
+      var pos := TInfra.GetScrolledPos(Self);
       BorderStyle := AStyle;
-      Perform(EM_LINESCROLL, pnt.X, pnt.Y);
+      Perform(EM_LINESCROLL, pos.X, pos.Y);
    end;
 end;
 
@@ -282,9 +283,9 @@ begin
       ATag.SetAttribute('mem_hscroll', HasHScroll.ToString);
       ATag.SetAttribute('mem_wordwrap', WordWrap.ToString);
       ATag.SetAttribute('mem_align', TRttiEnumerationType.GetName(Alignment));
-      var pnt := TInfra.GetScrolledPoint(Self);
-      ATag.SetAttribute('mem_hscroll_pos', pnt.X.ToString);
-      ATag.SetAttribute('mem_vscroll_pos', pnt.Y.ToString);
+      var pos := TInfra.GetScrolledPos(Self);
+      ATag.SetAttribute('mem_hscroll_pos', pos.X.ToString);
+      ATag.SetAttribute('mem_vscroll_pos', pos.Y.ToString);
    end;
 end;
 
