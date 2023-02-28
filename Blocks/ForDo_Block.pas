@@ -1,4 +1,4 @@
-{
+ï»¿{
    Copyright (C) 2006 The devFlowcharter project.
    The initial author of this file is Michal Domagala.
 
@@ -56,8 +56,8 @@ type
          procedure ExpandFold(AResize: boolean); override;
          function GetTextControl: TCustomEdit; override;
          function CountErrWarn: TErrWarnCount; override;
-         function GetFromXML(ATag: IXMLElement): TError; override;
-         procedure SaveInXML(ATag: IXMLElement); override;
+         function GetFromXML(ANode: IXMLNode): TError; override;
+         procedure SaveInXML(ANode: IXMLNode); override;
          procedure ChangeColor(AColor: TColor); override;
          procedure PopulateComboBoxes; override;
          procedure UpdateEditor(AEdit: TCustomEdit); override;
@@ -74,7 +74,7 @@ implementation
 
 uses
    Vcl.Controls, Vcl.Forms, System.SysUtils, System.StrUtils, System.Math, YaccLib,
-   Infrastructure, Constants, XMLProcessor, Main_Block, UserFunction, Return_Block;
+   Infrastructure, Constants, Main_Block, UserFunction, Return_Block, OmniXMLUtils;
 
 const
    DEFAULT_WIDTH = 246;
@@ -123,7 +123,7 @@ begin
    edtVar.ReadOnly := GInfra.CurrentLang.ForDoVarList;
    edtVar.ShowHint := True;
    edtVar.AutoSelect := False;
-   edtVar.DoubleBuffered := true;
+   edtVar.DoubleBuffered := True;
    edtVar.Color := sColor;
    
    PopulateComboBoxes;
@@ -143,7 +143,7 @@ begin
    Constraints.MinHeight := DEFAULT_HEIGHT;
    FStatement.Free;
    FStatement := nil;
-   FIsInitialized := true;
+   FIsInitialized := True;
 end;
 
 procedure TForDoBlock.CloneFrom(ABlock: TBlock);
@@ -159,9 +159,9 @@ begin
       FDescOrder := forBlock.FDescOrder;
       if not forBlock.Expanded then
       begin
-         edtStart.Visible := false;
-         edtStop.Visible := false;
-         edtVar.Visible := false;
+         edtStart.Visible := False;
+         edtStop.Visible := False;
+         edtVar.Visible := False;
       end;
    end;
    inherited CloneFrom(ABlock);
@@ -205,12 +205,12 @@ end;
 procedure TForDoBlock.PutTextControls;
 begin
    var t := GetTextTop;
-   var r := DrawTextLabel(Branch.Hook.X-97, t, FForLabel, false, true, false).Right;
+   var r := DrawTextLabel(Branch.Hook.X-97, t, FForLabel, False, True, False).Right;
    cbVar.SetBounds(r+1, 34-t, edtVar.Width+5, cbVar.Height);
    edtVar.SetBounds(cbVar.Left+4, 38-t, edtVar.Width, edtVar.Height);
-   r := DrawTextLabel(edtVar.Left + edtVar.Width + 3, t, GInfra.CurrentLang.ForDoVarString, false, true, false).Right;
+   r := DrawTextLabel(edtVar.Left + edtVar.Width + 3, t, GInfra.CurrentLang.ForDoVarString, False, True, False).Right;
    edtStart.SetBounds(r+4, 38-t, edtStart.Width, edtStart.Height);
-   r := DrawTextLabel(edtStart.Left + edtStart.Width + 3, t, IfThen(FDescOrder, '«', '»'), false, true, false).Right;
+   r := DrawTextLabel(edtStart.Left + edtStart.Width + 3, t, IfThen(FDescOrder, 'Â«', 'Â»'), False, True, False).Right;
    edtStop.SetBounds(r+4, 38-t, edtStop.Width, edtStop.Height);
    Invalidate;
 end;
@@ -243,9 +243,9 @@ begin
                       Point(bst-9, TopHook.Y),
                       Point(bhx-100, TopHook.Y),
                       Point(bhx-100, 0)]);
-      DrawTextLabel(edtVar.BoundsRect.Right+3, t, GInfra.CurrentLang.ForDoVarString, false, true);
-      DrawTextLabel(edtStart.BoundsRect.Right+3, t, IfThen(FDescOrder, '«', '»'), false, true);
-      DrawTextLabel(bhx-97, t, FForLabel, false, true);
+      DrawTextLabel(edtVar.BoundsRect.Right+3, t, GInfra.CurrentLang.ForDoVarString, False, True);
+      DrawTextLabel(edtStart.BoundsRect.Right+3, t, IfThen(FDescOrder, 'Â«', 'Â»'), False, True);
+      DrawTextLabel(bhx-97, t, FForLabel, False, True);
       DrawBlockLabel(bhx-100, 40, GInfra.CurrentLang.LabelFor);
    end;
    DrawI;
@@ -280,10 +280,6 @@ begin
 end;
 
 procedure TForDoBlock.VarOnChange(Sender: TObject);
-var
-   header: TUserFunctionHeader;
-   isOk: boolean;
-   w: integer;
 begin
    GProject.SetChanged;
    edtVar.Font.Color := GSettings.FontColor;
@@ -292,14 +288,13 @@ begin
       UpdateEditor(edtVar);
    if GSettings.ParseFor then
    begin
-      if (GProject.GlobalVars <> nil) and GProject.GlobalVars.IsValidLoopVar(edtVar.Text) then
-         isOk := true
-      else
+      var isVarOk := True;
+      if (GProject.GlobalVars = nil) or not GProject.GlobalVars.IsValidLoopVar(edtVar.Text) then
       begin
-         header := TInfra.GetFunctionHeader(Self);
-         isOk := (header <> nil) and header.LocalVars.IsValidLoopVar(edtVar.Text);
+         var header := TInfra.GetFunctionHeader(Self);
+         isVarOk := (header <> nil) and header.LocalVars.IsValidLoopVar(edtVar.Text);
       end;
-      if not isOk then
+      if not isVarOk then
       begin
          edtVar.Font.Color := NOK_COLOR;
          if edtVar.Text <> '' then
@@ -308,7 +303,7 @@ begin
             edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
       end;
    end;
-   w := TInfra.GetAutoWidth(edtVar, IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
+   var w := TInfra.GetAutoWidth(edtVar, IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
    if w <> edtVar.Width then
    begin
       edtVar.Width := w;
@@ -317,19 +312,15 @@ begin
 end;
 
 function TForDoBlock.FillCodedTemplate(const ALangId: string): string;
-var
-   varVal, startVal, stopVal, varName: string;
-   lang: TLangDefinition;
-   i: integer;
 begin
    result := '';
-   varVal := Trim(edtVar.Text);
-   startVal := Trim(edtStart.Text);
-   stopVal := Trim(edtStop.Text);
-   lang := GInfra.GetLangDefinition(ALangId);
+   var i := 0;
+   var varVal := Trim(edtVar.Text);
+   var startVal := Trim(edtStart.Text);
+   var stopVal := Trim(edtStop.Text);
    if ALangId = PYTHON_LANG_ID then
    begin
-      result := 'for ' + varVal + ' ' + lang.ForDoVarString + ' ';
+      result := 'for ' + varVal + ' ' + GInfra.GetLangDefinition(ALangId).ForDoVarString + ' ';
       if stopVal.IsEmpty then
       begin
          if TryStrToInt(startVal, i) then
@@ -351,7 +342,7 @@ begin
          result := 'for (' + varVal + ' : ' + startVal + ') {'
       else
       begin
-         varName := varVal;
+         var varName := varVal;
          i := LastDelimiter(' ', varName);
          if i > 0 then
             varName := Copy(varName, i+1);
@@ -374,19 +365,16 @@ begin
 end;
 
 function TForDoBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
-var
-   template, line, indent: string;
-   tmpList: TStringList;
 begin
    result := 0;
    if fsStrikeOut in Font.Style then
       Exit;
-   indent := GSettings.IndentString(ADeep);
-   tmpList := TStringList.Create;
+   var indent := GSettings.IndentString(ADeep);
+   var tmpList := TStringList.Create;
    try
       if (ALangId = PYTHON_LANG_ID) or (ALangId = JAVA_LANG_ID) then   // for Java and Python it's impossible to create suitable for..do XML template so hardcoded template must be used
       begin
-         line := indent + FillCodedTemplate(ALangId);
+         var line := indent + FillCodedTemplate(ALangId);
          tmpList.AddObject(line, Self);
          GenerateNestedCode(tmpList, PRIMARY_BRANCH_IDX, ADeep+1, ALangId);
          if ALangId = JAVA_LANG_ID then
@@ -394,7 +382,7 @@ begin
       end
       else
       begin
-         template := FillTemplate(ALangId, GetBlockTemplate(ALangId));
+         var template := FillTemplate(ALangId, GetBlockTemplate(ALangId));
          if not template.IsEmpty then
             GenerateTemplateSection(tmpList, template, ALangId, ADeep);
       end;
@@ -407,10 +395,7 @@ end;
 
 procedure TForDoBlock.SetWidth(AMinX: integer);
 begin
-   if AMinX < FInitParms.Width - 30 then
-      Width := FInitParms.Width
-   else
-      Width := AMinX + 30;
+   Width := IfThen(AMinX < FInitParms.Width-30, FInitParms.Width, AMinX+30);
    BottomPoint.X := Width - RIGHT_MARGIN;
 end;
 
@@ -418,7 +403,7 @@ procedure TForDoBlock.ExpandFold(AResize: boolean);
 begin
    edtStart.Visible := not Expanded;
    edtStop.Visible := not Expanded;
-   cbVar.Visible := false;
+   cbVar.Visible := False;
    edtVar.Visible := not Expanded;
    inherited ExpandFold(AResize);
 end;
@@ -470,30 +455,23 @@ begin
    inherited PopulateComboBoxes;
    if GInfra.CurrentLang.ForDoVarList then
    begin
-      with cbVar do
-      begin
-         Items.Clear;
-         if GProject.GlobalVars <> nil then
-            GProject.GlobalVars.FillForList(Items);
-         var header := TInfra.GetFunctionHeader(Self);
-         if header <> nil then
-            header.LocalVars.FillForList(Items);
-         ItemIndex := Items.IndexOf(edtVar.Text);
-      end;
+      cbVar.Items.Clear;
+      if GProject.GlobalVars <> nil then
+         GProject.GlobalVars.FillForList(cbVar.Items);
+      var header := TInfra.GetFunctionHeader(Self);
+      if header <> nil then
+         header.LocalVars.FillForList(cbVar.Items);
+      cbVar.ItemIndex := cbVar.Items.IndexOf(edtVar.Text);
    end;
 end;
 
 function TForDoBlock.RetrieveFocus(AInfo: TFocusInfo): boolean;
-var
-   edit: TCustomEdit;
-   expr: string;
-   i: integer;
 begin
-   edit := edtStop;
+   var edit := TCustomEdit(edtStop);
    if not AInfo.SelText.IsEmpty then
    begin
-      expr := GetBlockTemplateExpr(GInfra.CurrentLang.Name);
-      i := Pos(PRIMARY_PLACEHOLDER, expr);
+      var expr := GetBlockTemplateExpr(GInfra.CurrentLang.Name);
+      var i := Pos(PRIMARY_PLACEHOLDER, expr);
       if i <> 0 then
       begin
          i := i + Length(edtVar.Text);
@@ -530,19 +508,17 @@ end;
 
 procedure TForDoBlock.UpdateEditor(AEdit: TCustomEdit);
 begin
-   var langName := GInfra.CurrentLang.Name;
    if PerformEditorUpdate then
    begin
       var chLine := TInfra.GetChangeLine(Self);
       if chLine.Row <> ROW_NOT_FOUND then
       begin
+         var langName := GInfra.CurrentLang.Name;
          if GetBlockTemplate(langName).IsEmpty then
             chLine.Text := TInfra.ExtractIndentString(chLine.Text) + FillCodedTemplate(langName)
          else
             chLine.Text := FillExpression(chLine.Text, langName);
-         if GSettings.UpdateEditor and not SkipUpdateEditor then
-            TInfra.ChangeLine(chLine);
-         TInfra.GetEditorForm.SetCaretPos(chLine);
+         TInfra.GetEditorForm.UpdateEditorForBlock(Self, chLine);
       end;
    end;
 end;
@@ -562,45 +538,39 @@ begin
       result := FillCodedTemplate(lang.Name);
 end;
 
-function TForDoBlock.GetFromXML(ATag: IXMLElement): TError;
+function TForDoBlock.GetFromXML(ANode: IXMLNode): TError;
 begin
-   inherited GetFromXML(ATag);
-   if ATag <> nil then
+   inherited GetFromXML(ANode);
+   if ANode <> nil then
    begin
-      var tag := TXMLProcessor.FindChildTag(ATag, 'i_var');
-      if tag <> nil then
+      var node := FindNode(ANode, 'i_var');
+      if node <> nil then
       begin
-         cbVar.Text := tag.Text;
-         edtVar.Text := tag.Text;
+         cbVar.Text := node.Text;
+         edtVar.Text := node.Text;
       end;
-      FRefreshMode := true;
-      tag := TXMLProcessor.FindChildTag(ATag, 'init_val');
-      if tag <> nil then
-         edtStart.Text := ReplaceStr(tag.Text, '#', ' ');
-      tag := TXMLProcessor.FindChildTag(ATag, 'end_val');
-      if tag <> nil then
-         edtStop.Text := ReplaceStr(tag.Text, '#' , ' ');
-      FRefreshMode := false;
-      FDescOrder := ATag.GetAttribute('order') = 'ordDesc';
+      FRefreshMode := True;
+      node := FindNode(ANode, 'init_val');
+      if node <> nil then
+         edtStart.Text := ReplaceStr(node.Text, '#', ' ');
+      node := FindNode(ANode, 'end_val');
+      if node <> nil then
+         edtStop.Text := ReplaceStr(node.Text, '#' , ' ');
+      FRefreshMode := False;
+      FDescOrder := GetNodeAttrStr(ANode, 'order') = 'ordDesc';
    end;
    OnChangeAll;
 end;
 
-procedure TForDoBlock.SaveInXML(ATag: IXMLElement);
+procedure TForDoBlock.SaveInXML(ANode: IXMLNode);
 begin
-   inherited SaveInXML(ATag);
-   if ATag <> nil then
+   inherited SaveInXML(ANode);
+   if ANode <> nil then
    begin
-      var tag := ATag.OwnerDocument.CreateElement('i_var');
-      TXMLProcessor.AddText(tag, edtVar.Text);
-      ATag.AppendChild(tag);
-      tag := ATag.OwnerDocument.CreateElement('init_val');
-      TXMLProcessor.AddText(tag, ReplaceStr(edtStart.Text, ' ', '#'));
-      ATag.AppendChild(tag);
-      tag := ATag.OwnerDocument.CreateElement('end_val');
-      TXMLProcessor.AddText(tag, ReplaceStr(edtStop.Text, ' ', '#'));
-      ATag.AppendChild(tag);
-      ATag.SetAttribute('order', IfThen(FDescOrder, 'ordDesc', 'ordAsc'));
+      SetNodeText(ANode, 'i_var', edtVar.Text);
+      SetNodeText(ANode, 'init_val', ReplaceStr(edtStart.Text, ' ', '#'));
+      SetNodeText(ANode, 'end_val', ReplaceStr(edtStop.Text, ' ', '#'));
+      SetNodeAttrStr(ANode, 'order', IfThen(FDescOrder, 'ordDesc', 'ordAsc'));
    end;
 end;
 

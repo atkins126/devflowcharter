@@ -35,8 +35,8 @@ type
     { Private declarations }
   public
     { Public declarations }
-    procedure ExportSettingsToXMLTag(ATag: IXMLElement); override;
-    procedure ImportSettingsFromXMLTag(ATag: IXMLElement); override;
+    procedure ExportToXML(ANode: IXMLNode); override;
+    procedure ImportFromXML(ANode: IXMLNode); override;
     procedure ResetForm; override;
   end;
 
@@ -46,35 +46,35 @@ var
 implementation
 
 uses
-   Vcl.Forms, System.SysUtils, XMLProcessor, DeclareList, Infrastructure, Constants;
+   Vcl.Forms, System.SysUtils, OmniXMLUtils, DeclareList, Infrastructure, Constants;
 
 {$R *.dfm}
 
-procedure TDeclarationsForm.ExportSettingsToXMLTag(ATag: IXMLElement);
+procedure TDeclarationsForm.ExportToXML(ANode: IXMLNode);
 begin
-   ATag.SetAttribute('var_win_h', Height.ToString);
-   ATag.SetAttribute('var_win_w', Width.ToString);
+   SetNodeAttrInt(ANode, 'var_win_h', Height);
+   SetNodeAttrInt(ANode, 'var_win_w', Width);
    if Visible then
    begin
-      ATag.SetAttribute('var_win_show', 'true');
-      ATag.SetAttribute('var_win_x', Left.ToString);
-      ATag.SetAttribute('var_win_y', Top.ToString);
+      SetNodeAttrBool(ANode, 'var_win_show', True);
+      SetNodeAttrInt(ANode, 'var_win_x', Left);
+      SetNodeAttrInt(ANode, 'var_win_y', Top);
       if WindowState = wsMinimized then
-         ATag.SetAttribute('var_win_min', 'true');
+         SetNodeAttrBool(ANode, 'var_win_min', True);
    end;
 end;
 
-procedure TDeclarationsForm.ImportSettingsFromXMLTag(ATag: IXMLElement);
+procedure TDeclarationsForm.ImportFromXML(ANode: IXMLNode);
 begin
-   Height := TXMLProcessor.GetIntFromAttr(ATag, 'var_win_h', Height);
-   Width := TXMLProcessor.GetIntFromAttr(ATag, 'var_win_w', Width);
-   if TXMLProcessor.GetBoolFromAttr(ATag, 'var_win_show') and (GInfra.CurrentLang.EnabledVars or GInfra.CurrentLang.EnabledConsts) then
+   Height := GetNodeAttrInt(ANode, 'var_win_h');
+   Width := GetNodeAttrInt(ANode, 'var_win_w');
+   if GetNodeAttrBool(ANode, 'var_win_show', False) and (GInfra.CurrentLang.EnabledVars or GInfra.CurrentLang.EnabledConsts) then
    begin
       Position := poDesigned;
-      if TXMLProcessor.GetBoolFromAttr(ATag, 'var_win_min') then
+      if GetNodeAttrBool(ANode, 'var_win_min', False) then
          WindowState := wsMinimized;
-      Left := TXMLProcessor.GetIntFromAttr(ATag, 'var_win_x', Left);
-      Top := TXMLProcessor.GetIntFromAttr(ATag, 'var_win_y', Top);
+      Left := GetNodeAttrInt(ANode, 'var_win_x');
+      Top := GetNodeAttrInt(ANode, 'var_win_y');
       Show;
    end;
 end;
@@ -86,39 +86,31 @@ begin
    Width := 610;
 end;
 
-procedure TDeclarationsForm.FormCanResize(Sender: TObject; var NewWidth,
-  NewHeight: Integer; var Resize: Boolean);
-var
-   i: integer;
-   declareList: TDeclareList;
+procedure TDeclarationsForm.FormCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
 begin
    if NewWidth < Width then
    begin
-      i := ControlCount;
+      var i := ControlCount;
       if (i > 0) and  (Controls[i-1] is TDeclareList) then
       begin
-         declareList := TDeclareList(Controls[i-1]);
+         var declareList := TDeclareList(Controls[i-1]);
          if NewWidth < (declareList.sgList.GetMinWidth + declareList.Left + DECLARATIONS_FORM_RIGHT_MARGIN) then
-            Resize := false;
+            Resize := False;
       end;
    end;
 end;
 
 procedure TDeclarationsForm.FormShow(Sender: TObject);
-var
-   i: integer;
-   f: boolean;
-   declareList: TDeclareList;
 begin
-   f := true;
-   for i := 0 to ControlCount-1 do
+   var f := True;
+   for var i := 0 to ControlCount-1 do
    begin
       if Controls[i] is TDeclareList then
       begin
-         declareList := TDeclareList(Controls[i]);
+         var declareList := TDeclareList(Controls[i]);
          if f then
          begin
-             f := false;
+             f := False;
              declareList.SetDefaultFocus;
          end;
          declareList.sgList.ColWidthsChanged;

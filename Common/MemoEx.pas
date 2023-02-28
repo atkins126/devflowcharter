@@ -24,9 +24,12 @@ unit MemoEx;
 interface
 
 uses
-   Vcl.StdCtrls, Vcl.Forms, System.Classes, System.UITypes, OmniXML, CommonTypes;
+   Vcl.StdCtrls, Vcl.Forms, System.Classes, System.UITypes, Vcl.Controls, OmniXML, CommonTypes;
 
 type
+
+   TWinControlHack = class(TWinControl);
+
    TMemoEx = class(TCustomMemo)
       private
          FHasVScroll,
@@ -41,6 +44,9 @@ type
          procedure SetScrollBars(AValue: TScrollStyle);
          procedure SetAlignment(AValue: TAlignment); virtual;
          procedure ChangeBorderStyle(AStyle: TBorderStyle);
+         procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+         procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+         procedure Change; override;
       public
          EditFormWidth,
          EditFormHeight: integer;
@@ -48,41 +54,42 @@ type
          property HasHScroll: boolean read FHasHScroll write SetHasHScroll;
          constructor Create(AOwner: TComponent); override;
          procedure UpdateScrolls;
-         procedure GetFromXML(ATag: IXMLElement);
-         procedure SaveInXML(ATag: IXMLElement);
+         procedure GetFromXML(ANode: IXMLNode);
+         procedure SaveInXML(ANode: IXMLNode);
          function Clone(AOwner: TComponent): TMemoEx;
          procedure CloneFrom(AMemo: TMemoEx);
       published
-         property OnDblClick;
-         property OnMouseDown;
-         property OnKeyUp;
          property OnChange;
          property PopupMenu;
          property Font;
          property Color;
          property BorderStyle;
          property WordWrap write SetWordWrap;
-         property ScrollBars write SetScrollBars;
-         property Alignment write SetAlignment;
    end;
 
 implementation
 
 uses
    WinApi.Windows, WinApi.Messages, System.StrUtils, System.SysUtils, System.Rtti,
-   XMLProcessor, Infrastructure;
+   OmniXMLUtils, Infrastructure, Navigator_Form;
 
 constructor TMemoEx.Create(AOwner: TComponent);
 begin
    inherited Create(AOwner);
-   EditMargins.Auto := true;
+   EditMargins.Auto := True;
    EditFormWidth := 280;
    EditFormHeight := 182;
-   FHasVScroll := true;
-   ParentCtl3D := false;
+   FHasVScroll := True;
+   ParentCtl3D := False;
    BorderStyle := bsNone;
-   Ctl3D := false;
-   OnKeyDown := TInfra.OnKeyDownSelectAll;
+   Ctl3D := False;
+end;
+
+procedure TMemoEx.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+   inherited;
+   if (ssCtrl in Shift) and (Key = Ord('A')) then
+      SelectAll;
 end;
 
 procedure TMemoEx.SetHasVScroll(AValue: boolean);
@@ -116,6 +123,20 @@ begin
    Perform(EM_LINESCROLL, pos.X, pos.Y);
 end;
 
+procedure TMemoEx.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+   inherited;
+   if Button = mbLeft then
+      TWinControlHack(Parent).MouseDown(Button, Shift, X+Left, Y+Top);
+end;
+
+procedure TMemoEx.Change;
+begin
+   inherited;
+   UpdateScrolls;
+   if NavigatorForm.InvalidateIndicator then
+      NavigatorForm.Invalidate;
+end;
 
 procedure TMemoEx.SetHasHScroll(AValue: boolean);
 begin
@@ -123,7 +144,7 @@ begin
    begin
       FHasHScroll := AValue;
       if FHasHScroll then
-         WordWrap := false;
+         WordWrap := False;
       UpdateHScroll;
    end;
 end;
@@ -131,7 +152,7 @@ end;
 procedure TMemoEx.SetWordWrap(AValue: boolean);
 begin
    if AValue and not WordWrap then
-      SetHasHScroll(false);
+      SetHasHScroll(False);
    inherited SetWordWrap(AValue);
 end;
 
@@ -166,13 +187,10 @@ begin
 end;
 
 procedure TMemoEx.ResetScrollBars(const AStyle: TScrollStyle);
-var
-   sStyle: TScrollStyle;
 begin
+   var sStyle := TScrollStyle.ssVertical; 
    if AStyle = TScrollStyle.ssVertical then
-      sStyle := TScrollStyle.ssHorizontal
-   else
-      sStyle := TScrollStyle.ssVertical;
+      sStyle := TScrollStyle.ssHorizontal;
    if ScrollBars = TScrollStyle.ssBoth then
       ScrollBars := AStyle
    else if ScrollBars = sStyle then
@@ -180,31 +198,28 @@ begin
 end;
 
 procedure TMemoEx.UpdateVScroll;
-var
-   count, lineCount: integer;
-   oldFont: HFont;
-   hnd: THandle;
-   txtMetric: TTextMetric;
-   r: TRect;
 begin
    if FHasVScroll then
    begin
-      hnd := GetDC(Handle);
+      var lineCount := 0;
+      var hnd := GetDC(Handle);
       try
-         oldFont := SelectObject(hnd, Font.Handle);
+         var oldFont := SelectObject(hnd, Font.Handle);
          try
+            var r: TRect;
+            var txtMetrics: TTextMetric;
             Perform(EM_GETRECT, 0, LPARAM(@r));
-            GetTextMetrics(hnd, txtMetric);
-            lineCount := r.Height div txtMetric.tmHeight;
+            GetTextMetrics(hnd, txtMetrics);
+            lineCount := r.Height div txtMetrics.tmHeight;
          finally
             SelectObject(hnd, oldFont);
          end;
       finally
          ReleaseDC(Handle, hnd);
       end;
-      count := Lines.Count;
+      var count := Lines.Count;
       if EndsText(sLineBreak, Text) then
-         count := count + 1;
+         Inc(count);
       if count > lineCount then
       begin
          if ScrollBars = TScrollStyle.ssNone then
@@ -220,19 +235,17 @@ begin
 end;
 
 procedure TMemoEx.UpdateHScroll;
-var
-   cnt, w, i: integer;
-   r: TRect;
 begin
    if FHasHScroll and not WordWrap then
    begin
-      w := 0;
-      for i := 0 to Lines.Count-1 do
+      var w := 0;
+      for var i := 0 to Lines.Count-1 do
       begin
-         cnt := TInfra.GetTextWidth(Lines[i], Self);
+         var cnt := TInfra.GetTextWidth(Lines[i], Self);
          if cnt > w then
             w := cnt;
       end;
+      var r: TRect;
       Perform(EM_GETRECT, 0, LPARAM(@r));
       if w > r.Width then
       begin
@@ -255,37 +268,35 @@ begin
    Repaint;
 end;
 
-procedure TMemoEx.GetFromXML(ATag: IXMLElement);
+procedure TMemoEx.GetFromXML(ANode: IXMLNode);
 begin
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      EditFormWidth := TXMLProcessor.GetIntFromAttr(ATag, 'memW', EditFormWidth);
-      EditFormHeight := TXMLProcessor.GetIntFromAttr(ATag, 'memH', EditFormHeight);
-      HasVScroll := TXMLProcessor.GetBoolFromAttr(ATag, 'mem_vscroll', FHasVScroll);
-      HasHScroll := TXMLProcessor.GetBoolFromAttr(ATag, 'mem_hscroll', FHasHScroll);
-      WordWrap := TXMLProcessor.GetBoolFromAttr(ATag, 'mem_wordwrap', WordWrap);
-      var h := TXMLProcessor.GetIntFromAttr(ATag, 'mem_hscroll_pos');
-      var v := TXMLProcessor.GetIntFromAttr(ATag, 'mem_vscroll_pos');
+      EditFormWidth := GetNodeAttrInt(ANode, 'memW');
+      EditFormHeight := GetNodeAttrInt(ANode, 'memH');
+      HasVScroll := GetNodeAttrBool(ANode, 'mem_vscroll');
+      HasHScroll := GetNodeAttrBool(ANode, 'mem_hscroll');
+      WordWrap := GetNodeAttrBool(ANode, 'mem_wordwrap');
+      var h := GetNodeAttrInt(ANode, 'mem_hscroll_pos');
+      var v := GetNodeAttrInt(ANode, 'mem_vscroll_pos');
       Perform(EM_LINESCROLL, h, v);
-      var val := ATag.GetAttribute('mem_align');
-      if not val.IsEmpty then
-         Alignment := TRttiEnumerationType.GetValue<TAlignment>(val);
+      Alignment := TRttiEnumerationType.GetValue<TAlignment>(GetNodeAttrStr(ANode, 'mem_align'));
    end;
 end;
 
-procedure TMemoEx.SaveInXML(ATag: IXMLElement);
+procedure TMemoEx.SaveInXML(ANode: IXMLNode);
 begin
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      ATag.SetAttribute('memW', EditFormWidth.ToString);
-      ATag.SetAttribute('memH', EditFormHeight.ToString);
-      ATag.SetAttribute('mem_vscroll', HasVScroll.ToString);
-      ATag.SetAttribute('mem_hscroll', HasHScroll.ToString);
-      ATag.SetAttribute('mem_wordwrap', WordWrap.ToString);
-      ATag.SetAttribute('mem_align', TRttiEnumerationType.GetName(Alignment));
+      SetNodeAttrInt(ANode, 'memW', EditFormWidth);
+      SetNodeAttrInt(ANode, 'memH', EditFormHeight);
+      SetNodeAttrBool(ANode, 'mem_vscroll', HasVScroll);
+      SetNodeAttrBool(ANode, 'mem_hscroll', HasHScroll);
+      SetNodeAttrBool(ANode, 'mem_wordwrap', WordWrap);
+      SetNodeAttrStr(ANode, 'mem_align', TRttiEnumerationType.GetName(Alignment));
       var pos := TInfra.GetScrolledPos(Self);
-      ATag.SetAttribute('mem_hscroll_pos', pos.X.ToString);
-      ATag.SetAttribute('mem_vscroll_pos', pos.Y.ToString);
+      SetNodeAttrInt(ANode, 'mem_hscroll_pos', pos.X);
+      SetNodeAttrInt(ANode, 'mem_vscroll_pos', pos.Y);
    end;
 end;
 

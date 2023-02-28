@@ -27,7 +27,7 @@ uses
 {$IFDEF USE_CODEFOLDING}
    SynEditCodeFolding,
 {$ENDIF}
-   System.Classes, Vcl.StdCtrls, Vcl.Forms, Vcl.Controls, Generics.Defaults,
+   System.Classes, Vcl.StdCtrls, Vcl.Forms, Vcl.Controls, Vcl.Menus, Generics.Defaults,
    Vcl.ComCtrls, WinApi.Messages, System.Types, SynEditTypes, OmniXML;
 
 const
@@ -54,6 +54,8 @@ type
    TImportMode = (impSelectTab, impSelectPopup, impAll);
 
    TPointArray = array of TPoint;
+
+   TMenuItemArray = array of TMenuItem;
 
    TDiamond = record
      Top,
@@ -108,6 +110,7 @@ type
       EditCaretXY: TBufferCoord;
       CodeRange: TCodeRange;
       class function New: TChangeLine; static;
+      function Change: boolean;
    end;
 
    TFocusInfo = record
@@ -135,7 +138,7 @@ type
       class function New(bt: TBlockType; x, y, w, h: integer; bid: integer = ID_INVALID): TBlockParms; overload; static;
       class function New(bt: TBlockType; x, y, w, h, brx, bry, bh: integer; bid: integer = ID_INVALID): TBlockParms; overload; static;
       class function New(bt: TBlockType; x, y, w, h, brx, bry, bh, th, br2x, br2y, trh, flh: integer; bid: integer = ID_INVALID): TBlockParms; overload; static;
-      class function New(AFrom: IXMLElement): TBlockParms; overload; static;
+      class function New(AFrom: IXMLNode): TBlockParms; overload; static;
    end;
 
    PTypesSet = ^TTypesSet;
@@ -161,7 +164,7 @@ type
 implementation
 
 uses
-   System.SysUtils, System.Rtti, Interfaces, XMLProcessor, Constants;
+   System.SysUtils, System.Rtti, Interfaces, OmniXMLUtils, Constants;
 
 constructor TComponentComparer.Create(ACompareType: integer);
 begin
@@ -185,7 +188,7 @@ end;
 
 class function TCodeRange.New: TCodeRange;
 begin
-   result.IsFolded := false;
+   result.IsFolded := False;
    result.FirstRow := ROW_NOT_FOUND;
    result.LastRow := ROW_NOT_FOUND;
    result.Lines := nil;
@@ -217,15 +220,12 @@ begin
 end;
 
 class function T3Strings.Extract(const AFrom: string): T3Strings;
-var
-   i: integer;
-   tokens: TArray<string>;
 begin
    result.S0 := '';
    result.S1 := '';
    result.S2 := '';
-   tokens := AFrom.Split(['|'], 3);
-   i := Length(tokens);
+   var tokens := AFrom.Split(['|'], 3);
+   var i := Length(tokens);
    if i > 0 then
       result.S0 := tokens[0];
    if i > 1 then
@@ -266,39 +266,48 @@ begin
    result.flh := flh;
 end;
 
-class function TBlockParms.New(AFrom: IXMLElement): TBlockParms;
+class function TBlockParms.New(AFrom: IXMLNode): TBlockParms;
 var
    attr: string;
    at: integer;
    bt: TBlockType;
 begin
-   attr := AFrom.GetAttribute(BLOCK_TYPE_ATTR);
+   attr := GetNodeAttrStr(AFrom, BLOCK_TYPE_ATTR);
    at := StrToIntDef(attr, -1);
    if at = -1 then
       bt := TRttiEnumerationType.GetValue<TBlockType>(attr)
    else
       bt := TBlockType(at);
-   with TXMLProcessor do
-      result := New(bt,
-                    GetIntFromAttr(AFrom, 'x'),
-                    GetIntFromAttr(AFrom, 'y'),
-                    GetIntFromAttr(AFrom, 'w'),
-                    GetIntFromAttr(AFrom, 'h'),
-                    GetIntFromAttr(AFrom, 'brx'),
-                    GetIntFromAttr(AFrom, 'bry'),
-                    GetIntFromAttr(AFrom, 'bh'),
-                    GetIntFromAttr(AFrom, 'th'),
-                    GetIntFromAttr(AFrom, 'fbrx'),
-                    GetIntFromAttr(AFrom, 'fbry'),
-                    GetIntFromAttr(AFrom, 'trh'),
-                    GetIntFromAttr(AFrom, 'flh'),
-                    GetIntFromAttr(AFrom, ID_ATTR, ID_INVALID));
+   result := New(bt,
+                 GetNodeAttrInt(AFrom, 'x'),
+                 GetNodeAttrInt(AFrom, 'y'),
+                 GetNodeAttrInt(AFrom, 'w'),
+                 GetNodeAttrInt(AFrom, 'h'),
+                 GetNodeAttrInt(AFrom, 'brx', 0),
+                 GetNodeAttrInt(AFrom, 'bry', 0),
+                 GetNodeAttrInt(AFrom, 'bh', 0),
+                 GetNodeAttrInt(AFrom, 'th', 0),
+                 GetNodeAttrInt(AFrom, 'fbrx', 0),
+                 GetNodeAttrInt(AFrom, 'fbry', 0),
+                 GetNodeAttrInt(AFrom, 'trh', 0),
+                 GetNodeAttrInt(AFrom, 'flh', 0),
+                 GetNodeAttrInt(AFrom, ID_ATTR, ID_INVALID));
 end;
 
 procedure TNameEdit.WMKillFocus(var msg: TWMKillFocus);
 begin
    inherited;
    Change;
+end;
+
+function TChangeLine.Change: boolean;
+begin
+   result := (CodeRange.Lines <> nil) and
+             (Row >= 0) and
+             (Row < CodeRange.Lines.Count) and
+             (CodeRange.Lines[Row] <> Text);
+   if result then
+      CodeRange.Lines[Row] := Text;
 end;
 
 class function TDiamond.New(const ATop: TPoint; AEdit: TCustomEdit): TDiamond;

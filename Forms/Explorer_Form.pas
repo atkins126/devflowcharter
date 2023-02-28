@@ -70,8 +70,8 @@ type
     procedure ClearTreeViewItems;
   public
     { Public declarations }
-    procedure ExportSettingsToXMLTag(ATag: IXMLElement); override;
-    procedure ImportSettingsFromXMLTag(ATag: IXMLElement); override;
+    procedure ExportToXML(ANode: IXMLNode); override;
+    procedure ImportFromXML(ANode: IXMLNode); override;
   end;
 
 var
@@ -82,7 +82,7 @@ implementation
 
 uses
    Vcl.Graphics, Vcl.Forms, System.SysUtils, System.Math, Infrastructure, Base_Block,
-   XMLProcessor, Constants;
+   Constants, OmniXMLUtils;
 
 procedure TExplorerForm.FormShow(Sender: TObject);
 begin
@@ -167,20 +167,20 @@ begin
    begin
       tvExplorer.Items.BeginUpdate;
       if Sender = miExpand then
-         tvExplorer.Selected.Expand(true)
+         tvExplorer.Selected.Expand(True)
       else if Sender = miCollapse then
-         tvExplorer.Selected.Collapse(true);
+         tvExplorer.Selected.Collapse(True);
       tvExplorer.Items.EndUpdate;
    end;
 end;
 
 procedure TExplorerForm.PopupMenuPopup(Sender: TObject);
 begin
-   miExpand.Enabled    := false;
-   miCollapse.Enabled  := false;
-   miNextError.Enabled := false;
-   miPrevError.Enabled := false;
-   miRemove.Enabled    := false;
+   miExpand.Enabled    := False;
+   miCollapse.Enabled  := False;
+   miNextError.Enabled := False;
+   miPrevError.Enabled := False;
+   miRemove.Enabled    := False;
    if tvExplorer.Selected <> nil then
    begin
       miNextError.Enabled := (FErrWarnCount.ErrorCount > 0) or (FErrWarnCount.WarningCount > 0);
@@ -194,11 +194,11 @@ end;
 
 procedure TExplorerForm.miRebuildClick(Sender: TObject);
 begin
-   tvExplorer.Enabled := false;
+   tvExplorer.Enabled := False;
    try
       FormShow(Self);
    finally
-      tvExplorer.Enabled := true;
+      tvExplorer.Enabled := True;
    end;
 end;
 
@@ -274,7 +274,7 @@ begin
    lFont.Color := lColor;
    var nodeRect := Node.DisplayRect(True);
    Sender.Canvas.TextOut(nodeRect.Left+x, nodeRect.Top+y, Node.Text);
-   DefaultDraw := true;
+   DefaultDraw := True;
 end;
 
 procedure TExplorerForm.tvExplorerDeletion(Sender: TObject; Node: TTreeNode);
@@ -312,34 +312,34 @@ begin
    end;
 end;
 
-procedure TExplorerForm.ExportSettingsToXMLTag(ATag: IXMLElement);
+procedure TExplorerForm.ExportToXML(ANode: IXMLNode);
 begin
    if Visible then
    begin
-      ATag.SetAttribute('tree_win_show', 'true');
-      ATag.SetAttribute('tree_win_x', Left.ToString);
-      ATag.SetAttribute('tree_win_y', Top.ToString);
-      ATag.SetAttribute('tree_win_w', Width.ToString);
-      ATag.SetAttribute('tree_win_h', Height.ToString);
-      ATag.SetAttribute('tree_top_y', tvExplorer.TopItem.AbsoluteIndex.ToString);
+      SetNodeAttrBool(ANode, 'tree_win_show', True);
+      SetNodeAttrInt(ANode, 'tree_win_x', Left);
+      SetNodeAttrInt(ANode, 'tree_win_y', Top);
+      SetNodeAttrInt(ANode, 'tree_win_w', Width);
+      SetNodeAttrInt(ANode, 'tree_win_h', Height);
+      SetNodeAttrInt(ANode, 'tree_top_y', tvExplorer.TopItem.AbsoluteIndex);
       if WindowState = wsMinimized then
-         ATag.SetAttribute('tree_win_min', 'true');
+         SetNodeAttrBool(ANode, 'tree_win_min', True);
    end;
 end;
 
-procedure TExplorerForm.ImportSettingsFromXMLTag(ATag: IXMLElement);
+procedure TExplorerForm.ImportFromXML(ANode: IXMLNode);
 begin
-   if TXMLProcessor.GetBoolFromAttr(ATag, 'tree_win_show') and GInfra.CurrentLang.EnabledExplorer then
+   if GetNodeAttrBool(ANode, 'tree_win_show', False) and GInfra.CurrentLang.EnabledExplorer then
    begin
       Position := poDesigned;
-      SetBounds(TXMLProcessor.GetIntFromAttr(ATag, 'tree_win_x', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'tree_win_y', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'tree_win_w', 498),
-                TXMLProcessor.GetIntFromAttr(ATag, 'tree_win_h', 574));
-      if TXMLProcessor.GetBoolFromAttr(ATag, 'tree_win_min') then
+      SetBounds(GetNodeAttrInt(ANode, 'tree_win_x'),
+                GetNodeAttrInt(ANode, 'tree_win_y'),
+                GetNodeAttrInt(ANode, 'tree_win_w'),
+                GetNodeAttrInt(ANode, 'tree_win_h'));
+      if GetNodeAttrBool(ANode, 'tree_win_min', False) then
          WindowState := wsMinimized;
       Show;
-      var topY := TXMLProcessor.GetIntFromAttr(ATag, 'tree_top_y', -2);
+      var topY := GetNodeAttrInt(ANode, 'tree_top_y');
       if (topY >= 0) and (topY < tvExplorer.Items.Count) then
          tvExplorer.TopItem := tvExplorer.Items[topY];
    end;

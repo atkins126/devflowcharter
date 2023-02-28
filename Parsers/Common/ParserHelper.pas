@@ -154,12 +154,12 @@ begin
    result.Ident := '';
    result.Scope := GLOBAL;
    result.DimensCount := 0;
-   result.FIsInteger := false;
-   result.FIsReal := false;
-   result.FIsNumeric := false;
-   result.FIsRecord := false;
-   result.FIsENum := false;
-   result.FIsPointer := false;
+   result.FIsInteger := False;
+   result.FIsReal := False;
+   result.FIsNumeric := False;
+   result.FIsRecord := False;
+   result.FIsENum := False;
+   result.FIsPointer := False;
 end;
 
 procedure TIdentInfo.SetType(AType: integer);
@@ -200,13 +200,13 @@ end;
 // check if active statement is inside loop
 class function TParserHelper.IsInLoop: boolean;
 begin
-   result := false;
+   result := False;
    var block := TInfra.GetParsedBlock;
    while block <> nil do
    begin
       if block.BType in LOOP_BLOCKS then
       begin
-         result := true;
+         result := True;
          break;
       end;
       block := block.ParentBlock;
@@ -215,7 +215,7 @@ end;
 
 class function TParserHelper.IsDuplicatedCase: boolean;
 begin
-   result := false;
+   result := False;
    var edit := TInfra.GetParsedEdit;
    if (edit <> nil) and (edit.Parent is TCaseBlock) then
       result := TCaseBlock(edit.Parent).IsDuplicatedCase(edit);
@@ -271,7 +271,7 @@ end;
 
 class function TParserHelper.ValidateUserFunctionParms(const AName: string; AParmList: array of integer): boolean;
 begin
-   result := false;
+   result := False;
    if GProject <> nil then
    begin
       var func := GProject.GetUserFunction(AName);
@@ -292,7 +292,7 @@ begin
                Exit;
             i := i + 1;
          end;
-         result := true;
+         result := True;
       end;
    end;
 end;
@@ -406,7 +406,7 @@ begin
          begin
             SizeAsString := AVarList.sgList.Cells[VAR_SIZE_COL, i];
             Size := StrToIntDef(SizeAsString, INCORRECT_SIZE);
-            DimensCount := AVarList.GetDimensionCount(Ident, true);
+            DimensCount := AVarList.GetDimensionCount(Ident, True);
             if DimensCount = 0 then
                IdentType := VARIABLE
             else if DimensCount > 0 then
@@ -467,17 +467,16 @@ end;
 // interface for _GetConstType template function
 class function TParserHelper.GetConstType(const AConstName: string): integer;
 var
-   value: string;
-   secType: string;
+   value, secType: string;
 begin
    result := NOT_DEFINED;
    value := GetConstValue(AConstName);
    if not value.IsEmpty then
    begin
-      if Assigned(GInfra.CurrentLang.GetConstantType) then
-         result := GInfra.CurrentLang.GetConstantType(value, secType)
-      else if Assigned(GInfra.TemplateLang.GetConstantType) then
-         result := GInfra.TemplateLang.GetConstantType(value, secType)
+      var lang := GInfra.CurrentLang;
+      if not Assigned(lang.GetConstantType) then
+         lang := GInfra.TemplateLang;
+      result := lang.GetConstantType(value, secType);
    end;
 end;
 
@@ -528,7 +527,7 @@ end;
 
 class function TParserHelper.IsDeclared(const AIdentName: string): boolean;
 begin
-   result := true;
+   result := True;
    if GProject <> nil then
    begin
       for var dataType in GProject.GetUserDataTypes do
@@ -542,7 +541,7 @@ begin
       end;
    end;
    if (GetVarInfo(AIdentName).TType = NOT_DEFINED) and (GetConstType(AIdentName) = NOT_DEFINED) and
-      (GetUserFunctionType(AIdentName) = NOT_DEFINED) then result := false;
+      (GetUserFunctionType(AIdentName) = NOT_DEFINED) then result := False;
 end;
 
 class function TParserHelper.GetOriginalType(AType: integer): integer;
@@ -572,7 +571,7 @@ begin
    begin
       var userDataType := GProject.GetUserDataType(ATypeName);
       if userDataType <> nil then
-         result := userDataType.GetLibName;
+         result := userDataType.GetLibrary;
    end;
    if result.IsEmpty then
       result := ADefault;
@@ -581,13 +580,10 @@ end;
 class function TParserHelper.GetPointerType(AType: integer): integer;
 begin
    result := UNKNOWN_TYPE;
-   var lang: TLangDefinition := nil;
-   if Assigned(GInfra.CurrentLang.GetPointerTypeName) then
-      lang := GInfra.CurrentLang
-   else if Assigned(GInfra.TemplateLang.GetPointerTypeName) then
+   var lang := GInfra.CurrentLang;
+   if not Assigned(lang.GetPointerTypeName) then
       lang := GInfra.TemplateLang;
-   if lang <> nil then
-      result := GetType(lang.GetPointerTypeName(GetTypeAsString(AType)))
+   result := GetType(lang.GetPointerTypeName(GetTypeAsString(AType)))
 end;
 
 class function TParserHelper.IsGenericType(const ATypeName: string): boolean;

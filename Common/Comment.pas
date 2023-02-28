@@ -37,9 +37,9 @@ type
          FZOrder: integer;
       protected
          FMouseLeave: boolean;
-         procedure OnMouseDownComment(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-         procedure OnMouseMoveComment(Sender: TObject; Shift: TShiftState; X, Y: Integer);
-         procedure OnDblClickComment(Sender: TObject);
+         procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+         procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+         procedure DblClick; override;
          procedure OnContextPopupComment(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
          procedure OnMouseLeaveComment(Sender: TObject);
          procedure NCHitTest(var Msg: TWMNCHitTest); message WM_NCHITTEST;
@@ -48,7 +48,7 @@ type
          procedure SetActive(AValue: boolean);
          procedure SetAlignment(AValue: TAlignment); override;
          function GetActive: boolean;
-         procedure OnChangeComment(Sender: TObject);
+         procedure Change; override;
          procedure SetPage(APage: TBlockTabSheet);
          procedure SetIsHeader(AValue: boolean);
          function GetIsHeader: boolean;
@@ -62,9 +62,9 @@ type
          function Clone(APage: TBlockTabSheet; const ATopLeft: TPoint): TComment; overload;
          function Clone(APage: TBlockTabSheet): TComment; overload;
          destructor Destroy; override;
-         procedure ImportFromXMLTag(ATag: IXMLElement; APinControl: TControl);
-         procedure ExportToXMLTag(ATag: IXMLElement);
-         procedure ExportToXMLTag2(ATag: IXMLElement);
+         procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl);
+         procedure ExportToXML(ANode: IXMLNode);
+         procedure ExportToXML2(ANode: IXMLNode);
          function GetHandle: THandle;
          procedure BringAllToFront;
          procedure SetZOrder(AValue: integer);
@@ -77,7 +77,7 @@ implementation
 
 uses
    Vcl.Graphics, Vcl.Forms, System.SysUtils, System.UITypes, WinApi.Windows, Infrastructure,
-   XMLProcessor, UserFunction, Main_Block, Navigator_Form, Constants;
+   OmniXMLUtils, UserFunction, Main_Block, Navigator_Form, Constants;
 
 constructor TComment.Create(APage: TBlockTabSheet; ALeft, ATop, AWidth, AHeight: Integer);
 begin
@@ -88,23 +88,18 @@ begin
    Font.Size := GSettings.FlowchartFontSize;
    Font.Color := clNavy;
    Font.Name := GSettings.FlowchartFontName;
-   FActive := true;
-   DoubleBuffered := true;
+   FActive := True;
+   DoubleBuffered := True;
    Constraints.MinWidth := 25;
    Constraints.MinHeight := 25;
    FZOrder := -1;
    PopupMenu := APage.Box.PopupMenu;
-   FMouseLeave := true;
+   FMouseLeave := True;
    SetBounds(ALeft, ATop, AWidth, AHeight);
    GProject.AddComponent(Self);
 
-   OnEndDrag      := OnEndDragComment;
-   OnMouseDown    := OnMouseDownComment;
-   OnMouseMove    := OnMouseMoveComment;
-   OnDblClick     := OnDblClickComment;
-   OnChange       := OnChangeComment;
-   OnContextPopup := OnContextPopupComment;
-   OnMouseLeave   := OnMouseLeaveComment;
+   OnEndDrag := OnEndDragComment;
+   OnMouseLeave := OnMouseLeaveComment;
 end;
 
 function TComment.Clone(APage: TBlockTabSheet; const ATopLeft: TPoint): TComment;
@@ -128,7 +123,7 @@ destructor TComment.Destroy;
 begin
    Hide;
    FPage.Box.SetScrollBars;
-   IsHeader := false;
+   IsHeader := False;
    inherited Destroy;
 end;
 
@@ -215,14 +210,15 @@ begin
       GProject.HeaderComment := nil;
 end;
 
-procedure TComment.OnMouseDownComment(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TComment.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+   inherited;
    if Button = mbLeft then
    begin
       if ssShift in Shift then
       begin
          if Trim(Text) <> '' then
-            BeginDrag(true)
+            BeginDrag(True)
       end
       else
       begin
@@ -246,8 +242,9 @@ begin
       result := Handle;
 end;
 
-procedure TComment.OnChangeComment(Sender: TObject);
+procedure TComment.Change;
 begin
+   inherited;
    GProject.SetChanged;
    if IsHeader then
       TInfra.UpdateCodeEditor;
@@ -255,13 +252,15 @@ begin
    NavigatorForm.Invalidate;
 end;
 
-procedure TComment.OnDblClickComment(Sender: TObject);
+procedure TComment.DblClick;
 begin
+   inherited;
    SelectAll;
 end;
 
-procedure TComment.OnMouseMoveComment(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TComment.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
+   inherited;
    var pnt := Point(X, Y);
    if Rect(Width-5, 0, Width, Height-5).Contains(pnt) then
       Cursor := crSizeWE
@@ -277,10 +276,10 @@ procedure TComment.NCHitTest(var Msg: TWMNCHitTest);
 begin
    inherited;
    ChangeBorderStyle(bsSingle);
-   FMouseLeave := true;
+   FMouseLeave := True;
    if GetAsyncKeyState(vkLButton) <> 0 then
    begin
-      FMouseLeave := false;
+      FMouseLeave := False;
       case Cursor of
          crSizeWE:   Msg.Result := HTRIGHT;
          crSizeNS:   Msg.Result := HTBOTTOM;
@@ -299,61 +298,60 @@ end;
 
 procedure TComment.OnContextPopupComment(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
 begin
-   Handled := true;
+   Handled := True;
    var pnt := ClientToScreen(MousePos);
    PopupMenu.PopupComponent := Self;
    PopupMenu.Popup(pnt.X, pnt.Y);
 end;
 
-procedure TComment.ImportFromXMLTag(ATag: IXMLElement; APinControl: TControl);
+procedure TComment.ImportFromXML(ANode: IXMLNode; APinControl: TControl);
 begin
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      SetBounds(TXMLProcessor.GetIntFromAttr(ATag, 'x'),
-                TXMLProcessor.GetIntFromAttr(ATag, 'y'),
-                TXMLProcessor.GetIntFromAttr(ATag, 'w'),
-                TXMLProcessor.GetIntFromAttr(ATag, 'h'));
-      var v := TXMLProcessor.GetIntFromAttr(ATag, FONT_SIZE_ATTR);
+      SetBounds(GetNodeAttrInt(ANode, 'x'),
+                GetNodeAttrInt(ANode, 'y'),
+                GetNodeAttrInt(ANode, 'w'),
+                GetNodeAttrInt(ANode, 'h'));
+      var v := GetNodeAttrInt(ANode, FONT_SIZE_ATTR);
       if v in FLOWCHART_VALID_FONT_SIZES then
          Font.Size := v;
-      FZOrder := TXMLProcessor.GetIntFromAttr(ATag, Z_ORDER_ATTR, -1);
-      v := TXMLProcessor.GetIntFromAttr(ATag, FONT_STYLE_ATTR);
+      FZOrder := GetNodeAttrInt(ANode, Z_ORDER_ATTR);
+      v := GetNodeAttrInt(ANode, FONT_STYLE_ATTR, 0);
       if v > 0 then
          Font.Style := TInfra.DecodeFontStyle(v);
-      Text := ATag.Text;
-      Visible := TXMLProcessor.GetBoolFromAttr(ATag, 'v');
+      Text := ANode.Text;
+      Visible := GetNodeAttrBool(ANode, 'v');
       FPinControl := APinControl;
-      IsHeader := TXMlProcessor.GetBoolFromAttr(ATag, IS_HEADER_ATTR);
-      GetFromXML(ATag);
+      IsHeader := GetNodeAttrBool(ANode, IS_HEADER_ATTR);
+      GetFromXML(ANode);
    end;
 end;
 
-procedure TComment.ExportToXMLTag(ATag: IXMLElement);
+procedure TComment.ExportToXML(ANode: IXMLNode);
 begin
    if (FPinControl = nil) and (GProject.FindMainBlockForControl(Self) = nil) then
-      ExportToXMLTag2(ATag);
+      ExportToXML2(ANode);
 end;
 
-procedure TComment.ExportToXMLTag2(ATag: IXMLElement);
+procedure TComment.ExportToXML2(ANode: IXMLNode);
 begin
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      var tag := ATag.OwnerDocument.CreateElement(COMMENT_ATTR);
-      TXMLProcessor.AddCDATA(tag, Text);
-      tag.SetAttribute('x', Left.ToString);
-      tag.SetAttribute('y', Top.ToString);
-      tag.SetAttribute('w', Width.ToString);
-      tag.SetAttribute('h', Height.ToString);
-      tag.SetAttribute(FONT_SIZE_ATTR, Font.Size.ToString);
-      tag.SetAttribute('v', Visible.ToString);
-      tag.SetAttribute(Z_ORDER_ATTR, FZOrder.ToString);
-      tag.SetAttribute(IS_HEADER_ATTR, IsHeader.ToString);
+      var node := AppendNode(ANode, COMMENT_TAG);
+      SetCDataChild(node, Text);
+      SetNodeAttrInt(node, 'x', Left);
+      SetNodeAttrInt(node, 'y', Top);
+      SetNodeAttrInt(node, 'w', Width);
+      SetNodeAttrInt(node, 'h', Height);
+      SetNodeAttrInt(node, FONT_SIZE_ATTR, Font.Size);
+      SetNodeAttrBool(node, 'v', Visible);
+      SetNodeAttrInt(node, Z_ORDER_ATTR, FZOrder);
+      SetNodeAttrBool(node, IS_HEADER_ATTR, IsHeader);
       if not FPage.IsMain then
-         tag.SetAttribute(PAGE_CAPTION_ATTR, FPage.Caption);
+         SetNodeAttrStr(node, PAGE_CAPTION_ATTR, FPage.Caption);
       if Font.Style <> [] then
-         tag.SetAttribute(FONT_STYLE_ATTR, TInfra.EncodeFontStyle(Font.Style).ToString);
-      SaveInXML(tag);
-      ATag.AppendChild(tag);
+         SetNodeAttrInt(node, FONT_STYLE_ATTR, TInfra.EncodeFontStyle(Font.Style));
+      SaveInXML(node);
    end;
 end;
 

@@ -1,7 +1,7 @@
 {
    Copyright (C) 2006 The devFlowcharter project.
    The initial author of this file is Michal Domagala.
-   
+
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License
    as published by the Free Software Foundation; either version 2
@@ -32,7 +32,7 @@ uses
 const
    PRIMARY_BRANCH_IDX = 1;
    LAST_LINE = -1;
-   
+
 type
 
    TInitParms = record
@@ -66,16 +66,15 @@ type
          FFrame,
          FMouseLeave: boolean;
          FShape: TColorShape;
+         FRedArrow: integer;                // indicates active arrow; -1: none, 0: bottom, 1: branch1, 2: branch2...
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode; AAlignment: TAlignment);
-         procedure MyOnMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-         procedure MyOnMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-         procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); virtual;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); virtual;
-         procedure MyOnDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
-         procedure MyOnDragDrop(Sender, Source: TObject; X, Y: Integer);
+         procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+         procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
+         procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); override;
+         procedure DragDrop(Source: TObject; X, Y: Integer); override;
          procedure MyOnChange(Sender: TObject);
-         procedure MyOnDblClick(Sender: TObject);
-         procedure OnChangeMemo(Sender: TObject); virtual;
+         procedure DblClick; override;
          procedure WMMouseLeave(var Msg: TMessage); message WM_MOUSELEAVE;
          procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
          procedure NCHitTest(var Msg: TWMNCHitTest); message WM_NCHITTEST;
@@ -84,8 +83,8 @@ type
          procedure WMWindowPosChanged(var Msg: TWMWindowPosChanged); message WM_WINDOWPOSCHANGED;
          procedure Paint; override;
          procedure DrawI;
-         function DrawTextLabel(x, y: integer; const AText: string; ARightJust: boolean = false; ADownJust: boolean = false; APrint: boolean = true): TRect;
-         procedure DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = false; downJust: boolean = false);
+         function DrawTextLabel(x, y: integer; const AText: string; ARightJust: boolean = False; ADownJust: boolean = False; APrint: boolean = True): TRect;
+         procedure DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = False; downJust: boolean = False);
          function GetId: integer;
          function PerformEditorUpdate: boolean;
          procedure Select;
@@ -108,7 +107,7 @@ type
          function ProcessComments: boolean;
          function IsAncestor(AParent: TObject): boolean;
          function GetErrorMsg(AEdit: TCustomEdit): string;
-         procedure SaveInXML2(ATag: IXMLElement);
+         procedure SaveInXML2(ANode: IXMLNode);
          procedure ExitSizeMove;
          procedure SetBrushColor(AShape: TColorShape);
          function GetBlockParms: TBlockParms; virtual;
@@ -120,7 +119,7 @@ type
          IPoint: TPoint;          // points to I mark
          BottomHook: integer;
          TopHook: TPoint;
-         Ired: Integer;           // indicates active arrow; -1: none, 0: bottom, 1: branch1, 2: branch2...
+         property RedArrow: integer read FRedArrow;
          property Frame: boolean read FFrame write SetFrame;
          property TopParentBlock: TGroupBlock read FTopParentBlock;
          property Page: TBlockTabSheet read GetPage write SetPage;
@@ -138,8 +137,8 @@ type
          procedure PerformRefreshStatements;
          procedure PopulateComboBoxes; virtual;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; virtual;
-         function GetFromXML(ATag: IXMLElement): TError; virtual;
-         procedure SaveInXML(ATag: IXMLElement); virtual;
+         function GetFromXML(ANode: IXMLNode): TError; virtual;
+         procedure SaveInXML(ANode: IXMLNode); virtual;
          function FillTemplate(const ALangId: string; const ATemplate: string = ''): string; virtual;
          function FillCodedTemplate(const ALangId: string): string; virtual;
          function GetDescTemplate(const ALangId: string): string; virtual;
@@ -148,11 +147,12 @@ type
          function IsMouseAtSelectPos: boolean;
          function IsCursorResize: boolean;
          function CanInsertReturnBlock: boolean; virtual;
-         procedure ExportToXMLTag(ATag: IXMLElement);
-         function ImportFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
+         procedure ExportToXML(ANode: IXMLNode);
+         function ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
          procedure ExportToGraphic(AGraphic: TGraphic); virtual;
          procedure UpdateEditor(AEdit: TCustomEdit); virtual;
          function SkipUpdateEditor: boolean;
+         procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          function RetrieveFocus(AInfo: TFocusInfo): boolean; virtual;
          function CanBeFocused: boolean; virtual;
          function GetTreeNodeText(ANodeOffset: integer = 0): string; virtual;
@@ -172,26 +172,21 @@ type
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; virtual;
          function CanRemove: boolean;
          function IsBoldDesc: boolean; virtual;
-         function GetComments(AInFront: boolean = false): IEnumerable<TComment>;
+         function GetComments(AInFront: boolean = False): IEnumerable<TComment>;
          function GetPinComments: IEnumerable<TComment>;
-         procedure SetVisible(AVisible: boolean; ASetComments: boolean = true); virtual;
+         procedure SetVisible(AVisible: boolean; ASetComments: boolean = True); virtual;
          procedure BringAllToFront;
          function PinComments: integer;
-         function UnPinComments: integer; virtual;
+         procedure UnPinComments; virtual;
          procedure CloneComments(ASource: TBlock);
-         procedure ImportCommentsFromXML(ATag: IXMLElement);
+         procedure ImportCommentsFromXML(ANode: IXMLNode);
          procedure CloneFrom(ABlock: TBlock); virtual;
          function GetExportFileName: string; virtual;
          function ExportToXMLFile(const AFile: string): TError; virtual;
-         procedure OnMouseLeave(AClearRed: boolean = true); virtual;
+         procedure OnMouseLeave(AClearRedArrow: boolean = True); virtual;
          procedure LockDrawing;
          procedure UnlockDrawing;
          function FindSelectedBlock: TBlock; virtual;
-      published
-         property Color;
-         property OnMouseDown;
-         property OnResize;
-         property OnMouseMove;
    end;
 
    TGroupBlock = class(TBlock)    // block which can aggregate child blocks
@@ -205,8 +200,8 @@ type
          FFixedBranches: integer;
          FDiamond: TDiamond;
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
-         procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure SetWidth(AMinX: integer); virtual;
          procedure LinkAllBlocks;
          procedure LinkBlocks(ABranch: TBranch);
@@ -235,19 +230,19 @@ type
          procedure PopulateComboBoxes; override;
          function GetMemoEx: TMemoEx; override;
          function CanInsertReturnBlock: boolean; override;
-         function GetFromXML(ATag: IXMLElement): TError; override;
-         procedure SaveInXML(ATag: IXMLElement); override;
+         function GetFromXML(ANode: IXMLNode): TError; override;
+         procedure SaveInXML(ANode: IXMLNode); override;
          procedure GenerateTemplateSection(ALines: TStringList; ATemplate: TStringList; const ALangId: string; ADeep: integer); override;
          function GetAllBlocks: IEnumerable<TBlock>;
          procedure ResizeWithDrawLock;
          function GetFoldedText: string;
          procedure SetFoldedText(const AText: string);
          function CountErrWarn: TErrWarnCount; override;
-         procedure SetVisible(AVisible: boolean; ASetComments: boolean = true); override;
+         procedure SetVisible(AVisible: boolean; ASetComments: boolean = True); override;
          function CanBeFocused: boolean; override;
-         function UnPinComments: integer; override;
+         procedure UnPinComments; override;
          procedure CloneFrom(ABlock: TBlock); override;
-         procedure OnMouseLeave(AClearRed: boolean = true); override;
+         procedure OnMouseLeave(AClearRedArrow: boolean = True); override;
          function GetBranchIndexByControl(AControl: TControl): integer;
          function RemoveBranch(AIndex: integer): boolean;
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
@@ -285,7 +280,8 @@ implementation
 uses
    System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, System.TypInfo,
    System.SysUtils, System.UITypes, Main_Block, Return_Block, Infrastructure, BlockFactory,
-   UserFunction, XMLProcessor, Navigator_Form, LangDefinition, FlashThread, Main_Form, Constants;
+   UserFunction, XMLProcessor, Navigator_Form, LangDefinition, FlashThread, Main_Form,
+   OmniXMLUtils, Constants;
 
 type
    TControlHack = class(TControl);
@@ -315,34 +311,26 @@ begin
       Parent := Page.Box;
    end;
 
-   ParentFont  := true;
-   ParentColor := true;
-   Ctl3D       := false;
+   ParentFont  := True;
+   ParentColor := True;
+   Ctl3D       := False;
    Color       := Page.Box.Color;
    Font.Name   := GSettings.FlowchartFontName;
    PopupMenu   := Page.Form.pmPages;
    DoubleBuffered := GSettings.EnableDBuffering;
    ControlStyle := ControlStyle + [csOpaque];
-   ParentBackground := false;
+   ParentBackground := False;
    Canvas.TextFlags := Canvas.TextFlags or ETO_OPAQUE;
    Canvas.Font.Assign(Font);
    SetBounds(ABlockParms.x, ABlockParms.y, ABlockParms.w, ABlockParms.h);
 
-   Ired := -1;
+   FRedArrow := -1;
    FId := GProject.Register(Self, ABlockParms.bid);
-   FMouseLeave := true;
+   FMouseLeave := True;
    FShape := AShape;
    FStatement := TStatement.Create(Self, AParserMode, AAlignment);
    FStatement.EditorAction := UpdateEditor;
    FStatement.Color := GSettings.GetShapeColor(FShape);
-
-   OnMouseDown := MyOnMouseDown;
-   OnMouseUp   := MyOnMouseUp;
-   OnMouseMove := MyOnMouseMove;
-   OnCanResize := MyOnCanResize;
-   OnDblClick  := MyOnDblClick;
-   OnDragOver  := MyOnDragOver;
-   OnDragDrop  := MyOnDragDrop;
 end;
 
 constructor TGroupBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
@@ -354,16 +342,14 @@ begin
 
    FMemoFolder := TMemoEx.Create(Self);
    FMemoFolder.Parent := Self;
-   FMemoFolder.Visible := false;
+   FMemoFolder.Visible := False;
    FMemoFolder.SetBounds(4, 4, 132, 55);
-   FMemoFolder.DoubleBuffered := true;
+   FMemoFolder.DoubleBuffered := True;
    FMemoFolder.Color := GSettings.GetShapeColor(shpFolder);
    FMemoFolder.Font.Assign(FStatement.Font);
-   FMemoFolder.OnMouseDown := OnMouseDown;
    FMemoFolder.Font.Color := clNavy;
-   FMemoFolder.OnChange := OnChangeMemo;
 
-   Expanded := true;
+   Expanded := True;
 
    FFixedBranches := 1;
 
@@ -417,7 +403,7 @@ begin
       FMemoFolder.CloneFrom(grpBlock.FMemoFolder);
       if not grpBlock.Expanded then
       begin
-         Expanded := false;
+         Expanded := False;
          FFoldParms := grpBlock.FFoldParms;
          Constraints.MinWidth := 140;
          Constraints.MinHeight := 54;
@@ -431,7 +417,7 @@ begin
          IPoint.X := BottomHook + 30;
          IPoint.Y := FMemoFolder.Height + 15;
          TopHook.X := BottomHook;
-         FMemoFolder.Visible := true;
+         FMemoFolder.Visible := True;
       end
       else
       begin
@@ -499,16 +485,16 @@ begin
          if FHResize then
          begin
             if FParentBlock <> nil then
-               FParentBlock.ResizeHorz(true);
-            FHResize := false;
+               FParentBlock.ResizeHorz(True);
+            FHResize := False;
          end;
          if FVResize then
          begin
             if Self is TGroupBlock then
                TGroupBlock(Self).LinkAllBlocks;
             if FParentBlock <> nil then
-               FParentBlock.ResizeVert(true);
-            FVResize := false;
+               FParentBlock.ResizeVert(True);
+            FVResize := False;
          end;
       finally
             FTopParentBlock.UnLockDrawing;
@@ -540,33 +526,31 @@ begin
    end;
 end;
 
-procedure TBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TBlock.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
-
+   inherited;
    var p := Point(X, Y);
-
    if IsAtSelectPos(p) then
       Select
    else
       DeSelect;
-
    SetCursor(p);
 
    if Rect(BottomPoint.X-5, BottomPoint.Y, BottomPoint.X+5, Height).Contains(p) then
    begin
       DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1), arrEnd, clRed);
-      Ired := 0;
+      FRedArrow := 0;
       Cursor := TCursor(GCustomCursor);
    end
-   else if Ired = 0 then
+   else if FRedArrow = 0 then
    begin
       DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1));
-      Ired := -1;
+      FRedArrow := -1;
       Cursor := crDefault;
    end;
 end;
 
-procedure TGroupBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TGroupBlock.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
    if Expanded then
    begin
@@ -576,20 +560,20 @@ begin
          if Rect(p.X-5, TopHook.Y, p.X+5, p.Y).Contains(Point(X, Y)) then
          begin
             DrawArrow(Point(p.X, TopHook.Y), p, arrEnd, clRed);
-            Ired := i;
+            FRedArrow := i;
             Cursor := TCursor(GCustomCursor);
             break;
          end
-         else if Ired = i then
+         else if FRedArrow = i then
          begin
             DrawArrow(Point(p.X, TopHook.Y), p);
-            Ired := -1;
+            FRedArrow := -1;
             Cursor := crDefault;
             break;
          end;
       end;
    end;
-   inherited MyOnMouseMove(Sender, Shift, X, Y);
+   inherited;
 end;
 
 function TBlock.GetBlockParms: TBlockParms;
@@ -616,7 +600,7 @@ end;
 
 function TBlock.IsAncestor(AParent: TObject): boolean;
 begin
-   result := false;
+   result := False;
    if AParent <> nil then
    begin
       var lParent := Parent;
@@ -624,7 +608,7 @@ begin
       begin
          if lParent = AParent then
          begin
-            result := true;
+            result := True;
             break;
          end;
          lParent := lParent.Parent;
@@ -632,18 +616,18 @@ begin
    end;
 end;
 
-procedure TBlock.MyOnDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
+procedure TBlock.DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
 begin
    var shiftState: TShiftState := [];
    var isShift := GetAsyncKeyState(vkShift) <> 0;
    if isShift then
       shiftState := [ssShift];
-   MyOnMouseMove(Sender, shiftState, X, Y);
-   if (Ired < 0) or (not (Source is TBlock)) or (Source is TMainBlock) or (Source is TReturnBlock) or ((not isShift) and ((Source = Self) or IsAncestor(Source))) then
-      Accept := false;
+   MouseMove(shiftState, X, Y);
+   if (FRedArrow < 0) or (not (Source is TBlock)) or (Source is TMainBlock) or (Source is TReturnBlock) or ((not isShift) and ((Source = Self) or IsAncestor(Source))) then
+      Accept := False;
 end;
 
-procedure TBlock.MyOnDragDrop(Sender, Source: TObject; X, Y: Integer);
+procedure TBlock.DragDrop(Source: TObject; X, Y: Integer);
 var
    srcPage: TBlockTabSheet;
    mForm: TMainForm;
@@ -688,33 +672,33 @@ begin
    if FMouseLeave then
       OnMouseLeave
    else
-      FMouseLeave := true;
+      FMouseLeave := True;
 end;
 
-procedure TBlock.OnMouseLeave(AClearRed: boolean = true);
+procedure TBlock.OnMouseLeave(AClearRedArrow: boolean = True);
 begin
    Cursor := crDefault;
    DeSelect;
-   if Ired = 0 then
+   if FRedArrow = 0 then
       DrawArrow(BottomPoint, Point(BottomPoint.X, Height-1));
-   if AClearRed then
-      Ired := -1;
+   if AClearRedArrow then
+      FRedArrow := -1;
    if FVResize or FHResize then
       SendMessage(Handle, WM_NCHITTEST, 0, 0);
 end;
 
-procedure TGroupBlock.OnMouseLeave(AClearRed: boolean = true);
+procedure TGroupBlock.OnMouseLeave(AClearRedArrow: boolean = True);
 begin
-   var br := GetBranch(Ired);
+   var br := GetBranch(FRedArrow);
    if br <> nil then
       DrawArrow(Point(br.Hook.X, TopHook.Y), br.Hook);
-   inherited OnMouseLeave(AClearRed);
+   inherited OnMouseLeave(AClearRedArrow);
 end;
 
-procedure TBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
-   if FHResize and Resize then
+   result := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
+   if FHResize and result then
    begin
       BottomPoint.X := NewWidth div 2;
       TopHook.X := BottomPoint.X;
@@ -722,10 +706,10 @@ begin
    end;
 end;
 
-procedure TGroupBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TGroupBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
-   if FHResize and Resize then
+   result := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
+   if FHResize and result then
    begin
       if Expanded then
          Inc(BottomPoint.X, NewWidth-Width)
@@ -736,7 +720,7 @@ begin
          IPoint.X := BottomPoint.X + 30;
       end;
    end;
-   if FVResize and Resize then
+   if FVResize and result then
    begin
       if Expanded then
          Inc(Branch.Hook.Y, NewHeight-Height)
@@ -748,8 +732,9 @@ begin
    end;
 end;
 
-procedure TBlock.MyOnDblClick(Sender: TObject);
+procedure TBlock.DblClick;
 begin
+   inherited;
    if IsMouseAtSelectPos then
       ChangeFrame;
 end;
@@ -780,16 +765,17 @@ begin
    result := Bounds(IPoint.X-5, IPoint.Y, 10, 10).Contains(APoint);
 end;
 
-procedure TBlock.MyOnMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TBlock.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+   inherited;
    if Button = mbLeft then
    begin
       if IsAtSelectPos(Point(X, Y)) then
-         BeginDrag(false, 3)
+         BeginDrag(False, 3)
       else if not IsCursorResize then
       begin
          var menuItem: TMenuItem := nil;
-         if Ired >= 0 then
+         if FRedArrow >= 0 then
          begin
             var mForm := Page.Form;
             case GCustomCursor of
@@ -828,7 +814,7 @@ begin
             SendMessage(FTopParentBlock.Handle, WM_SYSCOMMAND, $F012, 0);
             br := FTopParentBlock.BoundsRect;
             if (b <> br.Bottom) or (r <> br.Right) then
-               FTopParentBlock.OnResize(FTopParentBlock)
+               FTopParentBlock.Resize
             else
                FTopParentBlock.BringAllToFront;
          end;
@@ -864,38 +850,38 @@ begin
    inherited;
    if (GetAsyncKeyState(vkLButton) <> 0) and not Mouse.IsDragging then
    begin
-      FMouseLeave := false;
+      FMouseLeave := False;
       case Cursor of
          crSizeWE:
          begin
             Msg.Result := HTRIGHT;
-            FHResize := true;
+            FHResize := True;
             BringToFront;
          end;
          crSizeNS:
          begin
             Msg.Result := HTBOTTOM;
-            FVResize := true;
+            FVResize := True;
             BringToFront;
          end;
          crSizeNWSE:
          begin
             Msg.Result := HTBOTTOMRIGHT;
-            FHResize := true;
-            FVResize := true;
+            FHResize := True;
+            FVResize := True;
             BringToFront;
          end;
       end;
    end;
 end;
 
-procedure TBlock.MyOnMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TBlock.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
    if Button = mbRight then
    begin
       var p := ClientToScreen(Point(X, Y));
       PopupMenu.PopupComponent := Self;
-      FMouseLeave := false;
+      FMouseLeave := False;
       PopupMenu.Popup(p.X, p.Y);
    end;
 end;
@@ -919,8 +905,8 @@ procedure TGroupBlock.ResizeWithDrawLock;
 begin
    FTopParentBlock.LockDrawing;
    try
-      ResizeHorz(true);
-      ResizeVert(true);
+      ResizeHorz(True);
+      ResizeVert(True);
    finally
       FTopParentBlock.UnlockDrawing;
    end;
@@ -1059,20 +1045,19 @@ begin
    PutTextControls;
 end;
 
-function TBlock.GetComments(AInFront: boolean = false): IEnumerable<TComment>;
+function TBlock.GetComments(AInFront: boolean = False): IEnumerable<TComment>;
 begin
    var list := TList<TComment>.Create;
    if Visible then
    begin
-      var lPage := Page;
       for var comment in GProject.GetComments do
       begin
-         if comment.Page = lPage then
+         if comment.Page = Page then
          begin
-            var isFront := true;
+            var isFront := True;
             if AInFront then
                isFront := IsInFront(comment);
-            if isFront and (comment.PinControl = nil) and ClientRect.Contains(ParentToClient(comment.BoundsRect.TopLeft, lPage.Box)) then
+            if isFront and (comment.PinControl = nil) and ClientRect.Contains(ParentToClient(comment.BoundsRect.TopLeft, Page.Box)) then
                list.Add(comment);
          end
       end;
@@ -1089,7 +1074,7 @@ end;
 
 function TBlock.IsInFront(AControl: TWinControl): boolean;
 begin
-   result := false;
+   result := False;
    if AControl <> nil then
    begin
       var hnd := GetWindow(AControl.Handle, GW_HWNDLAST);
@@ -1097,7 +1082,7 @@ begin
       begin
          if hnd = FTopParentBlock.Handle then
          begin
-            result := true;
+            result := True;
             break;
          end
          else if hnd = AControl.Handle then
@@ -1111,7 +1096,7 @@ procedure TBlock.MoveComments(x, y: integer);
 begin
    if (x <> 0) and (y <> 0) and (Left <> 0) and (Top <> 0) and ((x <> Left) or (y <> Top)) then
    begin
-      for var comment in GetComments(true) do
+      for var comment in GetComments(True) do
       begin
          if comment.Visible then
             TInfra.MoveWinTopZ(comment, comment.Left+x-Left, comment.Top+y-Top);
@@ -1153,7 +1138,7 @@ end;
 procedure TBlock.PerformRefreshStatements;
 begin
     var b := NavigatorForm.InvalidateIndicator;
-    NavigatorForm.InvalidateIndicator := false;
+    NavigatorForm.InvalidateIndicator := False;
     RefreshStatements;
     NavigatorForm.InvalidateIndicator := b;
 end;
@@ -1161,7 +1146,7 @@ end;
 procedure TBlock.RefreshStatements;
 begin
     var b1 := FRefreshMode;
-    FRefreshMode := true;
+    FRefreshMode := True;
     try
        for var i := 0 to ControlCount-1 do
        begin
@@ -1261,7 +1246,7 @@ end;
 procedure TGroupBlock.ExpandAll;
 begin
    if not Expanded then
-      ExpandFold(true);
+      ExpandFold(True);
    for var block in GetAllBlocks do
    begin
       if block is TGroupBlock then
@@ -1333,7 +1318,7 @@ begin
    end;
 end;
 
-procedure TBlock.DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = false; downJust: boolean = false);
+procedure TBlock.DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = False; downJust: boolean = False);
 begin
    if GSettings.ShowBlockLabels and not AText.IsEmpty then
    begin
@@ -1351,7 +1336,7 @@ begin
    end;
 end;
 
-function TBlock.DrawTextLabel(x, y: integer; const AText: string; ARightJust: boolean = false; ADownJust: boolean = false; APrint: boolean = true): TRect;
+function TBlock.DrawTextLabel(x, y: integer; const AText: string; ARightJust: boolean = False; ADownJust: boolean = False; APrint: boolean = True): TRect;
 begin
    var te := TSize.Create(0, 0);
    if not AText.IsEmpty then
@@ -1420,7 +1405,7 @@ begin
    Canvas.Pen.Color := AColor;
    Canvas.Brush.Color := AColor;
    Canvas.Polygon([p,
-                   Point(p.X+MD[isVert, false], p.Y+MD[isVert, true]),
+                   Point(p.X+MD[isVert, False], p.Y+MD[isVert, True]),
                    Point(aX, aY),
                    p]);
    Canvas.MoveTo(fromX, fromY);
@@ -1547,16 +1532,16 @@ end;
 
 function TBlock.CanInsertReturnBlock: boolean;
 begin
-   result := (Ired = 0) and (FParentBranch <> nil) and (FParentBranch.Count > 0) and (FParentBranch.Last = Self);
+   result := (FRedArrow = 0) and (FParentBranch <> nil) and (FParentBranch.Count > 0) and (FParentBranch.Last = Self);
 end;
 
 function TGroupBlock.CanInsertReturnBlock: boolean;
 begin
-   if Ired = 0 then
+   if FRedArrow = 0 then
       result := (FParentBranch <> nil) and (FParentBranch.Count > 0) and (FParentBranch.Last = Self)
    else
    begin
-      var br := GetBranch(Ired);
+      var br := GetBranch(FRedArrow);
       result := (br <> nil) and (br.Count = 0);
    end;
 end;
@@ -1616,23 +1601,15 @@ begin
       NavigatorForm.Invalidate;
 end;
 
-procedure TBlock.OnChangeMemo(Sender: TObject);
-begin
-   if Sender is TMemoEx then
-      TMemoEx(Sender).UpdateScrolls;
-   if NavigatorForm.InvalidateIndicator then
-      NavigatorForm.Invalidate;
-end;
-
 function TBlock.CanBeFocused: boolean;
 begin
-   result := true;
+   result := True;
    var lParent := FParentBlock;
    while lParent <> nil do
    begin
       if not lParent.Expanded then
       begin
-         result := false;
+         result := False;
          break;
       end;
       lParent := lParent.ParentBlock;
@@ -1647,7 +1624,7 @@ begin
             result := func.Header.chkBodyVisible.Checked;
       end;
       if result and (FParentBranch <> nil) and (FParentBranch.IndexOf(Self) = -1) then
-         result := false;
+         result := False;
    end;
 end;
 
@@ -1675,7 +1652,7 @@ var
    memo: TCustomMemo;
    box: TScrollBoxEx;
 begin
-   result := false;
+   result := False;
    if ContainsControl(AInfo.FocusEdit) and AInfo.FocusEdit.CanFocus then
    begin
       box := Page.Box;
@@ -1712,7 +1689,7 @@ begin
       end;
       AInfo.FocusEditCallBack := UpdateEditor;
       TFlashThread.Create(AInfo);
-      result := true;
+      result := True;
    end;
 end;
 
@@ -1739,7 +1716,7 @@ begin
       if TInfra.IsNOkColor(TControlHack(textControl).Font.Color) then
       begin
          AParentNode.MakeVisible;
-         AParentNode.Expand(false);
+         AParentNode.Expand(False);
       end;
    end;
 end;
@@ -1801,7 +1778,7 @@ begin
    begin
       GClpbrd.UndoObject.Free;
       DeSelect;
-      SetVisible(false);
+      SetVisible(False);
       if FParentBranch <> nil then
       begin
          FParentBranch.Remove(Self);
@@ -1822,7 +1799,7 @@ begin
       if ANode <> nil then
          result := RemoveBranch(GetBranchIndexByControl(ANode.Data))
       else
-         result := false;
+         result := False;
       if not result then
          result := inherited Remove(ANode);
    end;
@@ -1830,48 +1807,43 @@ end;
 
 function TBlock.IsBoldDesc: boolean;
 begin
-   result := false;
+   result := False;
 end;
 
 function TBlock.PinComments: integer;
 begin
    result := 0;
-   var lPage := Page;
-   var p := ClientToParent(TPoint.Zero, lPage.Box);
+   var p := ClientToParent(TPoint.Zero, Page.Box);
    for var comment in GetComments do
    begin
-      comment.Visible := false;
+      comment.Visible := False;
       TInfra.MoveWin(comment, comment.Left - p.X, comment.Top - p.Y);
       comment.PinControl := Self;
-      comment.Parent := lPage;
+      comment.Parent := Page;
       Inc(result);
    end;
 end;
 
-function TBlock.UnPinComments: integer;
+procedure TBlock.UnPinComments;
 begin
-   result := 0;
-   var box := Page.Box;
-   var p := ClientToParent(TPoint.Zero, box);
+   var p := ClientToParent(TPoint.Zero, Page.Box);
    for var comment in GetPinComments do
    begin
       TInfra.MoveWin(comment, comment.Left + p.X, comment.Top + p.Y);
-      comment.Parent := box;
-      comment.Visible := true;
+      comment.Parent := Page.Box;
+      comment.Visible := True;
       comment.PinControl := nil;
       comment.BringToFront;
-      Inc(result);
    end;
 end;
 
-function TGroupBlock.UnPinComments: integer;
+procedure TGroupBlock.UnPinComments;
 begin
-   result := 0;
    if Expanded then
-      result := inherited UnPinComments;
+      inherited;
 end;
 
-procedure TBlock.SetVisible(AVisible: boolean; ASetComments: boolean = true);
+procedure TBlock.SetVisible(AVisible: boolean; ASetComments: boolean = True);
 begin
    if Visible <> AVisible then
    begin
@@ -1888,10 +1860,10 @@ end;
 
 function TBlock.ExportToXMLFile(const AFile: string): TError;
 begin
-   result := TXMLProcessor.ExportToXMLFile(ExportToXMLTag, AFile);
+   result := TXMLProcessor.ExportToXMLFile(ExportToXML, AFile);
 end;
 
-procedure TGroupBlock.SetVisible(AVisible: boolean; ASetComments: boolean = true);
+procedure TGroupBlock.SetVisible(AVisible: boolean; ASetComments: boolean = True);
 begin
    inherited SetVisible(AVisible, Expanded);
 end;
@@ -1903,7 +1875,7 @@ end;
 
 function TGroupBlock.RemoveBranch(AIndex: integer): boolean;
 begin
-   result := false;
+   result := False;
    var br := GetBranch(AIndex);
    if (br <> nil) and (AIndex > FFixedBranches) then
    begin
@@ -1914,7 +1886,7 @@ begin
       begin
          obj.Free;
          AfterRemovingBranch;
-         result := true;
+         result := True;
       end;
    end;
 end;
@@ -1927,7 +1899,7 @@ end;
 
 procedure TGroupBlock.ExpandFold(AResize: boolean);
 var
-   tmpWidth, tmpHeight, i: integer;
+   tmpWidth, tmpHeight: integer;
    block: TBlock;
    textControl: TCustomEdit;
 begin
@@ -1994,81 +1966,77 @@ begin
       FParentBlock.ResizeWithDrawLock;
       NavigatorForm.Invalidate;
    end;
-   
+
    UnPinComments;
 end;
 
-procedure TGroupBlock.SaveInXML(ATag: IXMLElement);
-var
-   brx, fw, fh, i: integer;
-   txt: string;
-   tag1, tag2: IXMLElement;
-   br: TBranch;
-   unPin: boolean;
-   comment: TComment;
-   block: TBlock;
-begin
-   SaveInXML2(ATag);
-   if ATag <> nil then
+procedure TGroupBlock.SaveInXML(ANode: IXMLNode);
+
+   function IsAlreadyExported(AComment: TComment; AExportedComments: IXMLNodeList): boolean;
    begin
-      unPin := false;
-      if Expanded then
+      result := False;
+      AExportedComments.Reset;
+      var exportedComment := AExportedComments.NextNode;
+      while exportedComment <> nil do
       begin
-         fw := FFoldParms.Width;
-         fh := FFoldParms.Height;
-         brx := Branch.Hook.X;
-         unPin := PinComments > 0;
-      end
+         var zOrder := GetNodeAttrInt(exportedComment, Z_ORDER_ATTR);
+         var pageCaption := GetNodeAttrStr(exportedComment, PAGE_CAPTION_ATTR, '');
+         if (zOrder = AComment.GetZOrder) and
+            ((pageCaption = AComment.Page.Caption) or (pageCaption.IsEmpty and AComment.Page.IsMain)) then
+         begin
+            result := True;
+            break;
+         end;
+         exportedComment := AExportedComments.NextNode;
+      end;
+   end;
+
+begin
+   SaveInXML2(ANode);
+   if ANode <> nil then
+   begin
+      var unPin := False;
+      if Expanded then
+         unPin := PinComments > 0
       else
       begin
-         fw := Width;
-         fh := Height;
-         brx := FFoldParms.BranchPoint.X;
-         ATag.SetAttribute('h', FFoldParms.Height.ToString);
-         ATag.SetAttribute('w', FFoldParms.Width.ToString);
-         ATag.SetAttribute('bh', FFoldParms.BottomHook.ToString);
+         SetNodeAttrInt(ANode, 'h', FFoldParms.Height);
+         SetNodeAttrInt(ANode, 'w', FFoldParms.Width);
+         SetNodeAttrInt(ANode, 'bh', FFoldParms.BottomHook);
       end;
 
       try
-         ATag.SetAttribute('brx', brx.ToString);
-         ATag.SetAttribute('bry', Branch.Hook.Y.ToString);
-         ATag.SetAttribute('fw', fw.ToString);
-         ATag.SetAttribute('fh', fh.ToString);
-         ATag.SetAttribute(FOLDED_ATTR, (not Expanded).ToString);
+         SetNodeAttrInt(ANode, 'bry', Branch.Hook.Y);
+         SetNodeAttrInt(ANode, 'brx', IfThen(Expanded, Branch.Hook.X, FFoldParms.BranchPoint.X));
+         SetNodeAttrInt(ANode, 'fw', IfThen(Expanded, FFoldParms.Width, Width));
+         SetNodeAttrInt(ANode, 'fh', IfThen(Expanded, FFoldParms.Height, Height));
+         SetNodeAttrBool(ANode, FOLDED_ATTR, not Expanded);
 
-         txt := GetFoldedText;
+         var txt := GetFoldedText;
          if not txt.IsEmpty then
+            SetNodeCData(ANode, FOLD_TEXT_TAG, txt);
+
+         var exportedComments := ANode.OwnerDocument.GetElementsByTagName(COMMENT_TAG);
+         for var comment in GetPinComments do
          begin
-            tag1 := ATag.OwnerDocument.CreateElement(FOLD_TEXT_ATTR);
-            TXMLProcessor.AddCDATA(tag1, txt);
-            ATag.AppendChild(tag1);
+            if not IsAlreadyExported(comment, exportedComments) then
+               comment.ExportToXML2(ANode);
          end;
 
-         for comment in GetPinComments do
-            comment.ExportToXMLTag2(ATag);
-
-         for i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+         for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
          begin
-            br := FBranchList[i];
-
-            tag2 := ATag.OwnerDocument.CreateElement(BRANCH_TAG);
-            ATag.AppendChild(tag2);
-
-            tag2.SetAttribute(ID_ATTR, br.Id.ToString);
+            var br := FBranchList[i];
+            var node := AppendNode(ANode, BRANCH_TAG);
+            SetNodeAttrInt(node, ID_ATTR, br.Id);
 
             if br.Statement <> nil then
-               tag2.SetAttribute(BRANCH_STMNT_ATTR, br.Statement.Id.ToString);
+               SetNodeAttrInt(node, BRANCH_STMNT_ATTR, br.Statement.Id);
 
-            tag1 := ATag.OwnerDocument.CreateElement('x');
-            TXMLProcessor.AddText(tag1, br.hook.X.ToString);
-            tag2.AppendChild(tag1);
+            SetNodeTextInt(node, 'x', br.hook.X);
+            SetNodeTextInt(node, 'y', br.hook.Y);
 
-            tag1 := ATag.OwnerDocument.CreateElement('y');
-            TXMLProcessor.AddText(tag1, br.hook.Y.ToString);
-            tag2.AppendChild(tag1);
-
-            for block in br do
-                TXMLProcessor.ExportBlockToXML(block, tag2);
+            for var block in br do
+               block.SaveInXml(AppendNode(node, BLOCK_TAG));
          end;
       finally
          if unPin then
@@ -2080,195 +2048,186 @@ end;
 procedure TBlock.LockDrawing;
 begin
    TWinControl(Self).LockDrawing;
-   for var comment in GetComments(true) do
+   for var comment in GetComments(True) do
       comment.LockDrawing;
 end;
 
 procedure TBlock.UnlockDrawing;
 begin
    TWinControl(Self).UnlockDrawing;
-   for var comment in GetComments(true) do
+   for var comment in GetComments(True) do
       comment.UnlockDrawing;
    if not IsDrawingLocked then
       GProject.RepaintFlowcharts;
 end;
 
-procedure TBlock.SaveInXML(ATag: IXMLElement);
+procedure TBlock.SaveInXML(ANode: IXMLNode);
 begin
-   SaveInXML2(ATag);
-   if (ATag <> nil) and (PinComments > 0) then
+   SaveInXML2(ANode);
+   if (ANode <> nil) and (PinComments > 0) then
    begin
       for var comment in GetPinComments do
-         comment.ExportToXMLTag2(ATag);
+         comment.ExportToXML2(ANode);
       UnPinComments;
    end;
 end;
 
-procedure TBlock.SaveInXML2(ATag: IXMLElement);
+procedure TBlock.SaveInXML2(ANode: IXMLNode);
 begin
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      ATag.SetAttribute(BLOCK_TYPE_ATTR, TRttiEnumerationType.GetName(BType));
-      ATag.SetAttribute(FRAME_ATTR, FFrame.ToString);
-      ATag.SetAttribute('x', Left.ToString);
-      ATag.SetAttribute('y', Top.ToString);
-      ATag.SetAttribute('h', Height.ToString);
-      ATag.SetAttribute('w', Width.ToString);
-      ATag.SetAttribute('bh', BottomHook.ToString);
-      ATag.SetAttribute('brx', BottomPoint.X.ToString);
-      ATag.SetAttribute(ID_ATTR, FId.ToString);
+      SetNodeAttrStr(ANode, BLOCK_TYPE_ATTR, TRttiEnumerationType.GetName(BType));
+      SetNodeAttrBool(ANode, FRAME_ATTR, FFrame);
+      SetNodeAttrInt(ANode, 'x', Left);
+      SetNodeAttrInt(ANode, 'y', Top);
+      SetNodeAttrInt(ANode, 'h', Height);
+      SetNodeAttrInt(ANode, 'w', Width);
+      SetNodeAttrInt(ANode, 'bh', BottomHook);
+      SetNodeAttrInt(ANode, 'brx', BottomPoint.X);
+      SetNodeAttrInt(ANode, ID_ATTR, FId);
+      SetNodeAttrInt(ANode, FONT_SIZE_ATTR, Font.Size);
+      SetNodeAttrInt(ANode, FONT_STYLE_ATTR, TInfra.EncodeFontStyle(Font.Style));
       var memo := GetMemoEx;
       if memo <> nil then
-         memo.SaveInXML(ATag);
-      ATag.SetAttribute(FONT_SIZE_ATTR, Font.Size.ToString);
-      ATag.SetAttribute(FONT_STYLE_ATTR, TInfra.EncodeFontStyle(Font.Style).ToString);
+         memo.SaveInXML(ANode);
       var txtControl := GetTextControl;
       if (txtControl <> nil) and (txtControl.Text <> '') then
-      begin
-         var txt := ReplaceStr(txtControl.Text, sLineBreak, LB_PHOLDER);
-         var tag := ATag.OwnerDocument.CreateElement(TEXT_TAG);
-         TXMLProcessor.AddCDATA(tag, txt);
-         ATag.AppendChild(tag);
-      end;
+         SetNodeCData(ANode, TEXT_TAG, ReplaceStr(txtControl.Text, sLineBreak, LB_PHOLDER));
    end;
 end;
 
-procedure TBlock.ImportCommentsFromXML(ATag: IXMLElement);
+procedure TBlock.ImportCommentsFromXML(ANode: IXMLNode);
 begin
    if ProcessComments then
    begin
-      var tag := TXMLProcessor.FindChildTag(ATag, COMMENT_ATTR);
-      while tag <> nil do
+      var commentNodes := FilterNodes(ANode, COMMENT_TAG);
+      var commentNode := commentNodes.NextNode;
+      while commentNode <> nil do
       begin
          var comment := TComment.CreateDefault(Page);
-         comment.ImportFromXMLTag(tag, Self);
-         tag := TXMLProcessor.FindNextTag(tag);
+         comment.ImportFromXML(commentNode, Self);
+         commentNode := commentNodes.NextNode;
       end;
       UnPinComments;
    end;
 end;
 
-function TBlock.GetFromXML(ATag: IXMLElement): TError;
+function TBlock.GetFromXML(ANode: IXMLNode): TError;
 begin
    result := errNone;
-   if ATag <> nil then
+   if ANode <> nil then
    begin
-      var tag := TXMLProcessor.FindChildTag(ATag, TEXT_TAG);
+      var node := FindNode(ANode, TEXT_TAG);
       var textControl := GetTextControl;
-      if (tag <> nil) and (textControl <> nil) then
+      if (node <> nil) and (textControl <> nil) then
       begin
-         FRefreshMode := true;
-         textControl.Text := ReplaceStr(tag.Text, LB_PHOLDER, sLineBreak);
-         FRefreshMode := false;
+         FRefreshMode := True;
+         textControl.Text := ReplaceStr(node.Text, LB_PHOLDER, sLineBreak);
+         FRefreshMode := False;
       end;
 
-      var i := TXMLProcessor.GetIntFromAttr(ATag, FONT_SIZE_ATTR);
+      var i := GetNodeAttrInt(ANode, FONT_SIZE_ATTR);
       if i in FLOWCHART_VALID_FONT_SIZES then
          SetFontSize(i);
 
-      i := TXMLProcessor.GetIntFromAttr(ATag, FONT_STYLE_ATTR);
+      i := GetNodeAttrInt(ANode, FONT_STYLE_ATTR);
       SetFontStyle(TInfra.DecodeFontStyle(i));
 
-      Frame := TXMLProcessor.GetBoolFromAttr(ATag, FRAME_ATTR);
+      Frame := GetNodeAttrBool(ANode, FRAME_ATTR);
 
       var memo := GetMemoEx;
       if memo <> nil then
-         memo.GetFromXML(ATag);
+         memo.GetFromXML(ANode);
 
-      ImportCommentsFromXML(ATag);
+      ImportCommentsFromXML(ANode);
    end;
 end;
 
-function TGroupBlock.GetFromXML(ATag: IXMLElement): TError;
-var
-   tag1, tag2: IXMLElement;
-   bId, idx, bStmntId, hx, hy: integer;
+function TGroupBlock.GetFromXML(ANode: IXMLNode): TError;
 begin
-   result := inherited GetFromXML(ATag);
-   if ATag <> nil then
+   result := inherited GetFromXML(ANode);
+   if ANode <> nil then
    begin
-      tag1 := TXMLProcessor.FindChildTag(ATag, BRANCH_TAG);
-      if tag1 <> nil then
+      var idx := PRIMARY_BRANCH_IDX;
+      var branchNodes := FilterNodes(ANode, BRANCH_TAG);
+      var branchNode := branchNodes.NextNode;
+      while branchNode <> nil do
       begin
-         idx := PRIMARY_BRANCH_IDX;
-         repeat
-            tag2 := TXMLProcessor.FindChildTag(tag1, 'x');
-            if tag2 <> nil then
-               hx := StrToIntDef(tag2.Text, 0);
-            tag2 := TXMLProcessor.FindChildTag(tag1, 'y');
-            if tag2 <> nil then
-               hy := StrToIntDef(tag2.Text, 0);
-            bId := TXMLProcessor.GetIntFromAttr(tag1, ID_ATTR, ID_INVALID);
-            bStmntId := TXMLProcessor.GetIntFromAttr(tag1, BRANCH_STMNT_ATTR, ID_INVALID);
-            if GetBranch(idx) = nil then
-               AddBranch(Point(hx, hy), bId, bStmntId);
-            tag2 := TXMLProcessor.FindChildTag(tag1, BLOCK_TAG);
-            if tag2 <> nil then
-            begin
-               TXMLProcessor.ImportFlowchartFromXMLTag(tag2, Self, nil, result, idx);
-               if result <> errNone then break;
-            end;
-            idx := idx + 1;
-            tag1 := TXMLProcessor.FindNextTag(tag1);
-         until tag1 = nil;
+         var hx := 0;
+         var hy := 0;
+         var node := FindNode(branchNode, 'x');
+         if node <> nil then
+            hx := StrToIntDef(node.Text, 0);
+         node := FindNode(branchNode, 'y');
+         if node <> nil then
+            hy := StrToIntDef(node.Text, 0);
+         var bId := GetNodeAttrInt(branchNode, ID_ATTR);
+         var bStmntId := GetNodeAttrInt(branchNode, BRANCH_STMNT_ATTR, ID_INVALID);
+         if GetBranch(idx) = nil then
+            AddBranch(Point(hx, hy), bId, bStmntId);
+         node := FindNode(branchNode, BLOCK_TAG);
+         if node <> nil then
+         begin
+            TXMLProcessor.ImportFlowchartFromXML(node, Self, nil, idx, result);
+            if result <> errNone then break;
+         end;
+         Inc(idx);
+         branchNode := branchNodes.NextNode;
       end;
-      tag2 := TXMLProcessor.FindChildTag(ATag, FOLD_TEXT_ATTR);
-      if tag2 <> nil then
-         SetFoldedText(tag2.Text);
-      FFoldParms.Width := TXMLProcessor.GetIntFromAttr(ATag, 'fw', 140);
-      FFoldParms.Height := TXMLProcessor.GetIntFromAttr(ATag, 'fh', 91);
-      if TXMLProcessor.GetBoolFromAttr(ATag, FOLDED_ATTR) then
-         ExpandFold(false);
+      var tnode := FindNode(ANode, FOLD_TEXT_TAG);
+      if tnode <> nil then
+         SetFoldedText(tnode.Text);
+      FFoldParms.Width := GetNodeAttrInt(ANode, 'fw');
+      FFoldParms.Height := GetNodeAttrInt(ANode, 'fh');
+      if GetNodeAttrBool(ANode, FOLDED_ATTR) then
+         ExpandFold(False);
    end;
 end;
 
-procedure TBlock.ExportToXMLTag(ATag: IXMLElement);
+procedure TBlock.ExportToXML(ANode: IXMLNode);
 begin
-   TXMLProcessor.ExportBlockToXML(Self, ATag);
+   SaveInXml(AppendNode(ANode, BLOCK_TAG));
    var block := Next;
    while (block <> nil) and block.Frame do
    begin
-      TXMLProcessor.ExportBlockToXML(block, ATag);
+      block.SaveInXml(AppendNode(ANode, BLOCK_TAG));
       block := block.Next;
    end;
 end;
 
-function TBlock.ImportFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
-var
-   block, newBlock: TBlock;
-   lParent: TGroupBlock;
-   tag: IXMLElement;
-   bt: TBlockType;
+function TBlock.ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
 begin
    result := errValidate;
-   tag := TXMLProcessor.FindChildTag(ATag, BLOCK_TAG);
-   if tag <> nil then
-      bt := TRttiEnumerationType.GetValue<TBlockType>(tag.GetAttribute(BLOCK_TYPE_ATTR));
-   if (tag = nil) or (bt in [blMain, blUnknown, blComment]) then
+   var bt := blUnknown;
+   var node := FindNode(ANode, BLOCK_TAG);
+   if node <> nil then
+      bt := TRttiEnumerationType.GetValue<TBlockType>(GetNodeAttrStr(node, BLOCK_TYPE_ATTR));
+   if bt in [blMain, blUnknown, blComment] then
       Gerr_text := i18Manager.GetString('BadImportTag')
    else
    begin
-      lParent := nil;
-      block := Self;
-      if (Ired = 0) and (FParentBlock <> nil) then
-         lParent := FParentBlock
-      else if Self is TGroupBlock then
+      var lParent: TGroupBlock := nil;
+      var block: TBlock := nil;
+      if FRedArrow = 0 then
       begin
+         lParent := FParentBlock;
+         block := Self;
+      end
+      else if FRedArrow > 0 then
          lParent := TGroupBlock(Self);
-         block := nil;
-      end;
       if lParent <> nil then
       begin
-         lParent.BlockImportMode := true;
+         var newBlock: TBlock := nil;
+         lParent.BlockImportMode := True;
          try
-            newBlock := TXMLProcessor.ImportFlowchartFromXMLTag(tag, lParent, block, result, Ired);
+            newBlock := TXMLProcessor.ImportFlowchartFromXML(node, lParent, block, FRedArrow, result);
          finally
-            lParent.BlockImportMode := false;
+            lParent.BlockImportMode := False;
          end;
-         if result = errNone then
+         if newBlock <> nil then
          begin
             lParent.ResizeWithDrawLock;
-            newBlock.ImportCommentsFromXML(tag);
+            newBlock.ImportCommentsFromXML(node);
          end;
       end;
    end;
@@ -2301,9 +2260,7 @@ begin
       begin
          chLine.Text := ReplaceStr(chLine.Text, PRIMARY_PLACEHOLDER, Trim(AEdit.Text));
          chLine.Text := TInfra.StripInstrEnd(chLine.Text);
-         if GSettings.UpdateEditor and not SkipUpdateEditor then
-            TInfra.ChangeLine(chLine);
-         TInfra.GetEditorForm.SetCaretPos(chLine);
+         TInfra.GetEditorForm.UpdateEditorForBlock(Self, chLine);
       end;
    end;
 end;
@@ -2384,7 +2341,7 @@ begin
    bitmap.Width := Width + 2;
    bitmap.Height := Height + 2;
    var lPage := Page;
-   lPage.DrawI := false;
+   lPage.DrawI := False;
    bitmap.Canvas.Lock;
    try
       PaintTo(bitmap.Canvas.Handle, 1, 1);
@@ -2395,7 +2352,7 @@ begin
       end;
    finally
       bitmap.Canvas.Unlock;
-      lPage.DrawI := true;
+      lPage.DrawI := True;
    end;
    if AGraphic <> bitmap then
    begin
@@ -2423,11 +2380,10 @@ begin
 end;
 
 procedure TGroupBlock.LinkBlocks(ABranch: TBranch);
-var
-   p: TPoint;
 begin
    if ABranch <> nil then
    begin
+      var p: TPoint;
       var blockPrev: TBlock := nil;
       for var block in ABranch do
       begin

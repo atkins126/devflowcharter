@@ -38,8 +38,8 @@ type
       procedure OnChangeName(Sender: TObject); override;
    public
       edtSize: TSizeEdit;
-      function ExportToXMLTag(ATag: IXMLElement): IXMLElement; override;
-      procedure ImportFromXMLTag(ATag: IXMLElement); override;
+      function ExportToXML(ANode: IXMLNode): IXMLNode; override;
+      procedure ImportFromXML(ANode: IXMLNode); override;
       function IsValid: boolean; override;
    end;
 
@@ -59,8 +59,8 @@ type
       lblSize: TLabel;
       property FieldCount: integer read GetElementCount default 0;
       constructor Create(AParentForm: TDataTypesForm);
-      procedure ExportToXMLTag(ATag: IXMLElement); override;
-      procedure ImportFromXMLTag(ATag: IXMLElement; APinControl: TControl = nil);
+      procedure ExportToXML(ANode: IXMLNode); override;
+      procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
       procedure RefreshSizeEdits; override;
       function IsValidEnumValue(const AValue: string): boolean;
       function GetDimensionCount: integer;
@@ -77,8 +77,8 @@ type
 implementation
 
 uses
-   Vcl.Forms, Vcl.Graphics, System.SysUtils, System.StrUtils, System.Rtti,
-   Generics.Defaults, Infrastructure, LangDefinition, ParserHelper, XMLProcessor, Constants;
+   Vcl.Forms, Vcl.Graphics, System.SysUtils, System.StrUtils, System.Rtti, System.Math,
+   Generics.Defaults, Infrastructure, LangDefinition, ParserHelper, OmniXMLUtils, Constants;
 
 var
    ByTopFieldComparer: IComparer<TField>;
@@ -95,7 +95,7 @@ begin
 
    lblName2 := TLabel.Create(Self);
    lblName2.Parent := Self;
-   lblName2.ParentFont := false;
+   lblName2.ParentFont := False;
    lblName2.Font.Style := [fsBold];
    lblName2.Font.Color := clWindowText;
    lblName2.SetBounds(5, 131, 0, 13);
@@ -103,50 +103,48 @@ begin
 
    lblSize := TLabel.Create(Self);
    lblSize.Parent := Self;
-   lblSize.ParentFont := false;
+   lblSize.ParentFont := False;
    lblSize.Font.Style := [fsBold];
    lblSize.Font.Color := clWindowText;
-   lblSize.SetBounds(TInfra.Scaled(171), 131, 0, 13);
+   lblSize.SetBounds(TInfra.Scaled(Self, 171), 131, 0, 13);
    lblSize.Caption := i18Manager.GetString('lblSize');
 
    lblType := TLabel.Create(Self);
    lblType.Parent := Self;
-   lblType.ParentFont := false;
+   lblType.ParentFont := False;
    lblType.Font.Style := [fsBold];
    lblType.Font.Color := clWindowText;
-   lblType.SetBounds(TInfra.Scaled(87), 131, 0, 13);
+   lblType.SetBounds(TInfra.Scaled(Self, 87), 131, 0, 13);
    lblType.Caption := i18Manager.GetString('lblType');
 
    sbxElements := TScrollBox.Create(Self);
    sbxElements.Parent := Self;
-   sbxElements.Ctl3D := false;
+   sbxElements.Ctl3D := False;
    sbxElements.BorderStyle := bsNone;
-   sbxElements.SetBounds(0, 149, TInfra.Scaled(302), 0);
-   sbxElements.Constraints.MaxHeight := AParentForm.Height - 233;
+   sbxElements.SetBounds(0, 149, TInfra.Scaled(Self, 302), 0);
+   sbxElements.Constraints.MaxHeight := Height - 148;
    sbxElements.Constraints.MinWidth := sbxElements.Width;
-   sbxElements.VertScrollBar.Tracking := true;
-   sbxElements.DoubleBuffered := true;
+   sbxElements.VertScrollBar.Tracking := True;
+   sbxElements.UseWheelForScrolling := True;
    sbxElements.Anchors := [akTop, akBottom, akLeft, akRight];
 
    btnAddElement := TButton.Create(Self);
    btnAddElement.Parent := Self;
-   btnAddElement.ParentFont := false;
+   btnAddElement.ParentFont := False;
    btnAddElement.Font.Style := [];
    btnAddElement.Caption := i18Manager.GetString('btnAddField');
-   btnAddElement.ShowHint := true;
-   btnAddElement.DoubleBuffered := true;
-   btnAddElement.SetBounds(1, 102, TInfra.Scaled(306), 25);
+   btnAddElement.ShowHint := True;
+   btnAddElement.SetBounds(1, 102, TInfra.Scaled(Self, 306), 25);
    btnAddElement.OnClick := AddElement;
 
    CreateLibControls(Self, edtName.Left+edtName.Width+7, 10);
 
    rgTypeBox := TRadioGroup.Create(Self);
    rgTypeBox.Parent := Self;
-   rgTypeBox.ParentFont := false;
-   rgTypeBox.ParentBackground := false;
+   rgTypeBox.ParentFont := False;
+   rgTypeBox.ParentBackground := False;
    rgTypeBox.Font.Style := [];
    rgTypeBox.Font.Color := clWindowText;
-   rgTypeBox.DoubleBuffered := true;
    rgTypeBox.Columns := 2;
    rgTypeBox.Caption := i18Manager.GetString('rgTypeBox');
    for var dt := Low(TUserDataTypeKind) to High(TUserDataTypeKind) do
@@ -168,11 +166,10 @@ begin
    chkAddPtrType := TCheckBox.Create(Self);
    chkAddPtrType.Parent := Self;
    chkAddPtrType.Caption := i18Manager.GetString('chkAddPtrType');
-   chkAddPtrType.ParentFont := false;
+   chkAddPtrType.ParentFont := False;
    chkAddPtrType.Font.Style := [];
    chkAddPtrType.Font.Color := clWindowText;
    chkAddPtrType.SetBounds(rgTypeBox.BoundsRect.Right+6, 42, TInfra.GetAutoWidth(chkAddPtrType), 17);
-   chkAddPtrType.DoubleBuffered := true;
    chkAddPtrType.Enabled := GInfra.CurrentLang.EnabledPointers;
    chkAddPtrType.OnClick := OnClickCh;
 
@@ -200,19 +197,19 @@ end;
 procedure TUserDataType.AddElement(Sender: TObject);
 begin
    if (Kind in [dtOther, dtArray]) and (GetFirstField = nil) then
-      btnAddElement.Enabled := false;
+      btnAddElement.Enabled := False;
    inherited AddElement(Sender);
 end;
 
 procedure TUserDataType.RefreshSizeEdits;
 begin
-   ParentForm.UpdateCodeEditor := false;
+   ParentForm.UpdateCodeEditor := False;
    for var field in GetFields do
    begin
       if field.edtSize.Text <> '1' then
-         field.edtSize.OnChange(field.edtSize);
+         field.edtSize.Change;
    end;
-   ParentForm.UpdateCodeEditor := true;
+   ParentForm.UpdateCodeEditor := True;
 end;
 
 function TUserDataType.GetExternModifier: string;
@@ -230,7 +227,7 @@ begin
    inherited;
    if sbxElements <> nil then
    begin
-      sbxElements.Constraints.MaxHeight := ParentForm.Height - 233;
+      sbxElements.Constraints.MaxHeight := Height - 148;
       sbxElements.Height := sbxElements.Constraints.MaxHeight;
    end;
 end;
@@ -259,13 +256,13 @@ begin
       if i = 0 then
       begin
          if t = dtOther then
-            b := false
+            b := False
          else if t = dtArray then
          begin
-            b := false;
-            field.edtName.Enabled := false;
-            field.edtSize.Enabled := true;
-            field.cbType.Enabled := true;
+            b := False;
+            field.edtName.Enabled := False;
+            field.edtSize.Enabled := True;
+            field.cbType.Enabled := True;
          end;
          i := 1;
       end;
@@ -274,7 +271,7 @@ begin
    if GInfra.CurrentLang.EnabledPointers then
    begin
       if t = dtEnum then
-         chkAddPtrType.Checked := false;
+         chkAddPtrType.Checked := False;
       chkAddPtrType.Enabled := t <> dtEnum;
    end;
    RefreshElements;
@@ -292,13 +289,13 @@ begin
 
    FElementTypeID := AParentTab.FElementTypeID;
    Constraints.MaxWidth := AParentTab.sbxElements.Width - 6;
-   SetBounds(0, Parent.Height, Constraints.MaxWidth, TInfra.Scaled(22));
+   SetBounds(0, Parent.Height, Constraints.MaxWidth, TInfra.Scaled(Self, 22));
    Align := alTop;
 
    TInfra.PopulateDataTypeCombo(cbType, ParentTab.PageIndex);
 
    edtSize := TSizeEdit.Create(Self);
-   edtSize.SetBounds(TInfra.Scaled(171), 2, edtSize.Parent.Width-btnRemove.Width-TInfra.Scaled(188), 17);
+   edtSize.SetBounds(TInfra.Scaled(Self, 171), 2, edtSize.Parent.Width-btnRemove.Width-TInfra.Scaled(Self, 188), 17);
    edtSize.BorderStyle := bsNone;
    edtSize.OnChange := OnChangeSize;
 end;
@@ -332,22 +329,21 @@ begin
    inherited OnChangeName(Sender);
 end;
 
-procedure TUserDataType.ExportToXMLTag(ATag: IXMLElement);
+procedure TUserDataType.ExportToXML(ANode: IXMLNode);
 begin
-   var tag := ATag.OwnerDocument.CreateElement(DATATYPE_TAG);
-   ATag.AppendChild(tag);
-   inherited ExportToXMLTag(tag);
+   var node := AppendNode(ANode, DATATYPE_TAG);
+   inherited ExportToXML(node);
    if chkAddPtrType.Enabled and chkAddPtrType.Checked then
-      tag.SetAttribute(POINTER_ATTR, 'true');
-   tag.SetAttribute(KIND_ATTR, TRttiEnumerationType.GetName(Kind));
+      SetNodeAttrBool(node, POINTER_ATTR, True);
+   SetNodeAttrStr(node, KIND_ATTR, TRttiEnumerationType.GetName(Kind));
 end;
 
-procedure TUserDataType.ImportFromXMLTag(ATag: IXMLElement; APinControl: TControl = nil);
+procedure TUserDataType.ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
 begin
-   inherited ImportFromXMLTag(ATag, APinControl);
+   inherited ImportFromXML(ANode, APinControl);
    if chkAddPtrType.Enabled then
-      chkAddPtrType.Checked := TXMLProcessor.GetBoolFromAttr(ATag, POINTER_ATTR);
-   rgTypeBox.ItemIndex := Ord(TRttiEnumerationType.GetValue<TUserDataTypeKind>(ATag.GetAttribute(KIND_ATTR)));
+      chkAddPtrType.Checked := GetNodeAttrBool(ANode, POINTER_ATTR, False);
+   rgTypeBox.ItemIndex := Ord(TRttiEnumerationType.GetValue<TUserDataTypeKind>(GetNodeAttrStr(ANode, KIND_ATTR)));
 end;
 
 function TUserDataType.GetDimensionCount: integer;
@@ -376,14 +372,14 @@ end;
 
 function TUserDataType.IsValidEnumValue(const AValue: string): boolean;
 begin
-   result := false;
+   result := False;
    if Kind = dtEnum then
    begin
       for var field in GetFields do
       begin
          if Trim(field.edtName.Text) = AValue then
          begin
-            result := true;
+            result := True;
             break;
          end;
       end;
@@ -424,15 +420,16 @@ begin
       inherited OnChangeName(Sender);
 end;
 
-function TField.ExportToXMLTag(ATag: IXMLElement): IXMLElement;
+function TField.ExportToXML(ANode: IXMLNode): IXMLNode;
 begin
-   inherited ExportToXMLTag(ATag).SetAttribute(SIZE_ATTR, edtSize.Text);
+   result := inherited ExportToXML(ANode);
+   SetNodeAttrStr(result, SIZE_ATTR, edtSize.Text);
 end;
 
-procedure TField.ImportFromXMLTag(ATag: IXMLElement);
+procedure TField.ImportFromXML(ANode: IXMLNode);
 begin
-   inherited ImportFromXMLTag(ATag);
-   var size := ATag.GetAttribute(SIZE_ATTR);
+   inherited ImportFromXML(ANode);
+   var size := GetNodeAttrStr(ANode, SIZE_ATTR);
    if size.IsEmpty then
       size := '1';
    edtSize.Text := size;
@@ -440,7 +437,8 @@ end;
 
 procedure TField.OnChangeSize(Sender: TObject);
 begin
-   edtSize.OnChangeSize(edtSize);
+   var sizeEdit := TSizeEdit(Sender);
+   sizeEdit.Font.Color := IfThen(sizeEdit.ParseSize, BLACK_COLOR, NOK_COLOR);
    ParentTab.PageControl.Refresh;
    GProject.SetChanged;
    if ParentForm.UpdateCodeEditor then
@@ -460,21 +458,16 @@ begin
    if TInfra.IsNOkColor(Font.Color) then
    begin
       ANode.MakeVisible;
-      ANode.Expand(false);
+      ANode.Expand(False);
    end;
 end;
 
 function TUserDataType.GetTreeNodeText(ANodeOffset: integer = 0): string;
 begin
-   var lang: TLangDefinition := nil;
-   if Assigned(GInfra.CurrentLang.GetUserTypeDesc) then
-      lang := GInfra.CurrentLang
-   else if Assigned(GInfra.TemplateLang.GetUserTypeDesc) then
+   var lang := GInfra.CurrentLang;
+   if not Assigned(lang.GetUserTypeDesc) then
       lang := GInfra.TemplateLang;
-   if lang <> nil then
-      result := lang.GetUserTypeDesc(Self).Trim
-   else
-      result := inherited GetTreeNodeText(ANodeOffset);
+   result := lang.GetUserTypeDesc(Self).Trim;
 end;
 
 initialization

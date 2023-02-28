@@ -61,14 +61,14 @@ type
 
    IXMLable = interface(IActivable)
       ['{371696A8-8B69-4293-8A9B-B00ACEE315C6}']
-      procedure ExportToXMLTag(ATag: IXMLElement);
-      procedure ImportFromXMLTag(ATag: IXMLElement; APinControl: TControl = nil);
+      procedure ExportToXML(ANode: IXMLNode);
+      procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
    end;
 
    IWithTab = interface(IActivable)
       ['{1E316044-89E6-4FFB-AC4D-FA773D4774D8}']
       function GetTab: TTabSheet;
-      function GetLibName: string;
+      function GetLibrary: string;
    end;
 
    IWithSizeEdits = interface

@@ -33,7 +33,7 @@ type
          FCaseLabel: string;
          DefaultBranch: TBranch;
          procedure Paint; override;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure EditorAction(AEdit: TCustomEdit);
          function GetDiamondTop: TPoint; override;
          procedure PlaceBranchStatement(ABranch: TBranch);
@@ -51,8 +51,8 @@ type
          function AddBranch(const AHook: TPoint; ABranchId: integer = ID_INVALID; ABranchTextId: integer = ID_INVALID): TBranch; override;
          function InsertNewBranch(AIndex: integer): TBranch;
          function CountErrWarn: TErrWarnCount; override;
-         function GetFromXML(ATag: IXMLElement): TError; override;
-         procedure SaveInXML(ATag: IXMLElement); override;
+         function GetFromXML(ANode: IXMLNode): TError; override;
+         procedure SaveInXML(ANode: IXMLNode); override;
          procedure ChangeColor(AColor: TColor); override;
          procedure UpdateEditor(AEdit: TCustomEdit); override;
          function IsDuplicatedCase(AEdit: TCustomEdit): boolean;
@@ -67,8 +67,8 @@ const
 implementation
 
 uses
-   System.StrUtils, System.Math, System.SysUtils, XMLProcessor, Return_Block, LangDefinition,
-   Infrastructure, Constants, YaccLib;
+   System.StrUtils, System.Math, System.SysUtils, Return_Block, LangDefinition,
+   Infrastructure, Constants, YaccLib, OmniXMLUtils;
 
 constructor TCaseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
@@ -141,7 +141,7 @@ begin
       var x := FDiamond.Bottom.X + FDiamond.Width div 4;
       var y := FDiamond.Bottom.Y - FDiamond.Height div 4 + 3;
       DrawTextLabel(x, y, FCaseLabel);
-      DrawBlockLabel(FDiamond.Right.X+5, 1, GInfra.CurrentLang.LabelCase, false, true);
+      DrawBlockLabel(FDiamond.Right.X+5, 1, GInfra.CurrentLang.LabelCase, False, True);
       Canvas.MoveTo(pnt.X, TopHook.Y);
       Canvas.LineTo(DefaultBranch.Hook.X, TopHook.Y);
       Canvas.LineTo(DefaultBranch.Hook.X, TopHook.Y-10);
@@ -167,7 +167,7 @@ end;
 
 function TCaseBlock.IsDuplicatedCase(AEdit: TCustomEdit): boolean;
 begin
-   result := false;
+   result := False;
    if (AEdit <> nil) and (AEdit.Parent = Self) then
    begin
       for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
@@ -175,7 +175,7 @@ begin
          var edit := FBranchList[i].Statement;
          if (edit <> AEdit) and (Trim(edit.Text) = Trim(AEdit.Text)) then
          begin
-            result := true;
+            result := True;
             break;
          end;
       end;
@@ -234,21 +234,17 @@ begin
 end;
 
 procedure TCaseBlock.ResizeHorz(AContinue: boolean);
-var
-   x, leftX, rightX, i: integer;
-   br: TBranch;
-   block: TBlock;
 begin
    BottomHook := Branch.Hook.X;
-   rightX := 100;
-   for i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
+   var rightX := 100;
+   for var i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
    begin
-      br := FBranchList[i];
-      leftX := rightX;
+      var br := FBranchList[i];
+      var leftX := rightX;
       br.Hook.X := leftX;
-      x := leftX;
+      var x := leftX;
       LinkBlocks(br);
-      for block in br do
+      for var block in br do
          x := Min(block.Left, x);
       Inc(br.hook.X, leftX-x);
       LinkBlocks(br);
@@ -270,16 +266,13 @@ begin
 end;
 
 procedure TCaseBlock.ResizeVert(AContinue: boolean);
-var
-   maxh, h, i: integer;
-   br, hBranch: TBranch;
 begin
-   maxh := 0;
-   hBranch := DefaultBranch;
-   for i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
+   var maxh := 0;
+   var hBranch := DefaultBranch;
+   for var i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
    begin
-      br := FBranchList[i];
-      h := br.Height;
+      var br := FBranchList[i];
+      var h := br.Height;
       if h > maxh then
       begin
          maxh := h;
@@ -288,9 +281,9 @@ begin
    end;
    hBranch.Hook.Y := 99;
    Height := maxh + 131;
-   for i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
+   for var i := DEFAULT_BRANCH_IDX to FBranchList.Count-1 do
    begin
-      br := FBranchList[i];
+      var br := FBranchList[i];
       if br <> hBranch then
          br.Hook.Y := maxh - br.Height + 99;
    end;
@@ -392,17 +385,15 @@ begin
       begin
          chLine.Text := ReplaceStr(chLine.Text, PRIMARY_PLACEHOLDER, Trim(AEdit.Text));
          chLine.Text := ReplaceStr(chLine.Text, '%s2', Trim(FStatement.Text));
-         if GSettings.UpdateEditor and not SkipUpdateEditor then
-            TInfra.ChangeLine(chLine);
-         TInfra.GetEditorForm.SetCaretPos(chLine);
+         TInfra.GetEditorForm.UpdateEditorForBlock(Self, chLine);
       end;
    end;
 end;
 
-procedure TCaseBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TCaseBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewHeight >= Constraints.MinHeight) and (NewWidth >= Constraints.MinWidth);
-   if Resize and FVResize then
+   result := (NewHeight >= Constraints.MinHeight) and (NewWidth >= Constraints.MinWidth);
+   if result and FVResize then
    begin
       if Expanded then
       begin
@@ -415,7 +406,7 @@ begin
          BottomPoint.Y := NewHeight - 28;
       end;
    end;
-   if Resize and FHResize and not Expanded then
+   if result and FHResize and not Expanded then
    begin
       BottomPoint.X := NewWidth div 2;
       TopHook.X := BottomPoint.X;
@@ -424,49 +415,43 @@ begin
 end;
 
 function TCaseBlock.GenerateTree(AParentNode: TTreeNode): TTreeNode;
-var
-   newNode: TTreeNodeWithFriend;
-   br: TBranch;
-   exp1, exp2: boolean;
-   i: integer;
-   block: TBlock;
 begin
 
-   exp1 := false;
-   exp2 := false;
+   var exp1 := False;
+   var exp2 := False;
 
    if TInfra.IsNOkColor(FStatement.Font.Color) then
-      exp1 := true;
+      exp1 := True;
 
    result := AParentNode.Owner.AddChildObject(AParentNode, GetTreeNodeText, FStatement);
 
-   for i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
+   for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
    begin
-      br := FBranchList[i];
+      var br := FBranchList[i];
       if TInfra.IsNOkColor(br.Statement.Font.Color) then
-         exp2 := true;
-      newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChildObject(result, GetTreeNodeText(i), br.Statement));
+         exp2 := True;
+      var newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChildObject(result, GetTreeNodeText(i), br.Statement));
       newNode.Offset := i;
-      for block in br do
+      for var block in br do
          block.GenerateTree(newNode);
    end;
 
-   newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(result, i18Manager.GetString('DefValue')));
+   var newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(result, i18Manager.GetString('DefValue')));
    newNode.Offset := FBranchList.Count;
 
-   for block in DefaultBranch do
+   for var block in DefaultBranch do
       block.GenerateTree(newNode);
 
    if exp1 then
    begin
       AParentNode.MakeVisible;
-      AParentNode.Expand(false);
+      AParentNode.Expand(False);
    end;
 
    if exp2 then
    begin
       result.MakeVisible;
-      result.Expand(false);
+      result.Expand(False);
    end;
 
 end;
@@ -527,51 +512,44 @@ begin
       FBranchList[i].Statement.Color := AColor;
 end;
 
-function TCaseBlock.GetFromXML(ATag: IXMLElement): TError;
+function TCaseBlock.GetFromXML(ANode: IXMLNode): TError;
 begin
-   result := inherited GetFromXML(ATag);
-   if ATag <> nil then
+   result := inherited GetFromXML(ANode);
+   if ANode <> nil then
    begin
-      var tag := TXMLProcessor.FindChildTag(ATag, BRANCH_TAG);
-      if tag <> nil then
+      var branchNodes := FilterNodes(ANode, BRANCH_TAG);
+      branchNodes.NextNode;          // skip default branch stored in first tag
+      var branchNode := branchNodes.NextNode;
+      FRefreshMode := True;
+      for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
       begin
-         tag := TXMLProcessor.FindNextTag(tag);   // skip default branch stored in first tag
-         FRefreshMode := true;
-         for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
+         if branchNode <> nil then
          begin
-            if tag <> nil then
-            begin
-               var tag2 := TXMLProcessor.FindChildTag(tag, 'value');
-               if tag2 <> nil then
-                  FBranchList[i].Statement.Text := tag2.Text;
-            end;
-            tag := TXMLProcessor.FindNextTag(tag);
+            var node := FindNode(branchNode, 'value');
+            if node <> nil then
+               FBranchList[i].Statement.Text := node.Text;
          end;
-         FRefreshMode := false;
+         branchNode := branchNodes.NextNode;
       end;
+      FRefreshMode := False;
       Repaint;
    end;
 end;
 
-procedure TCaseBlock.SaveInXML(ATag: IXMLElement);
+procedure TCaseBlock.SaveInXML(ANode: IXMLNode);
 begin
-   inherited SaveInXML(ATag);
-   if ATag <> nil then
+   inherited SaveInXML(ANode);
+   if ANode <> nil then
    begin
-      var tag := TXMLProcessor.FindChildTag(ATag, BRANCH_TAG);
-      if tag <> nil then
+      var branchNodes := FilterNodes(ANode, BRANCH_TAG);
+      branchNodes.NextNode;          // skip default branch stored in first tag
+      var branchNode := branchNodes.NextNode;
+      for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
       begin
-         tag := TXMLProcessor.FindNextTag(tag);   // skip default branch stored in first tag
-         for var i := DEFAULT_BRANCH_IDX+1 to FBranchList.Count-1 do
-         begin
-            if tag <> nil then
-            begin
-               var tag2 := ATag.OwnerDocument.CreateElement('value');
-               TXMLProcessor.AddCDATA(tag2, FBranchList[i].Statement.Text);
-               tag.AppendChild(tag2);
-            end;
-            tag := TXMLProcessor.FindNextTag(tag);
-         end;
+         if branchNode = nil then
+            break;
+         SetNodeCData(branchNode, 'value', FBranchList[i].Statement.Text);
+         branchNode := branchNodes.NextNode;
       end;
    end;
 end;

@@ -24,7 +24,7 @@ unit Folder_Block;
 interface
 
 uses
-   System.Types, Base_Block, Types;
+   Base_Block, Types;
 
 type
 
@@ -34,9 +34,8 @@ type
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
       protected
          procedure Paint; override;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure SetWidth(AMinX: integer); override;
-         function GetDiamondTop: TPoint; override;
    end;
 
 implementation
@@ -88,11 +87,6 @@ begin
    DrawI;
 end;
 
-function TFolderBlock.GetDiamondTop: TPoint;
-begin
-   result := Point(-1, -1);
-end;
-
 procedure TFolderBlock.SetWidth(AMinX: integer);
 begin
    BottomPoint.X := BottomHook;
@@ -102,10 +96,10 @@ begin
       Width := AMinX + 30;
 end;
 
-procedure TFolderBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TFolderBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
-   if Resize and FVResize then
+   result := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
+   if result and FVResize then
    begin
       if Expanded then
          Inc(Branch.Hook.Y, NewHeight-Height)
@@ -115,7 +109,7 @@ begin
          BottomPoint.Y := NewHeight - 28;
       end;
    end;
-   if Resize and FHResize and not Expanded then
+   if result and FHResize and not Expanded then
    begin
       BottomPoint.X := NewWidth div 2;
       TopHook.X := BottomPoint.X;

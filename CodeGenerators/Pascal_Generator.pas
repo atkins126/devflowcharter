@@ -107,18 +107,12 @@ begin
 end;
 
 procedure Pascal_ProgramHeaderSectionGenerator(ALines: TStringList);
-var
-   progName: string;
 begin
-
    GInfra.TemplateLang.ProgramHeaderSectionGenerator(ALines);
-
-   if GProject.Name.IsEmpty then
-      progName := i18Manager.GetString('Unknown')
-   else
-      progName := GProject.Name;
+   var progName := GProject.Name;
+   if progName.IsEmpty then
+      progName := i18Manager.GetString('Unknown');
    progName := ReplaceStr(progName, ' ', '_') + ';';
-
    if GProject.GetMainBlock <> nil then
       ALines.Add('program ' + progName)
    else
@@ -145,8 +139,8 @@ begin
          for i := 1 to AVarList.sgList.RowCount-2 do
          begin
             varName := AVarList.sgList.Cells[VAR_NAME_COL, i];
-            varType := AVarList.sgList.Cells[VAR_TYPE_COL, i];
             varInit := AVarList.sgList.Cells[VAR_INIT_COL, i];
+            varType :=  AVarList.sgList.Cells[VAR_TYPE_COL, i];
             dCount := AVarList.GetDimensionCount(varName);
             if (dCount < 0) or (AVarList.GetExternalState(i) = cbChecked) then
                continue;
@@ -226,7 +220,7 @@ begin
          ALines.Add('implementation');
          ALines.Add('');
          if Assigned(GInfra.TemplateLang.UserFunctionsSectionGenerator) then
-            GInfra.TemplateLang.UserFunctionsSectionGenerator(ALines, false);
+            GInfra.TemplateLang.UserFunctionsSectionGenerator(ALines, False);
          ALines.Add('end.');
          ALines.Add('');
       end;
@@ -317,7 +311,7 @@ end;
 
 function Pascal_Parse(const AText: string; AParserMode: TYYMode): boolean;
 begin
-   result := true;
+   result := True;
    if (pascalLang <> nil) and (pascalLang.Parser is TPascalParser) then
    begin
       pascalLang.Parser.Reset;

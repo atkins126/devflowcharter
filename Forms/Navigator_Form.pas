@@ -26,8 +26,8 @@ type
     { Public declarations }
     InvalidateIndicator: boolean;
     procedure ResetForm; override;
-    procedure ExportSettingsToXMLTag(ATag: IXMLElement); override;
-    procedure ImportSettingsFromXMLTag(ATag: IXMLElement); override;
+    procedure ExportToXML(ANode: IXMLNode); override;
+    procedure ImportFromXML(ANode: IXMLNode); override;
   end;
 
 var
@@ -37,14 +37,14 @@ implementation
 
 uses
    WinApi.Windows, System.SysUtils, Vcl.Graphics, Vcl.Forms, Infrastructure, BlockTabSheet,
-   XMLProcessor;
+   OmniXMLUtils;
 
 {$R *.dfm}
 
 procedure TNavigatorForm.FormCreate(Sender: TObject);
 begin
-   DoubleBuffered := true;
-   InvalidateIndicator := true;
+   DoubleBuffered := True;
+   InvalidateIndicator := True;
    SetBounds(50, 50, 426, 341);
    Constraints.MinWidth := 150;
    Constraints.MinHeight := 150;
@@ -103,7 +103,7 @@ procedure TNavigatorForm.ResetForm;
 begin
    inherited ResetForm;
    Position := poDesigned;
-   InvalidateIndicator := true;
+   InvalidateIndicator := True;
    SetBounds(50, 50, 426, 341);
 end;
 
@@ -125,31 +125,31 @@ begin
       GProject.ActivePage.Box.Perform(AMessage.Msg, AMessage.WParam, AMessage.LParam);
 end;
 
-procedure TNavigatorForm.ExportSettingsToXMLTag(ATag: IXMLElement);
+procedure TNavigatorForm.ExportToXML(ANode: IXMLNode);
 begin
    if Visible then
    begin
-      ATag.SetAttribute('nav_win_show', 'true');
-      ATag.SetAttribute('nav_win_x', Left.ToString);
-      ATag.SetAttribute('nav_win_y', Top.ToString);
-      ATag.SetAttribute('nav_win_width', Width.ToString);
-      ATag.SetAttribute('nav_win_height', Height.ToString);
+      SetNodeAttrBool(ANode, 'nav_win_show', True);
+      SetNodeAttrInt(ANode, 'nav_win_x', Left);
+      SetNodeAttrInt(ANode, 'nav_win_y', Top);
+      SetNodeAttrInt(ANode, 'nav_win_width', Width);
+      SetNodeAttrInt(ANode, 'nav_win_height', Height);
       if WindowState = wsMinimized then
-         ATag.SetAttribute('nav_win_min', 'true');
+         SetNodeAttrBool(ANode, 'nav_win_min', True);
    end;
 end;
 
-procedure TNavigatorForm.ImportSettingsFromXMLTag(ATag: IXMLElement);
+procedure TNavigatorForm.ImportFromXML(ANode: IXMLNode);
 begin
-   if TXMLProcessor.GetBoolFromAttr(ATag, 'nav_win_show') then
+   if GetNodeAttrBool(ANode, 'nav_win_show', False) then
    begin
       Position := poDesigned;
-      if TXMLProcessor.GetBoolFromAttr(ATag, 'nav_win_min') then
+      if GetNodeAttrBool(ANode, 'nav_win_min', False) then
          WindowState := wsMinimized;
-      SetBounds(TXMLProcessor.GetIntFromAttr(ATag, 'nav_win_x', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'nav_win_y', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'nav_win_width', 426),
-                TXMLProcessor.GetIntFromAttr(ATag, 'nav_win_height', 341));
+      SetBounds(GetNodeAttrInt(ANode, 'nav_win_x'),
+                GetNodeAttrInt(ANode, 'nav_win_y'),
+                GetNodeAttrInt(ANode, 'nav_win_width'),
+                GetNodeAttrInt(ANode, 'nav_win_height'));
       Show;
    end;
 end;

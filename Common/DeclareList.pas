@@ -47,7 +47,8 @@ type
          FId,
          FDragRow,
          FExternalCol: integer;
-         FKind: string;
+         FShort,
+         FNodeName: string;
          FSplitter: TSplitter;
          function GetId: integer;
          function IsDeclared(const AName: string; AssociatedListCheck: boolean): boolean;
@@ -90,11 +91,11 @@ type
          property Id: integer read GetId;
          constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
          destructor Destroy; override;
-         function ImportFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
-         function ImportItemFromXMLTag(ATag: IXMLElement): TError; virtual;
-         procedure ExportItemToXMLTag(ATag: IXMLElement; idx: integer); virtual;
-         procedure ExportToXMLTag(ATag: IXMLElement);
-         function GetImportTag(ATag: IXMLElement): IXMLElement; virtual;
+         function ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
+         function ImportItemFromXML(ANode: IXMLNode): TError; virtual;
+         procedure ExportItemToXML(ANode: IXMLNode; idx: integer); virtual;
+         procedure ExportToXML(ANode: IXMLNode);
+         function GetImportNode(ANode: IXMLNode): IXMLNode; virtual;
          function RetrieveFocus(AInfo: TFocusInfo): boolean;
          function GetTreeNodeText(ANodeOffset: integer = 0): string;
          function CanBeFocused: boolean;
@@ -124,14 +125,15 @@ type
          lblSize,
          lblInit: TLabel;
          constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
-         function ImportItemFromXMLTag(ATag: IXMLElement): TError; override;
-         procedure ExportItemToXMLTag(ATag: IXMLElement; idx: integer); override;
-         function GetImportTag(ATag: IXMLElement): IXMLElement; override;
+         function ImportItemFromXML(ANode: IXMLNode): TError; override;
+         procedure ExportItemToXML(ANode: IXMLNode; idx: integer); override;
+         function GetImportNode(ANode: IXMLNode): IXMLNode; override;
          procedure FillForList(AList: TStrings);
+         procedure RefreshTypes;
          function IsValidLoopVar(const AName: string): boolean;
          function IsGlobal: boolean; override;
-         function GetDimensionCount(const AVarName: string; AIncludeType: boolean = false): integer;
-         function GetDimensions(const AVarName: string; AIncludeType: boolean = false): TArray<string>;
+         function GetDimensionCount(const AVarName: string; AIncludeType: boolean = False): integer;
+         function GetDimensions(const AVarName: string; AIncludeType: boolean = False): TArray<string>;
          function GetExternModifier(idx: integer): string; override;
    end;
 
@@ -145,9 +147,8 @@ type
          edtValue: TEdit;
          lblValue: TLabel;
          constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
-         function ImportItemFromXMLTag(ATag: IXMLElement): TError; override;
-         procedure ExportItemToXMLTag(ATag: IXMLElement; idx: integer); override;
-         function GetImportTag(ATag: IXMLElement): IXMLElement; override;
+         function ImportItemFromXML(ANode: IXMLNode): TError; override;
+         procedure ExportItemToXML(ANode: IXMLNode; idx: integer); override;
          function GetValue(const AIdent: string): string;
          function IsGlobal: boolean; override;
          function GetExternModifier(idx: integer): string; override;
@@ -174,22 +175,20 @@ implementation
 
 uses
    System.SysUtils, System.StrUtils, System.UITypes, System.Rtti, Infrastructure,
-   XMLProcessor, Project, UserDataType, LangDefinition, ParserHelper, Constants;
+   XMLProcessor, Project, UserDataType, LangDefinition, ParserHelper, Constants, OmniXMLUtils;
 
 constructor TDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
-var
-   i: integer;
 begin
    FExternalCol := INVALID_COL;
    inherited Create(AParent);
    Parent := AParent;
-   ParentFont := false;
-   ParentBackground := false;
+   ParentFont := False;
+   ParentBackground := False;
    Font.Style := [fsBold];
    Font.Color := clBlack;
-   FModifying := false;
+   FModifying := False;
    AssociatedList := nil;
-   DoubleBuffered := true;
+   DoubleBuffered := True;
    FDragRow := INVALID_ROW;
    FId := TProject.GetInstance.Register(Self);
 
@@ -202,16 +201,16 @@ begin
    sgList.FixedRows := 1;
    sgList.FixedCols := 0;
    sgList.DefaultColWidth := sgList.Width div AColCount;
-   for i := 0 to AColCount-1 do
+   for var i := 0 to AColCount-1 do
       SetColumnLabel(i);
    sgList.DrawingStyle := gdsClassic;
-   sgList.Ctl3D := false;
+   sgList.Ctl3D := False;
    sgList.FixedColor := clMoneyGreen;
    sgList.Options := sgList.Options + [goRowSelect, goColSizing, goThumbTracking, goRowMoving] - [goRangeSelect];
    sgList.ScrollBars := ssVertical;
-   sgList.ParentFont := false;
+   sgList.ParentFont := False;
    sgList.Font.Style := [];
-   sgList.DoubleBuffered := true;
+   sgList.DoubleBuffered := True;
    sgList.OnDblClick := OnDblClickList;
    sgList.OnSelectCell := OnSelectCellList;
    sgList.OnMouseDown := OnMouseDownList;
@@ -229,9 +228,9 @@ begin
    btnRemove.SetBounds(4, sgList.BoundsRect.Bottom+8, (Width div 2)-5, 25);
    btnRemove.OnClick := OnClickRemove;
    btnRemove.Caption := i18Manager.GetString('btnRemove');
-   btnRemove.ParentFont := false;
+   btnRemove.ParentFont := False;
    btnRemove.Font.Style := [];
-   btnRemove.Enabled := false;
+   btnRemove.Enabled := False;
    btnRemove.Anchors := [akBottom, akLeft];
 
    btnChange := TButton.Create(Self);
@@ -239,16 +238,16 @@ begin
    btnChange.SetBounds(Width div 2, btnRemove.Top, (Width div 2)-5, 25);
    btnChange.OnClick := OnClickChange;
    btnChange.Caption := i18Manager.GetString('btnChange');
-   btnChange.ParentFont := false;
+   btnChange.ParentFont := False;
    btnChange.Font.Style := [];
-   btnChange.Enabled := false;
+   btnChange.Enabled := False;
    btnChange.Anchors := [akBottom, akLeft];
 
    gbBox := TGroupBox.Create(Self);
    gbBox.Parent := Self;
    gbBox.SetBounds(5, btnChange.BoundsRect.Bottom+4, AGBoxWidth, 72);
-   gbBox.ParentFont := false;
-   gbBox.ParentBackground := false;
+   gbBox.ParentFont := False;
+   gbBox.ParentBackground := False;
    gbBox.Font.Style := [];
    gbBox.Anchors := [akBottom, akLeft, akRight];
 
@@ -266,7 +265,7 @@ begin
    btnAdd.Parent := Self;
    btnAdd.SetBounds(4, gbBox.BoundsRect.Bottom+3, (Width-11) div 3, 25);
    btnAdd.OnClick := OnClickAdd;
-   btnAdd.ParentFont := false;
+   btnAdd.ParentFont := False;
    btnAdd.Font.Style := [];
    btnAdd.Anchors := [akLeft, akBottom, akRight];
    btnAdd.Caption := i18Manager.GetString('btnAdd');
@@ -275,7 +274,7 @@ begin
    btnImport.Parent := Self;
    btnImport.SetBounds(btnAdd.BoundsRect.Right+1, btnAdd.Top, btnAdd.Width, 25);
    btnImport.OnClick := OnClickImport;
-   btnImport.ParentFont := false;
+   btnImport.ParentFont := False;
    btnImport.Font.Style := [];
    btnImport.Anchors := [akLeft, akBottom, akRight];
    btnImport.Caption := i18Manager.GetString('btnImport');
@@ -284,7 +283,7 @@ begin
    btnExport.Parent := Self;
    btnExport.SetBounds(btnImport.BoundsRect.Right+1, btnAdd.Top, btnAdd.Width, 25);
    btnExport.OnClick := OnClickExport;
-   btnExport.ParentFont := false;
+   btnExport.ParentFont := False;
    btnExport.Font.Style := [];
    btnExport.Anchors := [akLeft, akBottom, akRight];
    btnExport.Caption := i18Manager.GetString('btnExport');
@@ -301,7 +300,8 @@ end;
 constructor TConstDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
 begin
 
-   FKind := 'Const';
+   FShort := 'Const';
+   FNodeName := CONST_TAG;
 
    inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
 
@@ -321,7 +321,7 @@ begin
    edtValue.Parent := gbBox;
    edtValue.SetBounds(lblValue.Width+10, 42, gbBox.Width-lblValue.Width-18, 21);
    edtValue.Anchors := edtValue.Anchors + [akRight];
-   edtValue.ShowHint := true;
+   edtValue.ShowHint := True;
    edtValue.Hint := i18Manager.GetString('DisableFieldValid');
    edtValue.OnKeyDown := OnKeyDownCommon;
 
@@ -332,7 +332,8 @@ end;
 constructor TVarDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
 begin
 
-   FKind := 'Var';
+   FShort := 'Var';
+   FNodeName := VAR_TAG;
 
    inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
 
@@ -375,7 +376,7 @@ begin
    edtInit.Parent := gbBox;
    edtInit.SetBounds(lblInit.BoundsRect.Right+5, 42, gbBox.Width-lblInit.BoundsRect.Right-13, 21);
    edtInit.Anchors := edtInit.Anchors + [akRight];
-   edtInit.ShowHint := true;
+   edtInit.ShowHint := True;
    edtInit.Hint := i18Manager.GetString('DisableFieldValid');
    edtInit.OnKeyDown := OnKeyDownCommon;
 
@@ -384,13 +385,10 @@ begin
 end;
 
 procedure TDeclareList.SetColumnLabel(ACol: integer; const AColLabel: string = '');
-var
-   s: string;
 begin
-   if AColLabel.IsEmpty then
-      s := i18Manager.GetString('sg' + FKind + 'ListCol' + ACol.ToString)
-   else
-      s := AColLabel;
+   var s := AColLabel; 
+   if s.IsEmpty then
+      s := i18Manager.GetString('sg' + FShort + 'ListCol' + ACol.ToString);
    sgList.Cells[ACol, 0] := s;
 end;
 
@@ -412,19 +410,14 @@ end;
 procedure TDeclareList.OnCanResizeSplitter(Sender: TObject; var NewSize: Integer; var Accept: Boolean);
 begin
    if (NewSize < sgList.BoundsRect.Right + 4) and (NewSize < sgList.GetMinWidth) then
-      Accept := false;
+      Accept := False;
 end;
 
 function TDeclareList.RetrieveFocus(AInfo: TFocusInfo): boolean;
-var
-   i: integer;
-   typeName: string;
-   list: TDeclareList;
-   dataType: TUserDataType;
 begin
-   i := 0;
-   list := nil;
-   typeName := AInfo.SelText.Trim;
+   var i := 0;
+   var list: TDeclareList := nil;
+   var typeName := AInfo.SelText.Trim;
    if not typeName.IsEmpty then
    begin
       i := sgList.Cols[NAME_COL].IndexOf(typeName);
@@ -438,7 +431,7 @@ begin
       end;
       if list = nil then
       begin
-         dataType := GProject.GetUserDataType(typeName);
+         var dataType := GProject.GetUserDataType(typeName);
          if dataType <> nil then
          begin
             result := dataType.RetrieveFocus(AInfo);
@@ -462,7 +455,7 @@ end;
 
 function TDeclareList.CanBeFocused: boolean;
 begin
-   result := true;
+   result := True;
 end;
 
 function TDeclareList.GetId: integer;
@@ -476,7 +469,7 @@ begin
       edtName.SetFocus;
 end;
 
-function TVarDeclareList.GetDimensionCount(const AVarName: string; AIncludeType: boolean = false): integer;
+function TVarDeclareList.GetDimensionCount(const AVarName: string; AIncludeType: boolean = False): integer;
 begin
    var i := sgList.Cols[VAR_NAME_COL].IndexOf(AVarName);
    if i < 1 then
@@ -490,7 +483,7 @@ begin
    end;
 end;
 
-function TVarDeclareList.GetDimensions(const AVarName: string; AIncludeType: boolean = false): TArray<string>;
+function TVarDeclareList.GetDimensions(const AVarName: string; AIncludeType: boolean = False): TArray<string>;
 begin
    var i := sgList.Cols[VAR_NAME_COL].IndexOf(AVarName);
    if i < 1 then
@@ -565,7 +558,7 @@ begin
       if lRow <> INVALID_ROW then
       begin
          FDragRow := lRow;
-         sgList.BeginDrag(true);
+         sgList.BeginDrag(True);
       end;
    end;
 end;
@@ -580,7 +573,7 @@ begin
    status := GInfra.ValidateId(edtName.Text);
    lType := TParserHelper.GetType(cbType.Text);
    if status <> VALID_IDENT then
-   else if IsDeclared(edtName.Text, true) then
+   else if IsDeclared(edtName.Text, True) then
       status := DUPLICATED_IDENT
    else if not edtSize.ParseSize then
       status := INCORRECT_SIZE
@@ -627,7 +620,7 @@ end;
 
 procedure TDeclareList.OnClickImport(Sender: TObject);
 begin
-   if not TXMLProcessor.ImportFromXMLFile(ImportFromXMLTag, impAll).IsEmpty then
+   if not TXMLProcessor.ImportFromXMLFile(ImportFromXML, impAll).IsEmpty then
       TInfra.UpdateCodeEditor;
 end;
 
@@ -635,8 +628,8 @@ procedure TDeclareList.OnClickExport(Sender: TObject);
 begin
    if sgList.RowCount > 2 then
    begin
-      var fileName := GProject.Name + '_' + i18Manager.GetString(FKind + 's');
-      TXMLProcessor.ExportToXMLFile(ExportToXMLTag, fileName);
+      var fileName := GProject.Name + '_' + i18Manager.GetString(FShort + 's');
+      TXMLProcessor.ExportToXMLFile(ExportToXML, fileName);
    end;
 end;
 
@@ -662,7 +655,7 @@ begin
    constType := GENERIC_INT_TYPE;
    status := GInfra.ValidateConstId(edtName.Text);
    if status <> VALID_IDENT then
-   else if IsDeclared(edtName.Text, true) then
+   else if IsDeclared(edtName.Text, True) then
       status := DUPLICATED_IDENT
    else
    begin
@@ -707,10 +700,10 @@ begin
    if FModifying then
    begin
       result := sgList.Row;
-      sgList.Enabled := true;
-      btnChange.Enabled := true;
-      btnRemove.Enabled := true;
-      FModifying := false;
+      sgList.Enabled := True;
+      btnChange.Enabled := True;
+      btnRemove.Enabled := True;
+      FModifying := False;
    end
    else
    begin
@@ -727,20 +720,19 @@ end;
 
 procedure TDeclareList.OnClickRemove(Sender: TObject);
 begin
-   with sgList do
+   if FExternalCol <> INVALID_COL then
+      sgList.Objects[FExternalCol, sgList.Row].Free;
+   sgList.BeginUpdate;
+   for var i := sgList.Row to sgList.RowCount-2 do
+      sgList.Rows[i].Assign(sgList.Rows[i+1]);
+   sgList.RowCount := sgList.RowCount - 1;
+   if (sgList.Row = sgList.RowCount-1) and (sgList.Row <> 1) then
+      sgList.Row := sgList.Row - 1;
+   sgList.EndUpdate;
+   if sgList.RowCount = 2 then
    begin
-      if FExternalCol <> INVALID_COL then
-         Objects[FExternalCol, Row].Free;
-      for var i := Row to RowCount-2 do
-         Rows[i].Assign(Rows[i+1]);
-      RowCount := RowCount - 1;
-      if (Row = RowCount-1) and (Row <> 1) then
-         Row := Row - 1;
-      if RowCount = 2 then
-      begin
-         btnChange.Enabled := False;
-         btnRemove.Enabled := False;
-      end;
+      btnChange.Enabled := False;
+      btnRemove.Enabled := False;
    end;
    OnTopLeftChanged(sgList);
    GProject.SetChanged;
@@ -768,7 +760,7 @@ begin
    btnChange.Enabled := False;
    btnRemove.Enabled := False;
    edtName.SetFocus;
-   FModifying := true;
+   FModifying := True;
 end;
 
 procedure TVarDeclareList.OnClickChange(Sender: TObject);
@@ -798,7 +790,7 @@ begin
    var i := sgList.Cols[NAME_COL].IndexOf(AName);
    result := (i > 0) and not (FModifying and (i = sgList.Row));
    if (AssociatedList <> nil) and AssociatedListCheck and not result then
-      result := AssociatedList.IsDeclared(AName, false);
+      result := AssociatedList.IsDeclared(AName, False);
 end;
 
 procedure TDeclareList.OnKeyDownCommon(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -835,7 +827,7 @@ end;
 
 function TVarDeclareList.IsValidLoopVar(const AName: string): boolean;
 begin
-   result := false;
+   result := False;
    var i := sgList.Cols[VAR_NAME_COL].IndexOf(AName);
    if i > 0 then
    begin
@@ -844,149 +836,132 @@ begin
    end;
 end;
 
-function TDeclareList.GetImportTag(ATag: IXMLElement): IXMLElement;
+function TVarDeclareList.GetImportNode(ANode: IXMLNode): IXMLNode;
 begin
-   result := ATag;
-end;
-
-function TVarDeclareList.GetImportTag(ATag: IXMLElement): IXMLElement;
-begin
-   result := TXMLProcessor.FindChildTag(ATag, VAR_TAG);
+   result := inherited GetImportNode(ANode);
    if result = nil then
    begin
-      result := TXMLProcessor.FindChildTag(ATag, FUNCTION_TAG);
+      result := FindNode(ANode, FUNCTION_TAG);
       if result <> nil then
       begin
-         result := TXMLProcessor.FindChildTag(result, HEADER_TAG);
+         result := FindNode(result, HEADER_TAG);
          if result <> nil then
-            result := TXMLProcessor.FindChildTag(result, VAR_TAG);
+            result := FindNode(result, VAR_TAG);
       end;
    end;
-   if result <> nil then
-      TInfra.PopulateDataTypeCombo(cbType);
 end;
 
-function TConstDeclareList.GetImportTag(ATag: IXMLElement): IXMLElement;
+function TDeclareList.GetImportNode(ANode: IXMLNode): IXMLNode;
 begin
-   result := TXMLProcessor.FindChildTag(ATag, CONST_TAG);
+   result := FindNode(ANode, FNodeName);
 end;
 
-function TDeclareList.ImportFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
-var
-   tag: IXMLElement;
-   i: integer;
+function TDeclareList.ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
 begin
-   if ATag <> nil then
-      FId := GProject.Register(Self, StrToIntDef(ATag.GetAttribute(ID_ATTR), ID_INVALID));
+   if ANode <> nil then
+      FId := GProject.Register(Self, GetNodeAttrInt(ANode, ID_ATTR, ID_INVALID));
    if goColSizing in sgList.Options then
    begin
-      i := 0;
-      tag := TXMLProcessor.FindChildTag(ATag, FKind + 'colwidth');
-      while (tag <> nil) and (i < sgList.ColCount) do
+      var i := 0;
+      var nodes := FilterNodes(ANode, FShort + 'colwidth');
+      var node := nodes.NextNode;
+      while (node <> nil) and (i < sgList.ColCount) do
       begin
-         sgList.ColWidths[i] := StrToIntDef(tag.Text, sgList.ColWidths[i]);
-         tag := TXMLProcessor.FindNextTag(tag);
+         sgList.ColWidths[i] := StrToIntDef(node.Text, sgList.ColWidths[i]);
+         node := nodes.NextNode;
          i := i + 1;
       end;
    end;
-   tag := TXMLProcessor.FindChildTag(ATag, FKind + 'width');
-   if tag <> nil then
-      Width := StrToIntDef(tag.Text, Width);
-   tag := GetImportTag(ATag);
-   while tag <> nil do
+   var node := FindNode(ANode, FShort + 'width');
+   if node <> nil then
+      Width := StrToIntDef(node.Text, Width);
+   sgList.BeginUpdate;
+   node := GetImportNode(ANode);
+   while node <> nil do
    begin
-      ImportItemFromXMLTag(tag);
-      tag := TXMLProcessor.FindNextTag(tag);
+      if node.NodeName = FNodeName then
+         ImportItemFromXML(node);
+      node := node.NextSibling;
    end;
+   sgList.EndUpdate;
    RefreshCheckBoxes;
    result := errNone;
 end;
 
-function TDeclareList.ImportItemFromXMLTag(ATag: IXMLElement): TError;
+function TDeclareList.ImportItemFromXML(ANode: IXMLNode): TError;
 begin
    result := errValidate;
-   var lName := ATag.GetAttribute(NAME_ATTR).Trim;
+   var lName := GetNodeAttrStr(ANode, NAME_ATTR).Trim;
    if (not lName.IsEmpty) and (sgList.Cols[NAME_COL].IndexOf(lName) < 1) then
    begin
       var idx := sgList.RowCount - 1;
       sgList.Cells[NAME_COL, idx] := lName;
       var box := CreateExternalCheckBox(idx);
       if box <> nil then
-         box.State := TInfra.DecodeCheckBoxState(ATag.GetAttribute(EXTERN_ATTR));
+         box.State := TInfra.DecodeCheckBoxState(GetNodeAttrStr(ANode, EXTERN_ATTR));
       result := errNone;
    end;
 end;
 
-function TConstDeclareList.ImportItemFromXMLTag(ATag: IXMLElement): TError;
+function TConstDeclareList.ImportItemFromXML(ANode: IXMLNode): TError;
 begin
-   result := inherited ImportItemFromXMLTag(ATag);
+   result := inherited ImportItemFromXML(ANode);
    if result = errNone then
    begin
       var idx := sgList.RowCount - 1;
-      sgList.Cells[CONST_VALUE_COL, idx] := ATag.GetAttribute(VALUE_ATTR);
+      sgList.Cells[CONST_VALUE_COL, idx] := GetNodeAttrStr(ANode, VALUE_ATTR);
       sgList.RowCount := idx + 2;
    end;
 end;
 
-function TVarDeclareList.ImportItemFromXMLTag(ATag: IXMLElement): TError;
+function TVarDeclareList.ImportItemFromXML(ANode: IXMLNode): TError;
 begin
-   result := inherited ImportItemFromXMLTag(ATag);
+   result := inherited ImportItemFromXML(ANode);
    if result = errNone then
    begin
       var idx := sgList.RowCount - 1;
-      var lType := ATag.GetAttribute(TYPE_ATTR);
+      var lType := GetNodeAttrStr(ANode, TYPE_ATTR);
       if cbType.Items.IndexOf(lType) = -1 then
          lType := i18Manager.GetString('Unknown');
       sgList.Cells[VAR_TYPE_COL, idx] := lType;
-      sgList.Cells[VAR_SIZE_COL, idx] := ATag.GetAttribute(SIZE_ATTR);
-      sgList.Cells[VAR_INIT_COL, idx] := ATag.GetAttribute(INIT_ATTR);
+      sgList.Cells[VAR_SIZE_COL, idx] := GetNodeAttrStr(ANode, SIZE_ATTR);
+      sgList.Cells[VAR_INIT_COL, idx] := GetNodeAttrStr(ANode, INIT_ATTR);
       sgList.RowCount := idx + 2;
    end;
 end;
 
-procedure TDeclareList.ExportToXMLTag(ATag: IXMLElement);
-var
-   i: integer;
-   tag: IXMLElement;
+procedure TDeclareList.ExportToXML(ANode: IXMLNode);
 begin
-   for i := 1 to sgList.RowCount-2 do
-      ExportItemToXMLTag(ATag, i);
+   for var i := 1 to sgList.RowCount-2 do
+      ExportItemToXML(ANode, i);
    if goColSizing in sgList.Options then
    begin
-      for i := 0 to sgList.ColCount-1 do
-      begin
-         tag := ATag.OwnerDocument.CreateElement(FKind + 'colwidth');
-         tag.Text := sgList.ColWidths[i].ToString;
-         ATag.AppendChild(tag);
-      end;
+      for var i := 0 to sgList.ColCount-1 do
+         AppendNode(ANode, FShort + 'colwidth').Text := sgList.ColWidths[i].ToString;
    end;
-   tag := ATag.OwnerDocument.CreateElement(FKind + 'width');
-   tag.Text := Width.ToString;
-   ATag.AppendChild(tag);
+   SetNodeTextInt(ANode, FShort + 'width', Width);
 end;
 
-procedure TDeclareList.ExportItemToXMLTag(ATag: IXMLElement; idx: integer);
+procedure TDeclareList.ExportItemToXML(ANode: IXMLNode; idx: integer);
 begin
-   ATag.SetAttribute(NAME_ATTR, sgList.Cells[NAME_COL, idx]);
-   ATag.SetAttribute(EXTERN_ATTR, TRttiEnumerationType.GetName(GetExternalState(idx)));
+   SetNodeAttrStr(ANode, NAME_ATTR, sgList.Cells[NAME_COL, idx]);
+   SetNodeAttrStr(ANode, EXTERN_ATTR, TRttiEnumerationType.GetName(GetExternalState(idx)));
 end;
 
-procedure TVarDeclareList.ExportItemToXMLTag(ATag: IXMLElement; idx: integer);
+procedure TVarDeclareList.ExportItemToXML(ANode: IXMLNode; idx: integer);
 begin
-   var tag := ATag.OwnerDocument.CreateElement(VAR_TAG);
-   ATag.AppendChild(tag);
-   tag.SetAttribute(TYPE_ATTR, sgList.Cells[VAR_TYPE_COL, idx]);
-   tag.SetAttribute(SIZE_ATTR, sgList.Cells[VAR_SIZE_COL, idx]);
-   tag.SetAttribute(INIT_ATTR, sgList.Cells[VAR_INIT_COL, idx]);
-   inherited ExportItemToXMLTag(tag, idx);
+   var node := AppendNode(ANode, VAR_TAG);
+   SetNodeAttrStr(node, TYPE_ATTR, sgList.Cells[VAR_TYPE_COL, idx]);
+   SetNodeAttrStr(node, SIZE_ATTR, sgList.Cells[VAR_SIZE_COL, idx]);
+   SetNodeAttrStr(node, INIT_ATTR, sgList.Cells[VAR_INIT_COL, idx]);
+   inherited ExportItemToXML(node, idx);
 end;
 
-procedure TConstDeclareList.ExportItemToXMLTag(ATag: IXMLElement; idx: integer);
+procedure TConstDeclareList.ExportItemToXML(ANode: IXMLNode; idx: integer);
 begin
-   var tag := ATag.OwnerDocument.CreateElement(CONST_TAG);
-   ATag.AppendChild(tag);
-   tag.SetAttribute(VALUE_ATTR, sgList.Cells[CONST_VALUE_COL, idx]);
-   inherited ExportItemToXMLTag(tag, idx);
+   var node := AppendNode(ANode, CONST_TAG);
+   SetNodeAttrStr(node, VALUE_ATTR, sgList.Cells[CONST_VALUE_COL, idx]);
+   inherited ExportItemToXML(node, idx);
 end;
 
 function TVarDeclareList.IsGlobal: boolean;
@@ -1038,7 +1013,7 @@ begin
       result.X := sgList.ClientWidth;
    if result.Y = 0 then
       result.Y := ARow * (sgList.DefaultRowHeight + sgList.GridLineWidth);
-   var s5 := TInfra.Scaled(5);
+   var s5 := TInfra.Scaled(Self, 5);
    result.X := result.X + sgList.Left + (sgList.ColWidths[FExternalCol] div 2) - s5;
    result.Y := result.Y + sgList.Top + (sgList.DefaultRowHeight div 2) - s5;
 end;
@@ -1048,7 +1023,7 @@ begin
    result := nil;
    if FExternalCol <> INVALID_COL then
    begin
-      var s12 := TInfra.Scaled(12);
+      var s12 := TInfra.Scaled(Self, 12);
       var pnt := GetExternalCheckBoxPoint(ARow);
       result := TCheckBox.Create(sgList.Parent);
       result.Parent := sgList.Parent;
@@ -1099,6 +1074,17 @@ begin
    end;
 end;
 
+procedure TVarDeclareList.RefreshTypes;
+begin
+   sgList.BeginUpdate;
+   for var i := 1 to sgList.RowCount-2 do
+   begin
+      if TParserHelper.GetType(sgList.Cells[VAR_TYPE_COL, i]) = UNKNOWN_TYPE then
+         sgList.Cells[VAR_TYPE_COL, i] := i18Manager.GetString('Unknown');
+   end;
+   sgList.EndUpdate;
+end;
+
 procedure TDeclareList.OnColWidthsChanged(Sender: TObject);
 begin
    RefreshCheckBoxes;
@@ -1131,12 +1117,12 @@ end;
 
 function TDeclareLIst.CanRemove: boolean;
 begin
-   result := false;
+   result := False;
 end;
 
 function TDeclareList.IsBoldDesc: boolean;
 begin
-   result := true;
+   result := True;
 end;
 
 end.

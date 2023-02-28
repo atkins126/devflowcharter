@@ -43,7 +43,7 @@ begin
       var buffer := '';
       for var i := 1 to AVarList.sgList.RowCount-2 do
       begin
-         if i <> 1 then
+         if not buffer.IsEmpty then
             buffer := buffer + ', ';
          buffer := buffer + AVarList.sgList.Cells[VAR_NAME_COL, i];
       end;

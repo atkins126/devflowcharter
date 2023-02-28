@@ -32,7 +32,7 @@ uses
    Vcl.Dialogs, Vcl.ComCtrls, Vcl.Clipbrd, Vcl.Menus, System.SysUtils, System.Classes,
    SynEdit, SynExportRTF, SynEditPrint, Types, SynHighlighterPas, SynHighlighterCpp,
    SynMemo, SynExportHTML, OmniXML, Base_Form, Interfaces, SynEditExport, SynEditHighlighter,
-   SynHighlighterPython, SynHighlighterJava;
+   SynHighlighterPython, SynHighlighterJava, Base_Block;
 
 type
 
@@ -113,7 +113,7 @@ type
     procedure miHelpClick(Sender: TObject);
     procedure memCodeEditorPaintTransient(Sender: TObject; Canvas: TCanvas; TransientType: TTransientType);
     procedure memCodeEditorMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
-    function SelectCodeRange(AObject: TObject; ADoSelect: boolean = true): TCodeRange;
+    function SelectCodeRange(AObject: TObject; ADoSelect: boolean = True): TCodeRange;
     procedure UnSelectCodeRange(AObject: TObject);
     procedure Localize(AList: TStringList); override;
     procedure ResetForm; override;
@@ -128,7 +128,7 @@ type
   private
     { Private declarations }
     FCloseBracketPos: TPoint;
-    FCloseBracketHint,
+    FCloseBracketPosP: PPoint;
     FFocusEditor: boolean;
     FDialog: TFindDialog;
     FWithFocus: IWithFocus;
@@ -136,15 +136,16 @@ type
     function CharToPixels(P: TBufferCoord): TPoint;
     function GetAllLines: TStrings;
     procedure PasteComment(const AText: string);
-    procedure DisplayLines(ALines: TStringList; APreserveBookMarks: boolean);
+    procedure DisplayLines(ALines: TStringList; AReset: boolean);
   public
     { Public declarations }
     procedure SetFormAttributes;
     procedure ExecuteCopyToClipboard(AIfRichText: boolean);
-    procedure ExportSettingsToXMLTag(ATag: IXMLElement); override;
-    procedure ImportSettingsFromXMLTag(ATag: IXMLElement); override;
+    procedure ExportToXML(ANode: IXMLNode); override;
+    procedure ImportFromXML(ANode: IXMLNode); override;
     function GetIndentLevel(idx: integer; ALines: TStrings): integer;
     procedure RefreshEditorForObject(AObject: TObject);
+    procedure UpdateEditorForBlock(ABlock: TBlock; const AChangeLine: TChangeLine);
     procedure SetCaretPos(const ALine: TChangeLine);
     procedure SaveToFile(const APath: string);
     procedure InsertLibraryEntry(const ALibrary: string);
@@ -158,6 +159,7 @@ type
   TEditorHintWindow = class(THintWindow)
      constructor Create (AOwner: TComponent); override;
      procedure ActivateHintData(ARect: TRect; const AHint: string; AData: Pointer); override;
+     function CalcHintRect(MaxWidth: Integer; const AHint: string; AData: Pointer): TRect; override;
   end;
 
 var
@@ -167,8 +169,8 @@ implementation
 
 uses
    System.StrUtils, System.UITypes, System.Math, WinApi.Windows, Infrastructure,
-   Goto_Form, Settings, LangDefinition, Main_Block, Help_Form, Comment, XMLProcessor,
-   Main_Form, Base_Block, SynEditTypes, ParserHelper, Constants, System.Character;
+   Goto_Form, Settings, LangDefinition, Main_Block, Help_Form, Comment, OmniXMLUtils,
+   Main_Form, SynEditTypes, ParserHelper, Constants, System.Character;
 
 {$R *.dfm}
 
@@ -185,10 +187,26 @@ end;
 
 procedure TEditorHintWindow.ActivateHintData(ARect: TRect; const AHint: string; AData: Pointer);
 begin
-   if (AData <> nil) and not TPoint(AData^).IsZero then
-      ARect.SetLocation(TPoint(AData^));
+   if AData <> nil then
+      ARect.SetLocation(PPoint(AData)^);
    ARect.Offset(0, -ARect.Height);
    inherited ActivateHintData(ARect, AHint, AData);
+end;
+
+// implementation taken from base class (THintWindow)
+function TEditorHintWindow.CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect;
+begin
+  Result := System.Types.Rect(0, 0, MaxWidth, 0);
+  //code below removed to allow use of custom font (e.g. font of underlying control) instead of Screen.HintFont
+  //if Screen.ActiveCustomForm <> nil then
+  //begin
+  //  Canvas.Font := Screen.HintFont;
+  //  Canvas.Font.Height := Muldiv(Canvas.Font.Height, Screen.ActiveCustomForm.CurrentPPI, Screen.PixelsPerInch);
+  //end;
+  DrawText(Canvas.Handle, AHint, -1, Result, DT_CALCRECT or DT_LEFT or
+    DT_WORDBREAK or DT_NOPREFIX or DrawTextBiDiModeFlagsReadingOnly);
+  Inc(Result.Right, 6);
+  Inc(Result.Bottom, 2);
 end;
 
 procedure TEditorForm.FormCreate(Sender: TObject);
@@ -203,11 +221,11 @@ end;
 
 procedure TEditorForm.OnShowHint(var HintStr: string; var CanShow: Boolean; var HintInfo: THintInfo);
 begin
-   if (HintInfo.HintControl = memCodeEditor) and FCloseBracketHint then
+   if (HintInfo.HintControl = memCodeEditor) and (FCloseBracketPosP <> nil) then
    begin
-      FCloseBracketHint := false;
       HintInfo.HintWindowClass := TEditorHintWindow;
-      HintInfo.HintData := @FCloseBracketPos;
+      HintInfo.HintData := FCloseBracketPosP;
+      FCloseBracketPosP := nil;
    end;
 end;
 
@@ -290,7 +308,7 @@ begin
       if miRichText.Enabled then
          miRichText.Checked := EditorShowRichText
       else
-         miRichText.Checked := false;
+         miRichText.Checked := False;
       if EditorShowScrollbars then
          memCodeEditor.ScrollBars := ssBoth
       else
@@ -306,7 +324,7 @@ begin
 {$IFDEF USE_CODEFOLDING}
       miCodeFoldingEnable.Enabled := Length(GInfra.CurrentLang.FoldRegions) > 0;
 {$ELSE}
-      miCodeFoldingEnable.Enabled := false;
+      miCodeFoldingEnable.Enabled := False;
 {$ENDIF}
       miCodeFoldingEnable.Checked := EditorCodeFolding and miCodeFoldingEnable.Enabled;
       miCollapseAll.Enabled := miCodeFoldingEnable.Checked;
@@ -317,7 +335,7 @@ begin
       with memCodeEditor.CodeFolding do
       begin
          Enabled := miCodeFoldingEnable.Checked;
-         HighlighterFoldRegions := false;
+         HighlighterFoldRegions := False;
          FolderBarColor := EditorGutterColor;
          FolderBarLinesColor := EditorFontColor;
          IndentGuides := miIndentGuides.Checked;
@@ -334,9 +352,8 @@ begin
 {$ENDIF}
    memCodeEditor.ClearAll;
    memCodeEditor.Highlighter := nil;
-   FFocusEditor := true;
-   FCloseBracketHint := false;
-   FCloseBracketPos := TPoint.Zero;
+   FFocusEditor := True;
+   FCloseBracketPosP := nil;
    FWithFocus := nil;
    Width := 425;
    Height := 558;
@@ -387,12 +404,12 @@ begin
       beginComment := GInfra.CurrentLang.CommentBegin;
       endComment := GInfra.CurrentLang.CommentEnd;
       count := strings.Count - 1;
-      afterLine := true;
+      afterLine := True;
       for i := 0 to count do
       begin
          if memCodeEditor.CaretX <= memCodeEditor.Lines[memCodeEditor.CaretY-1+i].Length then
          begin
-            afterLine := false;
+            afterLine := False;
             break;
          end;
       end;
@@ -437,14 +454,14 @@ begin
    end;
 end;
 
-procedure TEditorForm.DisplayLines(ALines: TStringList; APreserveBookMarks: boolean);
+procedure TEditorForm.DisplayLines(ALines: TStringList; AReset: boolean);
 begin
    if (ALines = nil) or (ALines.Count = 0) then
       Exit;
 {$IFDEF USE_CODEFOLDING}
    memCodeEditor.AllFoldRanges.DestroyAll;
 {$ENDIF}
-   if not APreserveBookMarks then
+   if AReset then
       memCodeEditor.Marks.Clear;
    memCodeEditor.Highlighter := nil;
    if GSettings.IndentChar = TAB_CHAR then
@@ -459,16 +476,17 @@ begin
          memCodeEditor.SetFocus;
    end
    else
-      FFocusEditor := true;
+      FFocusEditor := True;
    memCodeEditor.ClearUndo;
-   memCodeEditor.Modified := false;
+   memCodeEditor.Modified := not AReset;
 end;
 
 procedure TEditorForm.FormShow(Sender: TObject);
 begin
    var programLines := GInfra.GenerateProgram;
    try
-      DisplayLines(programLines, false);
+      DisplayLines(programLines, True);
+      GProject.SetChanged;
    finally
       programLines.Free;
    end;
@@ -477,7 +495,7 @@ end;
 procedure TEditorForm.pmPopMenuPopup(Sender: TObject);
 begin
    FWithFocus := nil;
-   miFindProj.Enabled := false;
+   miFindProj.Enabled := False;
    miCut.Enabled := memCodeEditor.SelAvail;
    miCopy.Enabled := miCut.Enabled;
    miCopyRichText.Enabled := miCopy.Enabled and (memCodeEditor.Highlighter <> nil);
@@ -518,9 +536,9 @@ begin
    else if Sender = miCut then
       memCodeEditor.CutToClipboard
    else if Sender = miCopy then
-      ExecuteCopyToClipboard(false)
+      ExecuteCopyToClipboard(False)
    else if Sender = miCopyRichText then
-      ExecuteCopyToClipboard(true)
+      ExecuteCopyToClipboard(True)
    else if Sender = miPaste then
       memCodeEditor.PasteFromClipboard
    else if Sender = miRemove then
@@ -627,12 +645,12 @@ begin
       Exit
    else
       libEntry := ALibrary;
-   found := false;
+   found := False;
    for i := 0 to memCodeEditor.Lines.Count-1 do
    begin
       if memCodeEditor.Lines[i].TrimLeft.StartsWith(libEntry, not GInfra.CurrentLang.CaseSensitiveSyntax) then
       begin
-         found := true;
+         found := True;
          break;
       end;
    end;
@@ -784,7 +802,15 @@ begin
       stbEditorBar.Panels[0].Text := i18Manager.GetFormattedString('StatusBarInfo', [p.Line, p.Char]);
    end;
    if scModified in Changes then
-      stbEditorBar.Panels[1].Text := IfThen(memCodeEditor.Modified, i18Manager.GetString('Modified'));
+   begin
+      if memCodeEditor.Modified then
+      begin
+         stbEditorBar.Panels[1].Text := i18Manager.GetString('Modified');
+         GProject.SetChanged;
+      end
+      else
+         stbEditorBar.Panels[1].Text := '';
+   end;
    if scInsertMode in Changes then
       stbEditorBar.Panels[2].Text := i18Manager.GetString(IfThen(memCodeEditor.InsertMode, 'InsertMode', 'OverwriteMode'));
 end;
@@ -793,7 +819,7 @@ procedure TEditorForm.memCodeEditorGutterClick(Sender: TObject;
   Button: TMouseButton; X, Y, Line: Integer; Mark: TSynEditMark);
 const
    MARK_FIRST_INDEX = 0;   // index of first bookmark image in MainForm.ImageList1
-   MARK_LAST_INDEX = 4;   // index of last bookmark image in MainForm.ImageList1
+   MARK_LAST_INDEX = 4;    // index of last bookmark image in MainForm.ImageList1
    MAX_MARKS = MARK_LAST_INDEX - MARK_FIRST_INDEX + 1;
 var
    i, a: integer;
@@ -805,11 +831,11 @@ begin
       begin
          for i := MARK_FIRST_INDEX to MARK_LAST_INDEX do
          begin
-            found := true;
+            found := True;
             for a := 0 to memCodeEditor.Marks.Count-1 do
                if i = memCodeEditor.Marks[a].ImageIndex then
                begin
-                  found := false;
+                  found := False;
                   break;
                end;
             if found then break;
@@ -820,7 +846,7 @@ begin
          Mark.ImageIndex := i;
          memCodeEditor.Marks.Add(Mark);
          Mark.Line := Line;
-         Mark.Visible := true;
+         Mark.Visible := True;
       end;
    end
    else
@@ -858,7 +884,7 @@ begin
    if State = dsDragEnter then
       memCodeEditor.SetFocus;
    if not ((Source is TComment) or (Source is TBlock)) then
-      Accept := false
+      Accept := False
    else
       memCodeEditor.CaretXY := memCodeEditor.DisplayToBufferPos(memCodeEditor.PixelsToRowColumn(X, Y));
 end;
@@ -1000,13 +1026,11 @@ var
    idInfo: TIdentInfo;
    obj: TObject;
    block: TBlock;
-   pos: TPoint;
    i: integer;
 begin
    h := '';
-   FCloseBracketHint := false;
-   FCloseBracketPos := TPoint.Zero;
-   memCodeEditor.ShowHint := false;
+   FCloseBracketPosP := nil;
+   memCodeEditor.ShowHint := False;
    memCodeEditor.Hint := '';
    p := memCodeEditor.DisplayToBufferPos(memCodeEditor.PixelsToRowColumn(X, Y));
    p1 := memCodeEditor.GetMatchingBracketEx(p);
@@ -1018,16 +1042,11 @@ begin
       h := BuildBracketHint(i, p.Line-2);
       if not h.IsEmpty then
       begin
-         with memCodeEditor do
-         begin
-            pos := ClientToScreen(CharToPixels(p));
-            Dec(pos.Y, LineHeight-Canvas.TextHeight('I')+1);
-            Dec(pos.X, 3);
-         end;
-         FCloseBracketPos := pos;
-         FCloseBracketHint := true;
+         FCloseBracketPos := memCodeEditor.ClientToScreen(CharToPixels(p))
+                             - Point(3, memCodeEditor.LineHeight-memCodeEditor.Canvas.TextHeight('I')+1);
+         FCloseBracketPosP := @FCloseBracketPos;
          memCodeEditor.Hint := h;
-         memCodeEditor.ShowHint := true;
+         memCodeEditor.ShowHint := True;
          Exit;
       end;
    end;
@@ -1036,8 +1055,8 @@ begin
    if w1.IsEmpty or (memCodeEditor.GetHighlighterAttriAtRowCol(p, w1, hAttr) and (memCodeEditor.Highlighter.StringAttribute = hAttr)) then
       Exit;
    block := nil;
-   gCheck := true;
-   lCheck := true;
+   gCheck := True;
+   lCheck := True;
    idInfo := TIdentInfo.New;
    obj := memCodeEditor.Lines.Objects[p.Line-1];
    idInfo.Ident := w;
@@ -1046,14 +1065,14 @@ begin
    TParserHelper.GetParameterInfo(TInfra.GetFunctionHeader(block), idInfo);
    if idInfo.TType <> NOT_DEFINED then
    begin
-      lCheck := false;
-      gCheck := false;
+      lCheck := False;
+      gCheck := False;
    end;
    if lCheck then
    begin
       TParserHelper.GetVariableInfo(TParserHelper.FindUserFunctionVarList(block), idInfo);
       if idInfo.TType <> NOT_DEFINED then
-         gCheck := false;
+         gCheck := False;
    end;
    if gCheck then
       idInfo := TParserHelper.GetIdentInfo(w);
@@ -1078,7 +1097,7 @@ begin
    if not h.IsEmpty then
    begin
       memCodeEditor.Hint := h;
-      memCodeEditor.ShowHint := true;
+      memCodeEditor.ShowHint := True;
    end;
 end;
 
@@ -1102,7 +1121,7 @@ begin
    end;
 end;
 
-function TEditorForm.SelectCodeRange(AObject: TObject; ADoSelect: boolean = true): TCodeRange;
+function TEditorForm.SelectCodeRange(AObject: TObject; ADoSelect: boolean = True): TCodeRange;
 var
    i: integer;
    lines: TStrings;
@@ -1123,8 +1142,8 @@ begin
             result.FirstRow := result.Lines.IndexOfObject(AObject);
             if result.FirstRow <> ROW_NOT_FOUND then
             begin
-               ADoSelect := false;
-               result.IsFolded := true;
+               ADoSelect := False;
+               result.IsFolded := True;
                result.FoldRange := memCodeEditor.AllFoldRanges[i];
                break;
             end
@@ -1190,7 +1209,7 @@ procedure TEditorForm.UnSelectCodeRange(AObject: TObject);
 begin
    if memCodeEditor.SelAvail and memCodeEditor.CanFocus then
    begin
-      var codeRange := SelectCodeRange(AObject, false);
+      var codeRange := SelectCodeRange(AObject, False);
       if (codeRange.FirstRow = memCodeEditor.CharIndexToRowCol(memCodeEditor.SelStart).Line-1) and
          (codeRange.LastRow = memCodeEditor.CharIndexToRowCol(memCodeEditor.SelEnd).Line-1) then
             memCodeEditor.SelStart := memCodeEditor.SelEnd;
@@ -1222,6 +1241,13 @@ begin
 end;
 {$ENDIF}
 
+procedure TEditorForm.UpdateEditorForBlock(ABlock: TBlock; const AChangeLine: TChangeLine);
+begin
+   if GSettings.UpdateEditor and (not ABlock.SkipUpdateEditor) and AChangeLine.Change then
+      memCodeEditor.Modified := True;
+   SetCaretPos(AChangeLine);
+end;
+
 procedure TEditorForm.RefreshEditorForObject(AObject: TObject);
 var
    topLine, line: integer;
@@ -1230,8 +1256,8 @@ var
    gotoLine: boolean;
    scrollEnabled: boolean;
 begin
-   FFocusEditor := false;
-   gotoLine := false;
+   FFocusEditor := False;
+   gotoLine := False;
    topLine := memCodeEditor.TopLine;
    caretXY := memCodeEditor.CaretXY;
    scrollEnabled := memCodeEditor.ScrollBars <> TScrollStyle.ssNone;
@@ -1240,10 +1266,10 @@ begin
    var programLines := GInfra.GenerateProgram;
    memCodeEditor.LockDrawing;
    try
-      DisplayLines(programLines, true);
+      DisplayLines(programLines, False);
       if AObject <> nil then
       begin
-         codeRange := SelectCodeRange(AObject, false);
+         codeRange := SelectCodeRange(AObject, False);
          line := codeRange.FirstRow + 1;
          if (line > 0) and not codeRange.IsFolded then
          begin
@@ -1282,132 +1308,117 @@ begin
    end;
 end;
 
-procedure TEditorForm.ExportSettingsToXMLTag(ATag: IXMLElement);
-var
-   i: integer;
-   tag2: IXMLElement;
-   withId: IWithId;
-   lines: TStrings;
+procedure TEditorForm.ExportToXML(ANode: IXMLNode);
 begin
    if Visible then
    begin
-      ATag.SetAttribute('src_win_show', 'true');
-      ATag.SetAttribute('src_win_x', Left.ToString);
-      ATag.SetAttribute('src_win_y', Top.ToString);
-      ATag.SetAttribute('src_win_w', Width.ToString);
-      ATag.SetAttribute('src_win_h', Height.ToString);
-      ATag.SetAttribute('src_win_sel_start', memCodeEditor.SelStart.ToString);
+      SetNodeAttrBool(ANode, 'src_win_show', True);
+      SetNodeAttrInt(ANode, 'src_win_x', Left);
+      SetNodeAttrInt(ANode, 'src_win_y', Top);
+      SetNodeAttrInt(ANode, 'src_win_w', Width);
+      SetNodeAttrInt(ANode, 'src_win_h', Height);
+      SetNodeAttrInt(ANode, 'src_win_sel_start', memCodeEditor.SelStart);
       if memCodeEditor.SelAvail then
-         ATag.SetAttribute('src_win_sel_length', memCodeEditor.SelLength.ToString);
+         SetNodeAttrInt(ANode, 'src_win_sel_length', memCodeEditor.SelLength);
       if memCodeEditor.Marks.Count > 0 then
       begin
-         for i := 0 to memCodeEditor.Marks.Count-1 do
+         for var i := 0 to memCodeEditor.Marks.Count-1 do
          begin
-            tag2 := ATag.OwnerDocument.CreateElement('src_win_mark');
-            tag2.SetAttribute('line', memCodeEditor.Marks[i].Line.ToString);
-            tag2.SetAttribute('index', memCodeEditor.Marks[i].ImageIndex.ToString);
-            ATag.AppendChild(tag2);
+            var mark := memCodeEditor.Marks[i];
+            var node := AppendNode(ANode, 'src_win_mark');
+            SetNodeAttrInt(node, 'line', mark.Line);
+            SetNodeAttrInt(node, 'index', mark.ImageIndex);
          end;
       end;
       if memCodeEditor.TopLine > 1 then
-         ATag.SetAttribute('src_top_line', memCodeEditor.TopLine.ToString);
+         SetNodeAttrInt(ANode, 'src_top_line', memCodeEditor.TopLine);
       if WindowState = wsMinimized then
-         ATag.SetAttribute('src_win_min', 'true');
+         SetNodeAttrBool(ANode, 'src_win_min', True);
 {$IFDEF USE_CODEFOLDING}
       if memCodeEditor.CodeFolding.Enabled then
       begin
-         var tag1: IXMLElement := nil;
-         for i := 0 to memCodeEditor.AllFoldRanges.AllCount-1 do
+         var node: IXMLNode := nil;
+         for var i := 0 to memCodeEditor.AllFoldRanges.AllCount-1 do
          begin
             var foldRange := memCodeEditor.AllFoldRanges[i];
             if foldRange.Collapsed then
             begin
-               if tag1 = nil then
-               begin
-                  tag1 := ATag.OwnerDocument.CreateElement('fold_ranges');
-                  ATag.AppendChild(tag1);
-               end;
-               tag2 := ATag.OwnerDocument.CreateElement('fold_range');
-               TXMLProcessor.AddText(tag2, memCodeEditor.GetRealLineNumber(foldRange.FromLine).ToString);
-               tag1.AppendChild(tag2);
+               if node = nil then
+                  node := AppendNode(ANode, 'fold_ranges');
+               AppendNode(node, 'fold_range').Text := memCodeEditor.GetRealLineNumber(foldRange.FromLine).ToString;
             end;
          end;
       end;
 {$ENDIF}
-      lines := GetAllLines;
+      var lines := GetAllLines;
       try
-         for i := 0 to lines.Count-1 do
+         for var i := 0 to lines.Count-1 do
          begin
-            tag2 := ATag.OwnerDocument.CreateElement('text_line');
-            TXMLProcessor.AddCDATA(tag2, lines[i]);
+            var node := AppendNode(ANode, 'text_line');
+            var withId: IWithId := nil;
+            SetCDataChild(node, lines[i]);
             if TInfra.IsValidControl(lines.Objects[i]) and Supports(lines.Objects[i], IWithId, withId) then
-               tag2.SetAttribute(ID_ATTR, withId.Id.ToString);
-            ATag.AppendChild(tag2);
+               SetNodeAttrInt(node, ID_ATTR, withId.Id);
          end;
       finally
          lines.Free;
       end;
-      ATag.SetAttribute('modified', memCodeEditor.Modified.ToString);
    end;
 end;
 
-procedure TEditorForm.ImportSettingsFromXMLTag(ATag: IXMLElement);
-var
-   i: integer;
-   tag1: IXMLElement;
-   mark: TSynEditMark;
-   showEvent: TNotifyEvent;
+procedure TEditorForm.ImportFromXML(ANode: IXMLNode);
 begin
-   if TXMLProcessor.GetBoolFromAttr(ATag, 'src_win_show') and GInfra.CurrentLang.EnabledCodeGenerator then
+   if GetNodeAttrBool(ANode, 'src_win_show', False) and GInfra.CurrentLang.EnabledCodeGenerator then
    begin
       Position := poDesigned;
-      SetBounds(TXMLProcessor.GetIntFromAttr(ATag, 'src_win_x', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'src_win_y', 50),
-                TXMLProcessor.GetIntFromAttr(ATag, 'src_win_w', 425),
-                TXMLProcessor.GetIntFromAttr(ATag, 'src_win_h', 558));
-      if TXMLProcessor.GetBoolFromAttr(ATag, 'src_win_min') then
+      SetBounds(GetNodeAttrInt(ANode, 'src_win_x'),
+                GetNodeAttrInt(ANode, 'src_win_y'),
+                GetNodeAttrInt(ANode, 'src_win_w'),
+                GetNodeAttrInt(ANode, 'src_win_h'));
+      if GetNodeAttrBool(ANode, 'src_win_min', False) then
          WindowState := wsMinimized;
-      showEvent := OnShow;
+      var showEvent := OnShow;
       OnShow := nil;
       try
          Show;
       finally
          OnShow := showEvent;
       end;
-      ATag.OwnerDocument.PreserveWhiteSpace := true;
-      tag1 := TXMLProcessor.FindChildTag(ATag, 'text_line');
+      ANode.OwnerDocument.PreserveWhiteSpace := True;
       memCodeEditor.Lines.BeginUpdate;
-      while tag1 <> nil do
+      var lineNodes := FilterNodes(ANode, 'text_line');
+      var lineNode := lineNodes.NextNode;
+      while lineNode <> nil do
       begin
-         memCodeEditor.Lines.AddObject(tag1.Text, GProject.FindObject(TXMLProcessor.GetIntFromAttr(tag1, ID_ATTR, ID_INVALID)));
-         tag1 := TXMLProcessor.FindNextTag(tag1);
+         memCodeEditor.Lines.AddObject(lineNode.Text, GProject.FindObject(GetNodeAttrInt(lineNode, ID_ATTR, ID_INVALID)));
+         lineNode := lineNodes.NextNode;
       end;
       memCodeEditor.Lines.EndUpdate;
       if GSettings.EditorShowRichText then
          memCodeEditor.Highlighter := GInfra.CurrentLang.HighLighter;
       memCodeEditor.ClearUndo;
       memCodeEditor.SetFocus;
-      memCodeEditor.Modified := TXMLProcessor.GetBoolFromAttr(ATag, 'modified');
-      memCodeEditor.SelStart := TXMLProcessor.GetIntFromAttr(ATag, 'src_win_sel_start');
-      memCodeEditor.SelLength := TXMLProcessor.GetIntFromAttr(ATag, 'src_win_sel_length');
+      memCodeEditor.SelStart := GetNodeAttrInt(ANode, 'src_win_sel_start');
+      memCodeEditor.SelLength := GetNodeAttrInt(ANode, 'src_win_sel_length', 0);
 {$IFDEF USE_CODEFOLDING}
       if memCodeEditor.CodeFolding.Enabled then
       begin
          memCodeEditor.ReScanForFoldRanges;
-         tag1 := TXMLProcessor.FindChildTag(ATag, 'fold_ranges');
-         if tag1 <> nil then
+         var node := FindNode(ANode, 'fold_ranges');
+         if node <> nil then
          begin
             var foldLines := TStringList.Create;
             try
-               var tag2 := TXMLProcessor.FindChildTag(tag1, 'fold_range');
-               while tag2 <> nil do
+               var rangeNodes := FilterNodes(node, 'fold_range');
+               var rangeNode := rangeNodes.NextNode;
+               while rangeNode <> nil do
                begin
-                  if StrToIntDef(tag2.Text, 0) > 0 then
-                     foldLines.Add(tag2.Text);
-                  tag2 := TXMLProcessor.FindNextTag(tag2);
+                  if StrToIntDef(rangeNode.Text, 0) > 0 then
+                     foldLines.Add(rangeNode.Text);
+                  rangeNode := rangeNodes.NextNode;
                end;
                foldLines.CustomSort(@CompareIntegers);
-               for i := foldLines.Count-1 downto 0 do
+               for var i := foldLines.Count-1 downto 0 do
                begin
                   var foldRange := memCodeEditor.CollapsableFoldRangeForLine(foldLines[i].ToInteger);
                   if (foldRange <> nil) and not foldRange.Collapsed then
@@ -1422,19 +1433,20 @@ begin
          end;
       end;
 {$ENDIF}
-      ATag.OwnerDocument.PreserveWhiteSpace := false;
-      i := TXMLProcessor.GetIntFromAttr(ATag, 'src_top_line');
+      ANode.OwnerDocument.PreserveWhiteSpace := False;
+      var i := GetNodeAttrInt(ANode, 'src_top_line', 0);
       if i > 0 then
          memCodeEditor.TopLine := i;
-      tag1 := TXMLProcessor.FindChildTag(ATag, 'src_win_mark');
-      while tag1 <> nil do
+      var markNodes := FilterNodes(ANode, 'src_win_mark');
+      var markNode := markNodes.NextNode;
+      while markNode <> nil do
       begin
-         mark := TSynEditMark.Create(memCodeEditor);
-         mark.ImageIndex := TXMLProcessor.GetIntFromAttr(tag1, 'index');
+         var mark := TSynEditMark.Create(memCodeEditor);
+         mark.ImageIndex := GetNodeAttrInt(markNode, 'index', 0);
          memCodeEditor.Marks.Add(mark);
-         mark.Line := TXMLProcessor.GetIntFromAttr(tag1, 'line');
-         mark.Visible := true;
-         tag1 := TXMLProcessor.FindNextTag(tag1);
+         mark.Line := GetNodeAttrInt(markNode, 'line', 0);
+         mark.Visible := True;
+         markNode := markNodes.NextNode;
       end;
    end;
 end;
@@ -1463,13 +1475,8 @@ begin
    memCodeEditor.CodeFolding.FoldRegions.Clear;
    for var i := 0 to High(GInfra.CurrentLang.FoldRegions) do
    begin
-      var foldRegion := GInfra.CurrentLang.FoldRegions[i];
-      memCodeEditor.CodeFolding.FoldRegions.Add(foldRegion.RegionType,
-                                                foldRegion.AddClose,
-                                                foldRegion.NoSubFolds,
-                                                foldRegion.WholeWords,
-                                                PChar(foldRegion.Open),
-                                                PChar(foldRegion.Close));
+      with GInfra.CurrentLang.FoldRegions[i] do
+         memCodeEditor.CodeFolding.FoldRegions.Add(RegionType, AddClose, NoSubFolds, WholeWords, PChar(Open), PChar(Close));
    end;
    memCodeEditor.InitCodeFolding;
 end;
@@ -1500,12 +1507,12 @@ begin
       if memCodeEditor.CodeFolding.Enabled and not miCodeFoldingEnable.Checked then
          memCodeEditor.UnCollapseAll;
       memCodeEditor.CodeFolding.Enabled := miCodeFoldingEnable.Checked;
-      memCodeEditor.CodeFolding.HighlighterFoldRegions := false;
+      memCodeEditor.CodeFolding.HighlighterFoldRegions := False;
       miIndentGuides.Enabled := memCodeEditor.CodeFolding.Enabled;
       miCollapseAll.Enabled := memCodeEditor.CodeFolding.Enabled;
       miUnCollapseAll.Enabled := memCodeEditor.CodeFolding.Enabled;
       if not miIndentGuides.Enabled then
-         miIndentGuides.Checked := false;
+         miIndentGuides.Checked := False;
       memCodeEditor.CodeFolding.IndentGuides := miIndentGuides.Checked;
       memCodeEditor.Gutter.RightOffset := IfThen(memCodeEditor.CodeFolding.Enabled, 21);
 {$ENDIF}
@@ -1550,34 +1557,26 @@ begin
 end;
 
 procedure TEditorForm.miFindProjClick(Sender: TObject);
-var
-   point: TPoint;
-   displ: TDisplayCoord;
-   selStart, selEnd: TBufferCoord;
-   focusInfo: TFocusInfo;
-   codeRange: TCodeRange;
-   i: integer;
-   selText, sline: string;
 begin
    if (FWithFocus <> nil) and FWithFocus.CanBeFocused then
    begin
-      focusInfo := TFocusInfo.New;
-      point := memCodeEditor.ScreenToClient(pmPopMenu.PopupPoint);
-      displ := memCodeEditor.PixelsToRowColumn(point.X, point.Y);
+      var focusInfo := TFocusInfo.New;
+      var point := memCodeEditor.ScreenToClient(pmPopMenu.PopupPoint);
+      var displ := memCodeEditor.PixelsToRowColumn(point.X, point.Y);
       if displ.Row > 0 then
       begin
-         selStart := memCodeEditor.CharIndexToRowCol(memCodeEditor.SelStart);
+         var selStart := memCodeEditor.CharIndexToRowCol(memCodeEditor.SelStart);
          selStart.Line := selStart.Line - 1;
-         sLine := memCodeEditor.Lines[selStart.Line];
+         var sLine := memCodeEditor.Lines[selStart.Line];
          focusInfo.SelStart := Max(selStart.Char - sLine.Length + sLine.TrimLeft.Length, 1);
          if memCodeEditor.SelAvail then
          begin
-            selEnd := memCodeEditor.CharIndexToRowCol(memCodeEditor.SelStart + memCodeEditor.SelLength);
+            var selEnd := memCodeEditor.CharIndexToRowCol(memCodeEditor.SelStart + memCodeEditor.SelLength);
             selEnd.Line := selEnd.Line - 1;
             if selStart.Line <> selEnd.Line then
             begin
-               selText := '';
-               for i := selStart.Line to selEnd.Line do
+               var selText := '';
+               for var i := selStart.Line to selEnd.Line do
                begin
                   sline := memCodeEditor.Lines[i];
                   if i = selStart.Line then
@@ -1595,7 +1594,7 @@ begin
          else
             focusInfo.Line := displ.Row - 1;
          focusInfo.LineText := memCodeEditor.Lines[focusInfo.Line].TrimLeft;
-         codeRange := SelectCodeRange(memCodeEditor.Lines.Objects[focusInfo.Line], false);
+         var codeRange := SelectCodeRange(memCodeEditor.Lines.Objects[focusInfo.Line], False);
          if codeRange.FirstRow <> ROW_NOT_FOUND then
             focusInfo.RelativeLine := focusInfo.Line - codeRange.FirstRow;
       end;

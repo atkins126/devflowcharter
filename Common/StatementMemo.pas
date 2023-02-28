@@ -22,11 +22,15 @@ unit StatementMemo;
 interface
 
 uses
-  System.Classes, Vcl.Graphics, Interfaces, MemoEx, Types;
+  System.Classes, Vcl.Graphics, Vcl.Controls, Interfaces, MemoEx, Types;
 
 type
 
   TStatementMemo = class(TMemoEx, IWithFocus)
+     protected
+        procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+        procedure KeyUp(var Key: Word; Shift: TShiftState); override;
+        procedure DblClick; override;
      public
      { Public declarations }
         constructor Create(AOwner: TComponent); override;
@@ -42,7 +46,7 @@ type
 implementation
 
 uses
-   System.SysUtils, Vcl.Controls, Base_Block, Infrastructure, Constants;
+   System.SysUtils, System.UITypes, Base_Block, Infrastructure, Constants;
 
 constructor TStatementMemo.Create(AOwner: TComponent);
 begin
@@ -50,8 +54,28 @@ begin
    Color := GSettings.GetShapeColor(shpRectangle);
    Font.Color := GSettings.FontColor;
    Font.Name := GSettings.FlowchartFontName;
-   DoubleBuffered := true;
+   DoubleBuffered := True;
    Anchors := [akRight, akLeft, akBottom, akTop];
+end;
+
+procedure TStatementMemo.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+   inherited;
+   if Button = mbLeft then
+      TInfra.GetEditorForm.SetCaretPos(TInfra.GetChangeLine(Parent, Self));
+end;
+
+procedure TStatementMemo.KeyUp(var Key: Word; Shift: TShiftState);
+begin
+   inherited;
+   if Key in [vkUp, vkDown, vkLeft, vkRight] then
+      MouseDown(mbLeft, Shift, 0, 0);
+end;
+
+procedure TStatementMemo.DblClick;
+begin
+   inherited;
+   SelectAll;
 end;
 
 function TStatementMemo.RetrieveFocus(AInfo: TFocusInfo): boolean;
@@ -63,7 +87,7 @@ begin
    begin
       if CanFocus then
          SetFocus;
-      result := true;
+      result := True;
    end;
 end;
 
@@ -91,7 +115,7 @@ begin
       if (ANode <> nil) and (ANode.Offset < Lines.Count) and ANode.Text.StartsWith(Lines[ANode.Offset]) then
          Lines.Delete(ANode.Offset)
       else
-         result := false;
+         result := False;
       if (Lines.Count = 0) and (Parent is TBlock) then
          result := TBlock(Parent).Remove(ANode);
    end;
@@ -104,7 +128,7 @@ end;
 
 function TStatementMemo.IsBoldDesc: boolean;
 begin
-   result := false;
+   result := False;
 end;
 
 function TStatementMemo.GetTreeNodeText(ANodeOffset: integer = 0): string;

@@ -42,9 +42,7 @@ type
          FCurrentLang: TLangDefinition;
          FLangArray: array of TLangDefinition;
          class var FParsedEdit: TCustomEdit;
-         class var FPPI: integer;
       public
-         class property PPI: integer read FPPI;
          property CurrentLang: TLangDefinition read FCurrentLang;
          property TemplateLang: TLangDefinition read FTemplateLang;
          constructor Create;
@@ -58,10 +56,8 @@ type
          class procedure PrintBitmap(ABitmap: TBitmap);
          class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; const ATemplateString: string; AObject: TObject = nil): integer; overload;
          class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; ATemplate: TStringList; AObject: TObject = nil): integer; overload;
-         class procedure ChangeLine(const ALine: TChangeLine);
          class procedure SetFontSize(AControl: TControl; ASize: integer);
          class procedure UpdateCodeEditor(AObject: TObject = nil);
-         class procedure OnKeyDownSelectAll(Sender: TObject; var Key: Word; Shift: TShiftState);
          class procedure InsertLinesIntoList(ADestList, ASourceList: TStringList; AFromLine: integer);
          class procedure DecrementNodeSiblingOffsets(ANode: TTreeNode);
          class procedure DeleteLinesContaining(ALines: TStrings; const AText: string);
@@ -114,7 +110,7 @@ type
          class function GetPageFromXY(APageControl: TPageControl; x, y: integer): TTabSheet;
          class function GetPageFromTabIndex(APageControl: TPageControl; ATabIndex: integer): TTabSheet;
          class function IndexOf<T>(const AValue: T; const AArray: TArray<T>): integer;
-         class function Scaled(on96: integer): integer;
+         class function Scaled(AWinControl: TWinControl; on96: integer): integer;
          class function ReplaceXMLIndents(const ALine: string): string;
          function GetNativeDataType(const AName: string): PNativeDataType;
          function GetNativeFunction(const AName: string): PNativeFunction;
@@ -164,7 +160,7 @@ begin
       repeat
          lFile := TPath.GetFullPath(langDir + searchRec.Name);
          lang := TLangDefinition.Create;
-         if TXMLProcessor.ImportFromXMLFile(lang.ImportFromXML, impAll, lFile, true).IsEmpty then
+         if TXMLProcessor.ImportFromXMLFile(lang.ImportFromXML, impAll, lFile, True).IsEmpty then
             lang.Free
          else
          begin
@@ -179,7 +175,6 @@ begin
    FTemplateLang := TLangDefinition.Create;
    FLangArray := FLangArray + [FTemplateLang];
    FCurrentLang := FLangArray[0];
-   FPPI := Screen.MonitorFromWindow(Application.Handle).PixelsPerInch;
 end;
 
 destructor TInfra.Destroy;
@@ -326,12 +321,6 @@ begin
       if lang = GInfra.CurrentLang then
          GSettings.UpdateForHLighter(lang.HighLighter);
    end;
-end;
-
-class procedure TInfra.OnKeyDownSelectAll(Sender: TObject; var Key: Word; Shift: TShiftState);
-begin
-   if (ssCtrl in Shift) and (Key = Ord('A')) and (Sender is TCustomEdit) then
-      TCustomEdit(Sender).SelectAll;
 end;
 
 class function TInfra.CreateDOSProcess(const ACommand: string; ADir: string = ''): boolean;
@@ -600,11 +589,11 @@ end;
 
 class function TInfra.IsPrinter: boolean;
 begin
-   result := true;
+   result := True;
    try
       Printer.PrinterIndex := -1;
    except
-      result := false;
+      result := False;
    end;
 end;
 
@@ -613,7 +602,7 @@ begin
    try
       result := (AObject is TControl) and (TControl(AObject).Parent <> nil);
    except
-      result := false;
+      result := False;
    end;
 end;
 
@@ -934,7 +923,7 @@ end;
 
 class function TInfra.Parse(AEdit: TCustomEdit; AParserMode: TYYMode): boolean;
 begin
-   result := false;
+   result := False;
    FParsedEdit := AEdit;
    try
       result := Parse(Trim(AEdit.Text), AParserMode);
@@ -946,7 +935,7 @@ end;
 
 class function TInfra.Parse(const AText: string; AParserMode: TYYMode): boolean;
 begin
-   result := true;
+   result := True;
    if Assigned(GInfra.CurrentLang.Parse) then
       result := GInfra.CurrentLang.Parse(AText, AParserMode);
 end;
@@ -970,7 +959,7 @@ begin
    var p := 0;
    if AObject <> nil then
    begin
-      result.CodeRange := GetEditorForm.SelectCodeRange(AObject, false);
+      result.CodeRange := GetEditorForm.SelectCodeRange(AObject, False);
       if result.CodeRange.FirstRow <> ROW_NOT_FOUND then
       begin
          var templateLines := TStringList.Create;
@@ -1060,12 +1049,6 @@ begin
       if mainBlock.UserFunction is TUserFunction then
          result := TUserFunction(mainBlock.UserFunction).Header;
    end;
-end;
-
-class procedure TInfra.ChangeLine(const ALine: TChangeLine);
-begin
-   if (ALine.CodeRange.Lines <> nil) and (ALine.Row >= 0) and (ALine.Row < ALine.CodeRange.Lines.Count) then
-      ALine.CodeRange.Lines[ALine.Row] := ALine.Text;
 end;
 
 class procedure TInfra.SetFontSize(AControl: TControl; ASize: integer);
@@ -1182,13 +1165,13 @@ begin
       if txt[len] <> ']' then
          Exit(-1);
       result := 0;
-      var nextOpen := true;
+      var nextOpen := True;
       for var i := 1 to len do
       begin
          if txt[i] = '[' then
          begin
             if nextOpen then
-               nextOpen := false
+               nextOpen := False
             else
             begin
                result := -1;
@@ -1204,7 +1187,7 @@ begin
                   result := -1;
                   break;
                end;
-               nextOpen := true;
+               nextOpen := True;
             end
             else
             begin
@@ -1263,12 +1246,13 @@ begin
       result := APageControl.Pages[idx];
 end;
 
-class function TInfra.Scaled(on96: integer): integer;
+class function TInfra.Scaled(AWinControl: TWinControl; on96: integer): integer;
 begin
-   if FPPI = 96 then
+   var ppi := Screen.MonitorFromWindow(AWinControl.Handle).PixelsPerInch;
+   if ppi = 96 then
       result := on96
    else
-      result := MulDiv(on96, FPPI, 96);
+      result := MulDiv(on96, ppi, 96);
 end;
 
 class function TInfra.ReplaceXMLIndents(const ALine: string): string;
@@ -1295,11 +1279,11 @@ end;
 
 function TInfra.ParseVarSize(const ASize: string): boolean;
 begin
-   result := true;
+   result := True;
    var lang := GetLangDefinition(PASCAL_LANG_ID);
    var goParse := (lang <> nil) and Assigned(lang.Parse);
    if (ASize <> '') and ((ASize[1] = '0') or (ASize[1] = '-') or (goParse and not lang.Parse(ASize, yymVarSize))) then
-      result := false;
+      result := False;
 end;
 
 function TInfra.ValidateId(const AId: string): integer;

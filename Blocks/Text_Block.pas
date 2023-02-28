@@ -28,7 +28,7 @@ uses
 
 type
 
-  THackWinControl = class(TWinControl);
+  TWinControlHack = class(TWinControl);
 
   TCorner = class(TPanel)
      protected
@@ -43,8 +43,8 @@ type
       protected
          FCorner: TCorner;
          procedure Paint; override;
-         procedure OnChangeMemo(Sender: TObject); override;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         procedure OnChangeStatements(Sender: TObject);
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
    end;
 
 implementation
@@ -56,13 +56,14 @@ constructor TTextBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
    inherited Create(ABranch, ABlockParms);
    FStatements.Font.Color := TEXT_COLOR;
+   FStatements.OnChange := OnChangeStatements;
    Font.Color := TEXT_COLOR;
    FCorner := TCorner.Create(Self);
    FCorner.Parent := Self;
    FCorner.Color := FStatements.Color;
    FCorner.BevelOuter := bvNone;
-   FCorner.Ctl3D := false;
-   FCorner.DoubleBuffered := true;
+   FCorner.Ctl3D := False;
+   FCorner.DoubleBuffered := True;
    FCorner.ControlStyle := FCorner.ControlStyle + [csOpaque];
    FCorner.SetBounds(Width-15, 0, 15, 15);
 end;
@@ -78,14 +79,14 @@ begin
    DrawBlockLabel(5, FStatements.BoundsRect.Bottom+1, GInfra.CurrentLang.LabelText);
 end;
 
-procedure TTextBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TTextBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   inherited MyOnCanResize(Sender, NewWidth, NewHeight, Resize);
-   if FHResize and Resize then
+   result := inherited;
+   if FHResize and result then
       FCorner.Left := Width - FCorner.Width;
 end;
 
-procedure TTextBlock.OnChangeMemo(Sender: TObject);
+procedure TTextBlock.OnChangeStatements(Sender: TObject);
 begin
    inherited;
    UpdateEditor(nil);
@@ -104,7 +105,7 @@ begin
    var r := ClientRect;
    r.Inflate(0, 0, -1, -1);
 
-   Canvas.Pen.Color := THackWinControl(Parent).Color;
+   Canvas.Pen.Color := TWinControlHack(Parent).Color;
    Canvas.Brush.Color := Canvas.Pen.Color;
    Canvas.Polygon([r.TopLeft, Point(r.Right, r.Top), r.BottomRight, r.TopLeft]);
 

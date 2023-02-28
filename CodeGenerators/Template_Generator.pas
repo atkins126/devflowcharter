@@ -24,9 +24,9 @@ interface
 implementation
 
 uses
-   System.SysUtils, System.StrUtils, System.Classes, Vcl.StdCtrls, Base_Block, LangDefinition,
-   UserFunction, DeclareList, Interfaces, UserDataType, Infrastructure,
-   ParserHelper, Types, Constants;
+   System.SysUtils, System.StrUtils, System.Classes, System.Math, Vcl.StdCtrls, Base_Block,
+   LangDefinition, UserFunction, DeclareList, Interfaces, UserDataType, Infrastructure,
+   ParserHelper, Types, Constants, TabComponent;
 
 procedure Template_UserDataTypesSectionGenerator(ALines: TStringList);
 var
@@ -166,13 +166,9 @@ begin
 end;
 
 function Template_GetConstantType(const AValue: string; var AGenericType: string): integer;
-var
-   i: integer;
 begin
-   result := UNKNOWN_TYPE;
    AGenericType := '';
-   if TryStrToInt(AValue, i) then
-      result := GENERIC_INT_TYPE;
+   result := IfThen(TryStrToInt(AValue, result), GENERIC_INT_TYPE, UNKNOWN_TYPE);
 end;
 
 procedure Template_ProgramHeaderSectionGenerator(ALines: TStringList);
@@ -197,44 +193,46 @@ begin
 end;
 
 procedure Template_LibSectionGenerator(ALines: TStringList);
-var
-   i, stripCount: integer;
-   libList, libTemplate: TStringList;
-   lang: TLangDefinition;
-   libStr, libFormat, p1, p2: string;
 begin
-   lang := GInfra.CurrentLang;
-   libList := GProject.GetLibraryList;
+   var lang := GInfra.CurrentLang;
+   var libList := GProject.GetLibraryList;
    try
-      if (libList.Count > 0) and (not lang.LibTemplate.IsEmpty) and ((not lang.LibEntry.IsEmpty) or (not lang.LibEntryList.IsEmpty)) then
+      if (libList.Count > 0) and not lang.LibTemplate.IsEmpty then
       begin
-         libStr := '';
+         var libStr := '';
+         var libFormat := lang.LibEntryList;
+         var p1 := '%s2';
+         var p2 := PRIMARY_PLACEHOLDER;
+         var stripCount := lang.LibEntryListStripCount;
          if lang.LibTemplate.Contains(PRIMARY_PLACEHOLDER) then
          begin
             libFormat := lang.LibEntry + sLineBreak;
             p1 := PRIMARY_PLACEHOLDER;
             p2 := '%s2';
-            stripCount := 0;
-         end
-         else
-         begin
-            libFormat := lang.LibEntryList;
-            p1 := '%s2';
-            p2 := PRIMARY_PLACEHOLDER;
-            stripCount := lang.LibEntryListStripCount;
+            stripCount := Length(sLineBreak);
          end;
-         for i := 0 to libList.Count-1 do
-            libStr := libStr + Format(libFormat, [libList[i]]);
-         if stripCount > 0 then
-            SetLength(libStr, libStr.Length - stripCount);
-         libTemplate := TStringList.Create;
-         try
-            libTemplate.Text := lang.LibTemplate;
-            TInfra.InsertTemplateLines(libTemplate, p1, libStr, TInfra.GetLibObject);
-            TInfra.InsertTemplateLines(libTemplate, p2, '');
-            ALines.AddStrings(libTemplate);
-         finally
-            libTemplate.Free;
+         for var i := 0 to libList.Count-1 do
+         begin
+            var tabName := '';
+            if libList.Objects[i] is TTabComponent then
+               tabName := TTabComponent(libList.Objects[i]).GetName;
+            var libEntry := ReplaceStr(libFormat, '%s1', tabName);
+            libEntry := ReplaceStr(libEntry, '%s', libList.Strings[i]);
+            libStr := libStr + libEntry;
+         end;
+         if not libStr.Trim.IsEmpty then
+         begin
+            if stripCount > 0 then
+               SetLength(libStr, libStr.Length - stripCount);
+            var libTemplate := TStringList.Create;
+            try
+               libTemplate.Text := lang.LibTemplate;
+               TInfra.InsertTemplateLines(libTemplate, p1, libStr, TInfra.GetLibObject);
+               TInfra.InsertTemplateLines(libTemplate, p2, '');
+               ALines.AddStrings(libTemplate);
+            finally
+               libTemplate.Free;
+            end;
          end;
       end;
    finally
@@ -243,59 +241,54 @@ begin
 end;
 
 procedure Template_ConstSectionGenerator(ALines: TStringList; AConstList: TConstDeclareList);
-var
-   i, t, d: integer;
-   constStr, constType, constValue, template, genericTypes: string;
-   lang: TLangDefinition;
-   constList, constTemplate: TStringList;
-   isExtern: boolean;
 begin
-   lang := GInfra.CurrentLang;
-   if (AConstList <> nil) and not lang.ConstTemplate.IsEmpty then
+   var currLang := GInfra.CurrentLang;
+   if (AConstList <> nil) and not currLang.ConstTemplate.IsEmpty then
    begin
-      constList := TStringList.Create;
+      var constList := TStringList.Create;
       try
-         for i := 1 to AConstList.sgList.RowCount-2 do
+         for var i := 1 to AConstList.sgList.RowCount-2 do
          begin
-            isExtern := AConstList.GetExternalState(i) = cbChecked;
-            if (isExtern and lang.CodeIncludeExternVarConst) or not isExtern then
+            if (AConstList.GetExternalState(i) = cbChecked) and not currLang.CodeIncludeExternVarConst then
+               continue;
+            var constValue := AConstList.sgList.Cells[CONST_VALUE_COL, i];
+            var genericTypes := '';
+            var constType := '';
+            var d := 0;
+            var t := 0;
+            if Assigned(currLang.GetConstantType) then
+               t := currLang.GetConstantType(constValue, genericTypes)
+            else
+               t := Template_GetConstantType(constValue, genericTypes);
+            if t <> UNKNOWN_TYPE then
             begin
-               constValue := AConstList.sgList.Cells[CONST_VALUE_COL, i];
-               constType := '';
-               d := 0;
-               if Assigned(GInfra.CurrentLang.GetConstantType) then
-                  t := GInfra.CurrentLang.GetConstantType(constValue, genericTypes)
-               else
-                  t := Template_GetConstantType(constValue, genericTypes);
-               if t <> UNKNOWN_TYPE then
-               begin
-                  d := TParserHelper.DecodeArrayDimension(t);
-                  if d > 0 then
-                     t := TParserHelper.DecodeArrayType(t);
-                  constType := TParserHelper.GetTypeAsString(t);
-                  template := GInfra.CurrentLang.ConstTypeGeneric;
-                  if template.IsEmpty or genericTypes.IsEmpty or not TParserHelper.IsGenericType(constType) then
-                     template := GInfra.CurrentLang.ConstTypeNotGeneric;
-                  if not template.IsEmpty then
-                  begin
-                     constType := ReplaceStr(template, PRIMARY_PLACEHOLDER, constType);
-                     constType := ReplaceStr(constType, '%s2', genericTypes);
-                  end;
-               end;
-               constStr := ReplaceStr(IfThen(d > 0, lang.ConstEntryArray, lang.ConstEntry), PRIMARY_PLACEHOLDER, AConstList.sgList.Cells[CONST_NAME_COL, i]);
-               constStr := ReplaceStr(constStr, '%s2', constValue);
-               constStr := ReplaceStr(constStr, '%s3', AConstList.GetExternModifier(i));
-               constStr := ReplaceStr(constStr, '%s4', constType);
+               d := TParserHelper.DecodeArrayDimension(t);
                if d > 0 then
-                  constStr := ReplaceStr(constStr, '%s5', DupeString(ReplaceStr(lang.VarEntryArraySize, '%s', ''), d));
-               constList.AddObject(constStr, AConstList);
+                  t := TParserHelper.DecodeArrayType(t);
+               constType := TParserHelper.GetTypeAsString(t);
+               var template := currLang.ConstTypeGeneric;
+               if template.IsEmpty or genericTypes.IsEmpty or not TParserHelper.IsGenericType(constType) then
+                  template := currLang.ConstTypeNotGeneric;
+               if not template.IsEmpty then
+               begin
+                  constType := ReplaceStr(template, PRIMARY_PLACEHOLDER, constType);
+                  constType := ReplaceStr(constType, '%s2', genericTypes);
+               end;
             end;
+            var constStr := IfThen(d > 0, currLang.ConstEntryArray, currLang.ConstEntry);
+            constStr := ReplaceStr(constStr, PRIMARY_PLACEHOLDER, AConstList.sgList.Cells[CONST_NAME_COL, i]);
+            constStr := ReplaceStr(constStr, '%s2', constValue);
+            constStr := ReplaceStr(constStr, '%s3', AConstList.GetExternModifier(i));
+            constStr := ReplaceStr(constStr, '%s4', constType);
+            if d > 0 then
+               constStr := ReplaceStr(constStr, '%s5', DupeString(ReplaceStr(currLang.VarEntryArraySize, '%s', ''), d));
+            constList.AddObject(constStr, AConstList);
          end;
          if constList.Count > 0 then
          begin
-            constTemplate := TStringList.Create;
+            var constTemplate := TStringList.Create;
             try
-               constTemplate.Text := lang.ConstTemplate;
+               constTemplate.Text := currLang.ConstTemplate;
                TInfra.InsertTemplateLines(constTemplate, PRIMARY_PLACEHOLDER, constList);
                ALines.AddStrings(constTemplate);
             finally
@@ -326,44 +319,43 @@ begin
          begin
             varSize := '';
             name := AVarList.sgList.Cells[VAR_NAME_COL, i];
-            typeStr := AVarList.sgList.Cells[VAR_TYPE_COL, i];
             isExtern := AVarList.GetExternalState(i) = cbChecked;
-            if (isExtern and lang.CodeIncludeExternVarConst) or not isExtern then
+            typeStr := AVarList.sgList.Cells[VAR_TYPE_COL, i];
+            if isExtern and not lang.CodeIncludeExternVarConst then
+               continue;
+            dcount := AVarList.GetDimensionCount(name);
+            if dcount > 0 then
             begin
-               dcount := AVarList.GetDimensionCount(name);
-               if dcount > 0 then
-               begin
-                  dims := AVarList.GetDimensions(name);
-                  for b := 0 to High(dims) do
-                     varSize := varSize + Format(lang.VarEntryArraySize, [dims[b]]);
-                  if lang.VarEntryArraySizeStripCount > 0 then
-                     SetLength(varSize, varSize.Length - lang.VarEntryArraySizeStripCount);
-                  varStr := ReplaceStr(lang.VarEntryArray, PRIMARY_PLACEHOLDER, name);
-                  varStr := ReplaceStr(varStr, '%s3', varSize);
-               end
-               else
-                  varStr := ReplaceStr(lang.VarEntry, PRIMARY_PLACEHOLDER, name);
-               varStr := ReplaceStr(varStr, '%s2', typeStr);
-               varInit := AVarList.sgList.Cells[VAR_INIT_COL, i];
-               if not varInit.IsEmpty then
-               begin
-                  initEntry := IfThen(isExtern, lang.VarEntryInitExtern, lang.VarEntryInit);
-                  if not initEntry.IsEmpty then
-                     varInit := ReplaceStr(initEntry, PRIMARY_PLACEHOLDER, varInit);
-               end;
-               varStr := ReplaceStr(varStr, '%s4', varInit);
-               lType := TParserHelper.GetType(typeStr);
-               lRecord := '';
-               enum := '';
-               if TParserHelper.IsRecordType(lType) then
-                  lRecord := lang.FunctionHeaderArgsEntryRecord
-               else if TParserHelper.IsEnumType(lType) then
-                  enum := lang.FunctionHeaderArgsEntryEnum;
-               varStr := ReplaceStr(varStr, '%s5', lRecord);
-               varStr := ReplaceStr(varStr, '%s6', enum);
-               varStr := ReplaceStr(varStr, '%s7', AVarList.GetExternModifier(i));
-               varList.AddObject(varStr, AVarList);
+               dims := AVarList.GetDimensions(name);
+               for b := 0 to High(dims) do
+                  varSize := varSize + Format(lang.VarEntryArraySize, [dims[b]]);
+               if lang.VarEntryArraySizeStripCount > 0 then
+                  SetLength(varSize, varSize.Length - lang.VarEntryArraySizeStripCount);
+               varStr := ReplaceStr(lang.VarEntryArray, PRIMARY_PLACEHOLDER, name);
+               varStr := ReplaceStr(varStr, '%s3', varSize);
+            end
+            else
+               varStr := ReplaceStr(lang.VarEntry, PRIMARY_PLACEHOLDER, name);
+            varStr := ReplaceStr(varStr, '%s2', typeStr);
+            varInit := AVarList.sgList.Cells[VAR_INIT_COL, i];
+            if not varInit.IsEmpty then
+            begin
+               initEntry := IfThen(isExtern, lang.VarEntryInitExtern, lang.VarEntryInit);
+               if not initEntry.IsEmpty then
+                  varInit := ReplaceStr(initEntry, PRIMARY_PLACEHOLDER, varInit);
             end;
+            varStr := ReplaceStr(varStr, '%s4', varInit);
+            lType := TParserHelper.GetType(typeStr);
+            lRecord := '';
+            enum := '';
+            if TParserHelper.IsRecordType(lType) then
+               lRecord := lang.FunctionHeaderArgsEntryRecord
+            else if TParserHelper.IsEnumType(lType) then
+               enum := lang.FunctionHeaderArgsEntryEnum;
+            varStr := ReplaceStr(varStr, '%s5', lRecord);
+            varStr := ReplaceStr(varStr, '%s6', enum);
+            varStr := ReplaceStr(varStr, '%s7', AVarList.GetExternModifier(i));
+            varList.AddObject(varStr, AVarList);
          end;
          if varList.Count > 0 then
          begin
@@ -542,7 +534,7 @@ end;
 
 function Template_SkipFuncBodyGen: boolean;
 begin
-   result := false;
+   result := False;
 end;
 
 procedure Template_ProgramGenerator(ALines: TStringList);
@@ -674,43 +666,32 @@ begin
    result := ReplaceStr(result, PRIMARY_PLACEHOLDER, GProject.Name);
 end;
 
-function Template_GetUserFuncDesc(AHeader: TUserFunctionHeader; AFullParams: boolean = true; AIncludeDesc: boolean = true): string;
-var
-   params, desc, lType, key, lb, arrayType: string;
-   lang: TLangDefinition;
-   param: TParameter;
+function Template_GetUserFuncDesc(AHeader: TUserFunctionHeader; AFullParams: boolean = True; AIncludeDesc: boolean = True): string;
 begin
    result := '';
    if AHeader <> nil then
    begin
-      lang := GInfra.CurrentLang;
-      desc := '';
-      lType := AHeader.cbType.Text;
-      key := '';
-      lb := '';
-      arrayType := IfThen(AHeader.chkArrayType.Checked, lang.FunctionHeaderTypeArray, lang.FunctionHeaderTypeNotArray);
+      var params := '';
+      var lang := GInfra.CurrentLang;
+      var arrayType := IfThen(AHeader.chkArrayType.Checked, lang.FunctionHeaderTypeArray, lang.FunctionHeaderTypeNotArray);
+      var desc := IfThen(AIncludeDesc, AHeader.memDesc.Text);
+      var lb := IfThen(AIncludeDesc, sLineBreak);
+      var lType := AHeader.cbType.Text;
+      var key := lang.ProcedureLabelKey;
       if AHeader.chkConstructor.Checked then
          key := lang.ConstructorLabelKey
       else if AHeader.cbType.ItemIndex > 0 then
-         key := lang.FunctionLabelKey
-      else
-         key := lang.ProcedureLabelKey;
+         key := lang.FunctionLabelKey;
       if (AHeader.ParameterCount > 1) and not AFullParams then
          params := '...'
       else
       begin
-         params := '';
-         for param in AHeader.GetParameters do
+         for var param in AHeader.GetParameters do
          begin
             if not params.IsEmpty then
                params := params + ', ';
             params := params + param.cbType.Text + IfThen(param.chkTable.Checked, '[ ] ', ' ') + Trim(param.edtName.Text);
          end;
-      end;
-      if AIncludeDesc then
-      begin
-         desc := AHeader.memDesc.Text;
-         lb := sLineBreak;
       end;
       if not key.IsEmpty then
       begin
@@ -727,29 +708,23 @@ begin
 end;
 
 function Template_GetUserFuncHeaderDesc(AHeader: TUserFunctionHeader): string;
-var
-   lang: TLangDefinition;
-   template, parms: TStringList;
-   parmString, returnString: string;
-   parm: TParameter;
-   i: integer;
 begin
    result := '';
-   lang := GInfra.CurrentLang;
+   var lang := GInfra.CurrentLang;
    if (AHeader <> nil) and not lang.FunctionHeaderDescTemplate.IsEmpty then
    begin
-       template := TStringList.Create;
-       parms := TStringList.Create;
+       var template := TStringList.Create;
+       var parms := TStringList.Create;
        try
           template.Text := ReplaceStr(lang.FunctionHeaderDescTemplate, PRIMARY_PLACEHOLDER, Trim(AHeader.edtName.Text));
           template.Text := ReplaceStr(template.Text, '%s2', AHeader.cbType.Text);
 
           if not lang.FunctionHeaderDescParmMask.IsEmpty then
           begin
-             i := 1;
-             for parm in AHeader.GetParameters do
+             var i := 1;
+             for var parm in AHeader.GetParameters do
              begin
-                parmString := ReplaceStr(lang.FunctionHeaderDescParmMask, PRIMARY_PLACEHOLDER, Trim(parm.edtName.Text));
+                var parmString := ReplaceStr(lang.FunctionHeaderDescParmMask, PRIMARY_PLACEHOLDER, Trim(parm.edtName.Text));
                 parmString := ReplaceStr(parmString, '%s2', parm.cbType.Text);
                 parmString := ReplaceStr(parmString, '%s3', Trim(parm.edtDefault.Text));
                 parmString := ReplaceStr(parmString, '%s4', i.ToString);
@@ -765,10 +740,7 @@ begin
           if AHeader.chkConstructor.Checked or (AHeader.cbType.ItemIndex = 0) then
              TInfra.DeleteLinesContaining(template, '%s4')
           else
-          begin
-             returnString := ReplaceStr(lang.FunctionHeaderDescReturnMask, PRIMARY_PLACEHOLDER, AHeader.cbType.Text);
-             template.Text := ReplaceStr(template.Text, '%s4', returnString);
-          end;
+             template.Text := ReplaceStr(template.Text, '%s4', ReplaceStr(lang.FunctionHeaderDescReturnMask, PRIMARY_PLACEHOLDER, AHeader.cbType.Text));
 
           result := template.Text;
        finally
@@ -782,8 +754,8 @@ initialization
 
    with GInfra.TemplateLang do
    begin
-      EnabledUserFunctionBody := true;
-      EnabledExplorer := true;
+      EnabledUserFunctionBody := True;
+      EnabledExplorer := True;
       MainFunctionSectionGenerator := Template_MainFunctionSectionGenerator;
       UserFunctionsSectionGenerator := Template_UserFunctionsSectionGenerator;
       VarSectionGenerator := Template_VarSectionGenerator;

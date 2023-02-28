@@ -48,16 +48,16 @@ type
          procedure OnClickRemove(Sender: TObject);
          procedure OnChangeType(Sender: TObject); virtual;
          procedure OnChangeName(Sender: TObject); virtual;
-         procedure OnDragOverElement(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
-         procedure OnDragDropElement(Sender, Source: TObject; X, Y: Integer);
+         procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); override;
+         procedure DragDrop(Source: TObject; X, Y: Integer); override;
       public
          edtName: TNameEdit;
          cbType: TComboBox;
          btnRemove: TButton;
          property ParentTab: TTabSheet read FParentTab;
          property ParentForm: TPageControlForm read FParentForm;
-         function ExportToXMLTag(ATag: IXMLElement): IXMLElement; virtual;
-         procedure ImportFromXMLTag(ATag: IXMLElement); virtual;
+         function ExportToXML(ANode: IXMLNode): IXMLNode; virtual;
+         procedure ImportFromXML(ANode: IXMLNode); virtual;
          function IsValid: boolean; virtual;
    end;
 
@@ -65,7 +65,7 @@ implementation
 
 uses
    Vcl.Graphics, System.SysUtils, System.Classes, Interfaces, TabComponent, Infrastructure,
-   Constants;
+   Constants, OmniXMLUtils;
 
 constructor TElement.Create(AParent: TScrollBox);
 begin
@@ -73,48 +73,45 @@ begin
    inherited Create(AParent);
    Parent := AParent;
    
-   Ctl3D := false;
+   Ctl3D := False;
    BevelOuter := bvNone;
    FParentTab := GetParentTab;
    FParentForm := TTabComponent(FParentTab).ParentForm;
-   DoubleBuffered := true;
+   DoubleBuffered := True;
    DragMode := dmAutomatic;
 
    edtName := TNameEdit.Create(Self);
    edtName.Parent := Self;
-   edtName.SetBounds(3, 0, TInfra.Scaled(70), 21);
-   edtName.ParentFont := false;
+   edtName.SetBounds(3, 0, TInfra.Scaled(Self, 70), 21);
+   edtName.ParentFont := False;
    edtName.Font.Style := [];
-   edtName.ParentCtl3D := false;
-   edtName.Ctl3D := true;
-   edtName.ShowHint := true;
+   edtName.ParentCtl3D := False;
+   edtName.Ctl3D := True;
+   edtName.ShowHint := True;
    edtName.Hint := i18Manager.GetString('BadIdD');
    edtName.Font.Color := NOK_COLOR;
-   edtName.DoubleBuffered := true;
+   edtName.DoubleBuffered := True;
    edtName.OnChange := OnChangeName;
 
    cbType := TComboBox.Create(Self);
    cbType.Parent := Self;
-   cbType.SetBounds(TInfra.Scaled(87), 0, TInfra.Scaled(70), 21);
-   cbType.Constraints.MaxWidth := TInfra.Scaled(74);
+   cbType.SetBounds(TInfra.Scaled(Self, 87), 0, TInfra.Scaled(Self, 70), 21);
+   cbType.Constraints.MaxWidth := TInfra.Scaled(Self, 74);
    cbType.Style := csDropDownList;
-   cbType.ParentFont := false;
+   cbType.ParentFont := False;
    cbType.Font.Style := [];
    cbType.Font.Color := clWindowText;
    cbType.OnChange := OnChangeType;
 
    btnRemove := TButton.Create(Self);
    btnRemove.Parent := Self;
-   btnRemove.ParentFont := false;
+   btnRemove.ParentFont := False;
    btnRemove.Font.Style := [];
-   btnRemove.DoubleBuffered := true;
+   btnRemove.DoubleBuffered := True;
    btnRemove.Caption := i18Manager.GetString('btnRemove');
    btnRemove.OnClick := OnClickRemove;
    var w := TInfra.GetAutoWidth(btnRemove);
-   btnRemove.SetBounds(Parent.Width-w-TInfra.Scaled(32), 0, w+14, TInfra.Scaled(20));
-
-   OnDragOver := OnDragOverElement;
-   OnDragDrop := OnDragDropElement;
+   btnRemove.SetBounds(Parent.Width-w-TInfra.Scaled(Self, 32), 0, w+14, TInfra.Scaled(Self, 20));
 end;
 
 function TElement.GetParentTab: TTabSheet;
@@ -136,7 +133,7 @@ procedure TElement.OnClickRemove(Sender: TObject);
 begin
    Hide;
    if Parent.Height < Parent.Constraints.MaxHeight then
-      Parent.Height := Parent.Height - 22;
+      Parent.Height := Parent.Height - Height;
    TTabComponent(FParentTab).RefreshElements;
    FParentTab.PageControl.Refresh;
    GProject.SetChanged;
@@ -155,9 +152,9 @@ end;
 
 function TElement.IsValid: boolean;
 begin
-   result := true;
+   result := True;
    if edtName.Enabled and ((edtName.Font.Color = NOK_COLOR) or ((Trim(edtName.Text) = '') and not edtName.Focused)) then
-      result := false;
+      result := False;
 end;
 
 procedure TElement.OnChangeName(Sender: TObject);
@@ -186,32 +183,31 @@ begin
       TTabComponent(FParentTab).UpdateCodeEditor;
 end;
 
-procedure TElement.ImportFromXMLTag(ATag: IXMLElement);
+procedure TElement.ImportFromXML(ANode: IXMLNode);
 begin
-   edtName.Text := ATag.GetAttribute(NAME_ATTR);
-   var idx := cbType.Items.IndexOf(ATag.GetAttribute(TYPE_ATTR));
+   edtName.Text :=  GetNodeAttrStr(ANode, NAME_ATTR);
+   var idx := cbType.Items.IndexOf(GetNodeAttrStr(ANode, TYPE_ATTR));
    if idx <> -1 then
       cbType.ItemIndex := idx
-   else if cbType.Items.Count > 0 then 
+   else if cbType.Items.Count > 0 then
       cbType.ItemIndex := 0;
    cbType.Hint := cbType.Text;
 end;
 
-function TElement.ExportToXMLTag(ATag: IXMLElement): IXMLElement;
+function TElement.ExportToXML(ANode: IXMLNode): IXMLNode;
 begin
-   result := ATag.OwnerDocument.CreateElement(FElementTypeID);
-   ATag.AppendChild(result);
-   result.SetAttribute(NAME_ATTR, Trim(edtName.Text));
-   result.SetAttribute(TYPE_ATTR, cbType.Text);
+   result := AppendNode(ANode, FElementTypeID);
+   SetNodeAttrStr(result, NAME_ATTR, Trim(edtName.Text));
+   SetNodeAttrStr(result, TYPE_ATTR, cbType.Text);
 end;
 
-procedure TElement.OnDragOverElement(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
+procedure TElement.DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
 begin
-   if (Source = Sender) or (not (Source is TElement)) or (TElement(Source).Parent <> Parent) then
-      Accept := false;
+   if (Source = Self) or (not (Source is TElement)) or (TElement(Source).Parent <> Parent) then
+      Accept := False;
 end;
 
-procedure TElement.OnDragDropElement(Sender, Source: TObject; X, Y: Integer);
+procedure TElement.DragDrop(Source: TObject; X, Y: Integer);
 begin
    if Source is TElement then
    begin

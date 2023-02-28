@@ -39,8 +39,8 @@ type
       Box: TScrollBoxEx;
       constructor Create(AMainForm: TMainForm);
       destructor Destroy; override;
-      procedure ExportToXMLTag(ATag: IXMLElement);
-      procedure ImportFromXMLTag(ATag: IXMLElement);
+      procedure ExportToXML(ANode: IXMLNode);
+      procedure ImportFromXML(ANode: IXMLNode);
       function IsMain: boolean;
       property Form: TMainForm read FForm;
    end;
@@ -68,17 +68,18 @@ implementation
 
 uses
    System.SysUtils, System.StrUtils, System.Math, System.UITypes, WinApi.Windows,
-   UserFunction, Navigator_Form, XMLProcessor, Infrastructure, Constants;
+   UserFunction, Navigator_Form, OmniXMLUtils, Infrastructure, Constants;
 
 constructor TBlockTabSheet.Create(AMainForm: TMainForm);
 begin
    inherited Create(AMainForm.pgcPages);
    PageControl := AMainForm.pgcPages;
    FForm := AMainForm;
-   ParentFont := false;
+   ParentFont := False;
    Align := alClient;
-   DrawI := true;
+   DrawI := True;
    Box := TScrollBoxEx.Create(Self);
+   Box.UseWheelForScrolling := True;
 end;
 
 destructor TBlockTabSheet.Destroy;
@@ -99,31 +100,22 @@ begin
    result := (GProject <> nil) and (GProject.MainPage = Self);
 end;
 
-procedure TBlockTabSheet.ExportToXMLTag(ATag: IXMLElement);
+procedure TBlockTabSheet.ExportToXML(ANode: IXMLNode);
 begin
-   var tag := ATag.OwnerDocument.CreateElement('page');
-   ATag.AppendChild(tag);
-   tag.SetAttribute('name', IfThen(IsMain, MAIN_PAGE_MARKER, Caption));
-   tag.SetAttribute('hScrollRange', Box.HorzScrollBar.Range.ToString);
-   tag.SetAttribute('vScrollRange', Box.VertScrollBar.Range.ToString);
-   tag.SetAttribute('hScrollPos', Box.HorzScrollBar.Position.ToString);
-   tag.SetAttribute('vScrollPos', Box.VertScrollBar.Position.ToString);
+   var node := AppendNode(ANode, 'page');
+   SetNodeAttrStr(node, 'name', IfThen(IsMain, MAIN_PAGE_MARKER, Caption));
+   SetNodeAttrInt(node, 'hScrollRange', Box.HorzScrollBar.Range);
+   SetNodeAttrInt(node, 'vScrollRange', Box.VertScrollBar.Range);
+   SetNodeAttrInt(node, 'hScrollPos', Box.HorzScrollBar.Position);
+   SetNodeAttrInt(node, 'vScrollPos', Box.VertScrollBar.Position);
 end;
 
-procedure TBlockTabSheet.ImportFromXMLTag(ATag: IXMLElement);
+procedure TBlockTabSheet.ImportFromXML(ANode: IXMLNode);
 begin
-   var val := TXMLProcessor.GetIntFromAttr(ATag, 'hScrollRange', -1);
-   if val > -1 then
-      Box.HorzScrollBar.Range := val;
-   val := TXMLProcessor.GetIntFromAttr(ATag, 'hScrollPos', -1);
-   if val > -1 then
-      Box.HorzScrollBar.Position := val;
-   val := TXMLProcessor.GetIntFromAttr(ATag, 'vScrollRange', -1);
-   if val > -1 then
-      Box.VertScrollBar.Range := val;
-   val := TXMLProcessor.GetIntFromAttr(ATag, 'vScrollPos', -1);
-   if val > -1 then
-      Box.VertScrollBar.Position := val;
+   Box.HorzScrollBar.Range := GetNodeAttrInt(ANode, 'hScrollRange');
+   Box.HorzScrollBar.Position := GetNodeAttrInt(ANode, 'hScrollPos');
+   Box.VertScrollBar.Range := GetNodeAttrInt(ANode, 'vScrollRange');
+   Box.VertScrollBar.Position := GetNodeAttrInt(ANode, 'vScrollPos');
 end;
 
 constructor TScrollBoxEx.Create(APage: TBlockTabSheet);
@@ -132,14 +124,14 @@ begin
    Parent := APage;
    FPage := APage;
    Align := alClient;
-   ParentFont := false;
+   ParentFont := False;
    Font.Size := GSettings.FlowchartFontSize;
    BorderStyle := bsNone;
    Color := GSettings.DesktopColor;
    HorzScrollBar.Range := ClientWidth;
    VertScrollBar.Range := ClientHeight;
-   HorzScrollBar.Tracking := true;
-   VertScrollBar.Tracking := true;
+   HorzScrollBar.Tracking := True;
+   VertScrollBar.Tracking := True;
    PopupMenu := APage.Form.pmPages;
    OnMouseUp := BoxMouseUp;
 end;

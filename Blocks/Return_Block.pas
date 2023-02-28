@@ -37,7 +37,7 @@ type
       protected
          FReturnLabel: string;
          procedure Paint; override;
-         procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
+         procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          function GetReturnEllipseRect: TRect;
          procedure PutTextControls; override;
    end;
@@ -104,7 +104,7 @@ begin
    if ALangId = PASCAL_LANG_ID then
    begin
       var expr := Trim(FStatement.Text);
-      var inFunction := false;
+      var inFunction := False;
       var userFunction: TUserFunction := nil;
       if not expr.IsEmpty then
       begin
@@ -146,9 +146,7 @@ begin
          finally
             list.Free;
          end;
-         if GSettings.UpdateEditor and not SkipUpdateEditor then
-            TInfra.ChangeLine(chLine);
-         TInfra.GetEditorForm.SetCaretPos(chLine);
+         TInfra.GetEditorForm.UpdateEditorForBlock(Self, chLine);
       end;
    end;
 end;
@@ -159,8 +157,9 @@ begin
    FStatement.Color := AColor;
 end;
 
-procedure TReturnBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TReturnBlock.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
+   inherited;
    if IsAtSelectPos(Point(X, Y)) then
       Select
    else

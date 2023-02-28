@@ -41,7 +41,7 @@ type
          UserFunction: TObject;
          constructor Create(APage: TBlockTabSheet; const ABlockParms: TBlockParms); overload;
          constructor Create(APage: TBlockTabSheet; const ATopLeft: TPoint); overload;
-         procedure SaveInXML(ATag: IXMLElement); override;
+         procedure SaveInXML(ANode: IXMLNode); override;
          procedure ExportToGraphic(AGraphic: TGraphic); override;
          procedure SetWidth(AMinX: integer); override;
          procedure SetZOrder(AValue: integer);
@@ -49,18 +49,18 @@ type
          function ExportToXMLFile(const AFile: string): TError; override;
          function GetExportFileName: string; override;
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
-         function GetFromXML(ATag: IXMLElement): TError; override;
+         function GetFromXML(ANode: IXMLNode): TError; override;
          function GetHandle: THandle;
          function GetZOrder: integer;
          function IsBoldDesc: boolean; override;
+         procedure Resize; override;
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
          function GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer; override;
       protected
          FZOrder: integer;
          FStartLabel,
          FStopLabel: string;
-         procedure MyOnResize(Sender: TObject);
-         procedure MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer); override;
+         procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          procedure Paint; override;
          procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
          procedure SetPage(APage: TBlockTabSheet); override;
@@ -78,8 +78,9 @@ const
 implementation
 
 uses
-   Vcl.Forms, System.SysUtils, System.StrUtils, Infrastructure, XMLProcessor, DeclareList,
-   Navigator_Form, Return_Block, LangDefinition, UserFunction, Comment, Constants;
+   Vcl.Forms, System.SysUtils, System.StrUtils, Infrastructure, XMLProcessor, OmniXMLUtils,
+   DeclareList, Navigator_Form, Return_Block, LangDefinition, UserFunction, Comment,
+   Constants;
 
 constructor TMainBlock.Create(APage: TBlockTabSheet; const ABlockParms: TBlockParms);
 begin
@@ -115,11 +116,10 @@ begin
    FInitParms.HeightAffix := 42;
 
    BottomPoint.X := FInitParms.BottomPoint.X;
-   TopHook.Y := TInfra.Scaled(30);
+   TopHook.Y := TInfra.Scaled(Self, 30);
    FZOrder := -1;
    Constraints.MinWidth := FInitParms.Width;
    Constraints.MinHeight := FInitParms.Height;
-   OnResize := MyOnResize;
    FLabelRect := TRect.Empty;
    FHandle := Canvas.Handle;
    FStatement.Free;
@@ -239,7 +239,7 @@ begin
    bitmap.Width := pnt.X;
    bitmap.Height := pnt.Y;
    pdi := FPage.DrawI;
-   FPage.DrawI := false;
+   FPage.DrawI := False;
    bitmap.Canvas.Lock;
    try
       PaintTo(bitmap.Canvas, 1, 1);
@@ -311,56 +311,42 @@ begin
 end;
 
 procedure TMainBlock.DrawStopEllipse;
-var
-   y: integer;
 begin
+   var y := GetEllipseTextRect(0, 0, FStopLabel).Height;
    if Branch.Count = 0 then
-      y := Branch.Hook.Y + 1
+      Inc(y, Branch.Hook.Y+1)
    else
-      y := Branch.Last.BoundsRect.Bottom;
-   y := y + GetEllipseTextRect(0, 0, FStopLabel).Height;
+      Inc(y, Branch.Last.BoundsRect.Bottom);
    DrawEllipsedText(BottomHook, y, FStopLabel);
 end;
 
 function TMainBlock.GetFunctionLabel(var ARect: TRect): string;
-var
-   lang: TLangDefinition;
-   d: integer;
-   header: TUserFunctionHeader;
 begin
    result := '';
    ARect := Rect(Branch.Hook.X+75, 7, 0, 0);
    if GSettings.ShowFuncLabels and (UserFunction <> nil) and Expanded then
    begin
-      lang := nil;
-      header := TUserFunction(UserFunction).Header;
+      var header := TUserFunction(UserFunction).Header;
       if header <> nil then
       begin
-         if Assigned(GInfra.CurrentLang.GetUserFuncDesc) then
-            lang := GInfra.CurrentLang
-         else if Assigned(GInfra.TemplateLang.GetUserFuncDesc) then
+         var lang := GInfra.CurrentLang;
+         if not Assigned(lang.GetUserFuncDesc) then
             lang := GInfra.TemplateLang;
-         if lang <> nil then
-            result := lang.GetUserFuncDesc(header, false, header.chkInclDescFlow.Checked);
+         result := lang.GetUserFuncDesc(header, False, header.chkInclDescFlow.Checked);
       end
       else
       begin
-         if Assigned(GInfra.CurrentLang.GetMainProgramDesc) then
-            lang := GInfra.CurrentLang
-         else if Assigned(GInfra.TemplateLang.GetMainProgramDesc) then
+         var lang := GInfra.CurrentLang;
+         if not Assigned(lang.GetMainProgramDesc) then
             lang := GInfra.TemplateLang;
-         if lang <> nil then
-            result := lang.GetMainProgramDesc;
+         result := lang.GetMainProgramDesc;
       end;
    end;
    if not result.IsEmpty then
    begin
       DrawText(Canvas.Handle, PChar(result), -1, ARect, DT_CALCRECT);
       if (Branch.Count > 0) and (ARect.Bottom > Branch.First.Top-5) and (ARect.Left < Branch.First.BoundsRect.Right+5) then
-      begin
-         d := Branch.First.BoundsRect.Right + 5 - ARect.Left;
-         ARect.Offset(d, 0);
-      end;
+         ARect.Offset(Branch.First.BoundsRect.Right + 5 - ARect.Left, 0);
    end;
 end;
 
@@ -375,7 +361,7 @@ end;
 function TMainBlock.ExportToXMLFile(const AFile: string): TError;
 begin
    if UserFunction <> nil then
-      result := TXMLProcessor.ExportToXMLFile(TUserFunction(UserFunction).ExportToXMLTag, AFile)
+      result := TXMLProcessor.ExportToXMLFile(TUserFunction(UserFunction).ExportToXML, AFile)
    else
       result := inherited ExportToXMLFile(AFile);
 end;
@@ -403,10 +389,10 @@ begin
    end;
 end;
 
-procedure TMainBlock.MyOnMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TMainBlock.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
    if Expanded then
-      inherited MyOnMouseMove(Sender, Shift, X, Y)
+      inherited
    else
    begin
       var p := Point(X, Y);
@@ -418,7 +404,7 @@ begin
    end;
 end;
 
-procedure TMainBlock.MyOnResize(Sender: TObject);
+procedure TMainBlock.Resize;
 begin
    FPage.Box.SetScrollbars;
    if FPage.Box.HorzScrollBar.Position + BoundsRect.Right < MARGIN_X then
@@ -430,58 +416,40 @@ begin
 end;
 
 function TMainBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
-var
-   lName, template, ending: string;
-   lang: TLangDefinition;
-   progList, varList, tmpList: TStringList;
-   vars: TVarDeclareList;
-   header: TUserFunctionHeader;
 begin
-   tmpList := TStringList.Create;
+   var lang := GInfra.GetLangDefinition(ALangId);
+   var tmpList := TStringList.Create;
    try
       if ALangId = TIBASIC_LANG_ID then
          GenerateNestedCode(tmpList, PRIMARY_BRANCH_IDX, ADeep+1, ALangId)
-      else
+      else if lang <> nil then
       begin
-         lang := GInfra.GetLangDefinition(ALangId);
-         if lang <> nil then
+         var vars := GProject.GlobalVars;
+         var lName := GProject.Name;
+         var template := lang.MainFunctionTemplate;
+         var header := TInfra.GetFunctionHeader(Self);
+         if header <> nil then
          begin
-            header := TInfra.GetFunctionHeader(Self);
-            if header <> nil then
-            begin
-               vars := header.LocalVars;
-               lName := header.GetName;
-               template := GetBlockTemplate(ALangId);
-            end
-            else
-            begin
-               vars := GProject.GlobalVars;
-               lName := GProject.Name;
-               template := lang.MainFunctionTemplate;
-            end;
-            if not template.IsEmpty then
-            begin
-               progList := TStringList.Create;
-               varList := TStringList.Create;
-               try
-                  progList.Text := ReplaceStr(template, PRIMARY_PLACEHOLDER, lName);
-                  if header = nil then
-                  begin
-                     ending := '';
-                     if not ((Branch.Count > 0) and (Branch.Last is TReturnBlock)) then
-                        ending := lang.ProgramReturnTemplate;
-                     TInfra.InsertTemplateLines(progList, '%s3', ending);
-                  end;
-                  if Assigned(GInfra.CurrentLang.VarSectionGenerator) then
-                     GInfra.CurrentLang.VarSectionGenerator(varList, vars)
-                  else if Assigned(GInfra.TemplateLang.VarSectionGenerator) then
-                     GInfra.TemplateLang.VarSectionGenerator(varList, vars);
-                  TInfra.InsertTemplateLines(progList, '%s2', varList);
-                  GenerateTemplateSection(tmpList, progList, ALangId, ADeep);
-               finally
-                  varList.Free;
-                  progList.Free;
-               end;
+            vars := header.LocalVars;
+            lName := header.GetName;
+            template := GetBlockTemplate(ALangId);
+         end;
+         if not template.IsEmpty then
+         begin
+            var progList := TStringList.Create;
+            var varList := TStringList.Create;
+            try
+               progList.Text := ReplaceStr(template, PRIMARY_PLACEHOLDER, lName);
+               if header = nil then
+                  TInfra.InsertTemplateLines(progList, '%s3', IfThen((Branch.Count = 0) or not (Branch.Last is TReturnBlock), lang.ProgramReturnTemplate));
+               if not Assigned(lang.VarSectionGenerator) then
+                  lang := GInfra.TemplateLang;
+               lang.VarSectionGenerator(varList, vars);
+               TInfra.InsertTemplateLines(progList, '%s2', varList);
+               GenerateTemplateSection(tmpList, progList, ALangId, ADeep);
+            finally
+               varList.Free;
+               progList.Free;
             end;
          end;
       end;
@@ -520,27 +488,27 @@ begin
        block.GenerateTree(AParentNode);
 end;
 
-procedure TMainBlock.SaveInXML(ATag: IXMLElement);
+procedure TMainBlock.SaveInXML(ANode: IXMLNode);
 begin
-   inherited SaveInXML(ATag);
-   if ATag <> nil then
+   inherited SaveInXML(ANode);
+   if ANode <> nil then
    begin
-      ATag.SetAttribute(Z_ORDER_ATTR, FZOrder.ToString);
+      SetNodeAttrInt(ANode, Z_ORDER_ATTR, FZOrder);
       if not FPage.IsMain then
-         ATag.SetAttribute(PAGE_CAPTION_ATTR, FPage.Caption);
+         SetNodeAttrStr(ANode, PAGE_CAPTION_ATTR, FPage.Caption);
    end;
 end;
 
-function TMainBlock.GetFromXML(ATag: IXMLElement): TError;
+function TMainBlock.GetFromXML(ANode: IXMLNode): TError;
 begin
-   result := inherited GetFromXML(ATag);
-   if ATag <> nil then
-      FZOrder := TXMLProcessor.GetIntFromAttr(ATag, Z_ORDER_ATTR, -1);
+   result := inherited GetFromXML(ANode);
+   if ANode <> nil then
+      FZOrder := GetNodeAttrInt(ANode, Z_ORDER_ATTR);
 end;
 
 function TMainBlock.IsBoldDesc: boolean;
 begin
-   result := true;
+   result := True;
 end;
 
 procedure TMainBlock.WMWindowPosChanging(var Msg: TWMWindowPosChanging);
@@ -564,7 +532,7 @@ begin
    result := inherited Remove(ANode);
    if result and (UserFunction <> nil) then
    begin
-      TUserFunction(UserFunction).Active := false;
+      TUserFunction(UserFunction).Active := False;
       TInfra.UpdateCodeEditor;
    end;
 end;

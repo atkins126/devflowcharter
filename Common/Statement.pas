@@ -132,7 +132,7 @@ begin
    Alignment := AAlignment;
    BorderStyle := bsNone;
    ShowHint := True;
-   DoubleBuffered := true;
+   DoubleBuffered := True;
    FParserMode := AParserMode;
    FId := GProject.Register(Self, AId);
    if CanFocus then
@@ -228,8 +228,9 @@ end;
 
 procedure TStatement.KeyDown(var Key: Word; Shift: TShiftState);
 begin
-   inherited KeyDown(Key, Shift);
-   TInfra.OnKeyDownSelectAll(Self, Key, Shift);
+   inherited;
+   if (ssCtrl in Shift) and (Key = Ord('A')) then
+      SelectAll;
 end;
 
 procedure TStatement.DoEnter;
@@ -241,10 +242,11 @@ end;
 
 procedure TStatement.MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer);
 begin
-   inherited MouseDown(Button, Shift, X, Y);
-   if HasParent and Assigned(TWinControlHack(Parent).OnMouseDown) then
-      TWinControlHack(Parent).OnMouseDown(Parent, Button, Shift, X+Left, Y+Top);
+   inherited;
+   if HasParent and (Button = mbLeft) then
+      TWinControlHack(Parent).MouseDown(Button, Shift, X+Left, Y+Top);
 end;
+
 
 function TStatement.GetId: integer;
 begin
@@ -273,7 +275,7 @@ end;
 
 function TStatement.IsBoldDesc: boolean;
 begin
-   result := false;
+   result := False;
 end;
 
 function TStatement.GetTreeNodeText(ANodeOffset: integer = 0): string;

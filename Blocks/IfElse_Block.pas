@@ -34,7 +34,7 @@ type
          FalseBranch: TBranch;
          TrueHook,
          FalseHook: integer;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure Paint; override;
          procedure SetWidth(AMinX: integer); override;
          function GetDiamondTop: TPoint; override;
@@ -46,7 +46,7 @@ type
          procedure ResizeVert(AContinue: boolean); override;
          procedure ExpandFold(AResize: boolean); override;
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
-         procedure SaveInXML(ATag: IXMLElement); override;
+         procedure SaveInXML(ANode: IXMLNode); override;
    end;
 
 const
@@ -56,7 +56,8 @@ const
 implementation
 
 uses
-   System.SysUtils, System.Classes, System.Math, Return_Block, Infrastructure, YaccLib;
+   System.SysUtils, System.Classes, System.Math, Return_Block, Infrastructure, YaccLib,
+   OmniXMLUtils;
 
 constructor TIfElseBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
 begin
@@ -134,19 +135,15 @@ begin
       Canvas.MoveTo(TrueBranch.Hook.X, FDiamond.Left.Y);
       Canvas.LineTo(FDiamond.Left.X, FDiamond.Left.Y);
 
-      DrawTextLabel(FDiamond.Left.X, FDiamond.Left.Y-5, FTrueLabel, true, true);
-      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, false, true);
-      DrawBlockLabel(FDiamond.Left.X+10, FDiamond.Left.Y+5, GInfra.CurrentLang.LabelIfElse, true);
+      DrawTextLabel(FDiamond.Left.X, FDiamond.Left.Y-5, FTrueLabel, True, True);
+      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, False, True);
+      DrawBlockLabel(FDiamond.Left.X+10, FDiamond.Left.Y+5, GInfra.CurrentLang.LabelIfElse, True);
    end;
    DrawI;
 end;
 
 procedure TIfElseBlock.ResizeHorz(AContinue: boolean);
-var
-   leftX, maxXTrue, minXFalse, rightX, dlt: integer;
-   block: TBlock;
 begin
-
    if (TrueBranch.Count = 0) and (FalseBranch.Count = 0) then  // no child blocks
    begin
       Width := FInitParms.Width;
@@ -163,23 +160,20 @@ begin
          ParentBlock.ResizeHorz(AContinue);
       Exit;
    end;
-
    LinkAllBlocks;
-
-   if (Ired <> FALSE_BRANCH_IDX) and (TrueBranch.Count > 0) then           // TRUE branch
+   if (FRedArrow <> FALSE_BRANCH_IDX) and (TrueBranch.Count > 0) then           // TRUE branch
    begin
-      leftX := 10;
-      for block in TrueBranch do
-          leftX := Min(block.Left, leftX);
-      TrueBranch.Hook.X := TrueBranch.Hook.X - leftX + 10;
+      var lx := 10;
+      for var block in TrueBranch do
+          lx := Min(block.Left, lx);
+      TrueBranch.Hook.X := TrueBranch.Hook.X - lx + 10;
       LinkAllBlocks;
-
-      maxXTrue := BottomHook - 30;
-      for block in TrueBranch do
-          maxXTrue := Max(block.BoundsRect.Right, maxXTrue);
-      dlt := maxXTrue - BottomHook + 30;
+      var mx := BottomHook - 30;
+      for var block in TrueBranch do
+          mx := Max(block.BoundsRect.Right, mx);
+      var dlt := mx - BottomHook + 30;
       Inc(TopHook.X, dlt);
-      BottomHook := BottomHook + dlt;
+      BottomHook := mx + 30;
       BottomPoint.X := BottomHook;
       Width := Width + dlt + 10;
       Inc(FalseBranch.Hook.X, dlt);
@@ -193,20 +187,18 @@ begin
          Width := FalseHook + 11;
       end;
    end;
-
-   if (Ired <> TRUE_BRANCH_IDX) and (FalseBranch.Count > 0) then           // FALSE branch
+   if (FRedArrow <> TRUE_BRANCH_IDX) and (FalseBranch.Count > 0) then           // FALSE branch
    begin
-      minXFalse := BottomHook + 30;
-      for block in FalseBranch do
-          minXFalse := Min(block.Left, minXFalse);
-      dlt := BottomHook + 30 - minXFalse;
+      var mx := BottomHook + 30;
+      for var block in FalseBranch do
+          mx := Min(block.Left, mx);
+      var dlt := BottomHook + 30 - mx;
       FalseBranch.Hook.X := FalseBranch.Hook.X + dlt;
       LinkAllBlocks;
-
-      rightX := 0;
-      for block in FalseBranch do
-          rightX := Max(block.BoundsRect.Right, rightX);
-      Width := rightX + 10;
+      var rx := 0;
+      for var block in FalseBranch do
+          rx := Max(block.BoundsRect.Right, rx);
+      Width := rx + 10;
       LinkAllBlocks;
       FalseHook := FalseBranch.Last.Left + FalseBranch.Last.BottomPoint.X;
       if TrueBranch.Count > 0 then
@@ -214,10 +206,8 @@ begin
       else
          TrueHook := TrueBranch.Hook.X;
    end;
-
    if AContinue then
       ParentBlock.ResizeHorz(AContinue);
-
 end;
 
 procedure TIfElseBlock.ResizeVert(AContinue: boolean);
@@ -237,10 +227,10 @@ begin
       ParentBlock.ResizeVert(AContinue);
 end;
 
-procedure TIfElseBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TIfElseBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
-   if Resize and FVResize then
+   result := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
+   if result and FVResize then
    begin
       if Expanded then
       begin
@@ -253,7 +243,7 @@ begin
          BottomPoint.Y := NewHeight - 28;
       end;
    end;
-   if FHResize and Resize and not Expanded then
+   if FHResize and result and not Expanded then
    begin
       BottomPoint.X := NewWidth div 2;
       TopHook.X := BottomPoint.X;
@@ -288,10 +278,10 @@ begin
    result := Point(TopHook.X, 0);
 end;
 
-procedure TIfElseBlock.SaveInXML(ATag: IXMLElement);
+procedure TIfElseBlock.SaveInXML(ANode: IXMLNode);
 begin
-   inherited SaveInXML(ATag);
-   if ATag <> nil then
+   inherited SaveInXML(ANode);
+   if ANode <> nil then
    begin
       var fbrx := FFoldParms.P2X;
       var th := FFoldParms.TopHook;
@@ -300,11 +290,11 @@ begin
          fbrx := FalseBranch.Hook.X;
          th := TopHook.X;
       end;
-      ATag.SetAttribute('fbrx', fbrx.ToString);
-      ATag.SetAttribute('th', th.ToString);
-      ATag.SetAttribute('fbry', FalseBranch.Hook.Y.ToString);
-      ATag.SetAttribute('flh', FalseHook.ToString);
-      ATag.SetAttribute('trh', TrueHook.ToString);
+      SetNodeAttrInt(ANode, 'fbrx', fbrx);
+      SetNodeAttrInt(ANode, 'th', th);
+      SetNodeAttrInt(ANode, 'fbry', FalseBranch.Hook.Y);
+      SetNodeAttrInt(ANode, 'flh', FalseHook);
+      SetNodeAttrInt(ANode, 'trh', TrueHook);
    end;
 end;
 

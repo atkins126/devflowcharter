@@ -35,7 +35,7 @@ type
      function IsEnabled: boolean; override;
   public
      { Public declarations }
-     function ImportTabsFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError; override;
+     function ImportTabsFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError; override;
      procedure RefreshTabs; override;
      procedure ResetForm; override;
   end;
@@ -46,30 +46,24 @@ var
 implementation
 
 uses
-   System.SysUtils, Infrastructure, XMLProcessor, UserDataType, Interfaces;
+   System.SysUtils, Infrastructure, UserDataType, Interfaces;
 
 {$R *.dfm}
 
 procedure TDataTypesForm.RefreshTabs;
-var
-   i: integer;
-   dataType: TUserDataType;
-   field: TField;
 begin
    inherited;
-   for i := 0 to pgcTabs.PageCount-1 do
+   for var i := 0 to pgcTabs.PageCount-1 do
    begin
-      dataType := TUserDataType(pgcTabs.Pages[i]);
-      for field in dataType.GetFields do
+      var dataType := TUserDataType(pgcTabs.Pages[i]);
+      for var field in dataType.GetFields do
          TInfra.PopulateDataTypeCombo(field.cbType, dataType.PageIndex);
    end;
 end;
 
 procedure TDataTypesForm.miAddClick(Sender: TObject);
-var
-   dataType: TUserDataType;
 begin
-   dataType := TUserDataType.Create(Self);
+   var dataType := TUserDataType.Create(Self);
    pgcTabs.ActivePage := dataType;
    dataType.edtName.SetFocus;
    if Assigned(dataType.edtName.OnChange) then
@@ -85,6 +79,7 @@ begin
          TInfra.PopulateDataTypeCombo(GProject.GlobalVars.cbType);
       GProject.PopulateDataTypeSets;
       GProject.PopulateDataTypeCombos;
+      GProject.RefreshVarTypes;
    end;
    TInfra.GetFunctionsForm.RefreshTabs;
    inherited FormDeactivate(Sender);
@@ -95,9 +90,9 @@ begin
    RefreshTabs;
 end;
 
-function TDataTypesForm.ImportTabsFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
+function TDataTypesForm.ImportTabsFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
 begin
-   result := GProject.ImportUserDataTypesFromXML(ATag, AImportMode);
+   result := GProject.ImportUserDataTypesFromXML(ANode, AImportMode);
 end;
 
 procedure TDataTypesForm.ResetForm;

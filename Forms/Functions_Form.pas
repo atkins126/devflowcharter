@@ -34,7 +34,7 @@ type
     function IsEnabled: boolean; override;
   public
     { Public declarations }
-    function ImportTabsFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError; override;
+    function ImportTabsFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError; override;
     procedure RefreshTabs; override;
     procedure ResetForm; override;
     procedure AddUserFunction(const ABodyTopLeft: TPoint);
@@ -49,7 +49,7 @@ implementation
 
 uses
    System.SysUtils, Infrastructure, Base_Block, Main_Block, Navigator_Form,
-   UserFunction, Interfaces, XMLProcessor, BlockTabSheet, Constants;
+   UserFunction, Interfaces, BlockTabSheet, Constants;
 
 procedure TFunctionsForm.miAddClick(Sender: TObject);
 begin
@@ -57,13 +57,10 @@ begin
 end;
 
 procedure TFunctionsForm.AddUserFunction(const ABodyTopLeft: TPoint);
-var
-   header: TUserFunctionHeader;
-   body: TMainBlock;
 begin
    Show;
-   body := TMainBlock.Create(GProject.ActivePage, ABodyTopLeft);
-   header := TUserFunctionHeader.Create(Self);
+   var body := TMainBlock.Create(GProject.ActivePage, ABodyTopLeft);
+   var header := TUserFunctionHeader.Create(Self);
    TUserFunction.Create(header, body);
    if Visible and Enabled then  // replace with CanFocus once fixed by Embarcadero (RSP-34465)
       SetFocus;
@@ -78,15 +75,12 @@ begin
 end;
 
 procedure TFunctionsForm.pgcTabsChange(Sender: TObject);
-var
-   body: TMainBlock;
-   bpage: TBlockTabSheet;
 begin
    inherited pgcTabsChange(Sender);
-   body := TUserFunctionHeader(pgcTabs.ActivePage).UserFunction.Body;
+   var body := TUserFunctionHeader(pgcTabs.ActivePage).UserFunction.Body;
    if (body <> nil) and body.Visible then
    begin
-      bpage := body.Page;
+      var bpage := body.Page;
       bpage.PageControl.ActivePage := bpage;
       bpage.Box.ScrollInView(body);
       body.BringAllToFront;
@@ -94,24 +88,20 @@ begin
    end;
 end;
 
-function TFunctionsForm.ImportTabsFromXMLTag(ATag: IXMLElement; AImportMode: TImportMode): TError;
+function TFunctionsForm.ImportTabsFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
 begin
-   result := GProject.ImportUserFunctionsFromXML(ATag, AImportMode);
+   result := GProject.ImportUserFunctionsFromXML(ANode, AImportMode);
 end;
 
 procedure TFunctionsForm.RefreshTabs;
-var
-   i: integer;
-   header: TUserFunctionHeader;
-   param: TParameter;
 begin
    inherited;
-   for i := 0 to pgcTabs.PageCount-1 do
+   for var i := 0 to pgcTabs.PageCount-1 do
    begin
-      header := TUserFunctionHeader(pgcTabs.Pages[i]);
+      var header := TUserFunctionHeader(pgcTabs.Pages[i]);
       TInfra.PopulateDataTypeCombo(header.LocalVars.cbType);
       TInfra.PopulateDataTypeCombo(header.cbType);
-      for param in header.GetParameters do
+      for var param in header.GetParameters do
          TInfra.PopulateDataTypeCombo(param.cbType);
    end;
 end;

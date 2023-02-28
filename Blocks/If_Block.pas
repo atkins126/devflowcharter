@@ -33,7 +33,7 @@ type
          constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
       protected
          procedure Paint; override;
-         procedure MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean); override;
+         function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure SetWidth(AMinX: integer); override;
          function GetDiamondTop: TPoint; override;
    end;
@@ -81,9 +81,9 @@ begin
       BottomPoint.Y := Height - 31;
 
       DrawArrow(TopHook, Branch.Hook);
-      DrawTextLabel(FDiamond.Bottom.X-10, FDiamond.Bottom.Y, FTrueLabel, true);
-      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, false, true);
-      DrawBlockLabel(FDiamond.Left.X-5, FDiamond.Left.Y-5, GInfra.CurrentLang.LabelIf, true, true);
+      DrawTextLabel(FDiamond.Bottom.X-10, FDiamond.Bottom.Y, FTrueLabel, True);
+      DrawTextLabel(FDiamond.Right.X, FDiamond.Right.Y-5, FFalseLabel, False, True);
+      DrawBlockLabel(FDiamond.Left.X-5, FDiamond.Left.Y-5, GInfra.CurrentLang.LabelIf, True, True);
 
       Canvas.PenPos := FDiamond.Right;
       Canvas.LineTo(Width-11, FDiamond.Right.Y);
@@ -103,10 +103,10 @@ begin
       Width := AMinX + 30;
 end;
 
-procedure TIfBlock.MyOnCanResize(Sender: TObject; var NewWidth, NewHeight: Integer; var Resize: Boolean);
+function TIfBlock.CanResize(var NewWidth, NewHeight: Integer): Boolean;
 begin
-   Resize := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
-   if Resize and FVResize then
+   result := (NewWidth >= Constraints.MinWidth) and (NewHeight >= Constraints.MinHeight);
+   if result and FVResize then
    begin
       if Expanded then
          Inc(Branch.Hook.Y, NewHeight-Height)
@@ -116,7 +116,7 @@ begin
          BottomPoint.Y := NewHeight - 28;
       end;
    end;
-   if Resize and FHResize and not Expanded then
+   if result and FHResize and not Expanded then
    begin
       BottomPoint.X := NewWidth div 2;
       TopHook.X := BottomPoint.X;
