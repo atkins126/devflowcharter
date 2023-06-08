@@ -126,12 +126,12 @@ end;
 
 procedure TMultiLineBlock.UpdateEditor(AEdit: TCustomEdit);
 begin
-   if PerformEditorUpdate then
+   if ShouldFocusEditor then
    begin
       var chLine := TInfra.GetChangeLine(Self, FStatements);
       if chLine.CodeRange.FirstRow <> ROW_NOT_FOUND then
       begin
-         if (chLine.CodeRange.Lines <> nil) and GSettings.UpdateEditor and not SkipUpdateEditor then
+         if (chLine.CodeRange.Lines <> nil) and ShouldUpdateEditor then
          begin
             var templateLines := TStringList.Create;
             try

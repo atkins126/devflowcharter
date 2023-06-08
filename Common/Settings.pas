@@ -100,11 +100,9 @@ type
       procedure Save;
       procedure LoadFromForm;
       procedure LoadFromEditor;
-      procedure SetForm;
       procedure UpdateForHLighter(AHLighter: TSynCustomHighlighter);
       procedure ResetCurrentLangName;
       function GetShapeColor(AShape: TColorShape): TColor;
-      function UpdateEditor: boolean;
       function IndentString(ATimes: integer = 1): string;
       function ExecuteParse(AParserMode: TYYMode): boolean;
       property ParseInput: boolean read FParseInput;
@@ -556,16 +554,17 @@ begin
    FPrintMultPages := sForm.chkMultiPrint.Checked;
    FPrintMultPagesHorz := sForm.chkMultiPrintHorz.Checked;
 
-   if sForm.edtTranslateFile.Text <> FTranslateFile then
+   var translateFile := sForm.edtTranslateFile.Text;
+   if translateFile <> FTranslateFile then
    begin
-      if sForm.edtTranslateFile.Text = '' then
+      if translateFile = '' then
       begin
          FTranslateFile := '';
          if i18Manager.LoadDefaultLabels = 0 then
             Application.Terminate;
       end
-      else if i18Manager.LoadAllLabels(sForm.edtTranslateFile.Text) > 0 then
-         FTranslateFile := sForm.edtTranslateFile.Text;
+      else if i18Manager.LoadAllLabels(translateFile) > 0 then
+         FTranslateFile := translateFile;
    end;
 
    var lang := GInfra.GetLangDefinition(sForm.cbLanguage.Text);
@@ -639,16 +638,6 @@ begin
      end;
    end;
 
-end;
-
-procedure TSettings.SetForm;
-begin
-   TInfra.GetSettingsForm.SetSettings(Self);
-end;
-
-function TSettings.UpdateEditor: boolean;
-begin
-   result := TInfra.GetEditorForm.Visible and FEditorAutoUpdate;
 end;
 
 function TSettings.ExecuteParse(AParserMode: TYYMode): boolean;

@@ -194,7 +194,7 @@ begin
    begin
       FDescOrder := AValue;
       Repaint;
-      if GSettings.UpdateEditor and not SkipUpdateEditor then
+      if ShouldUpdateEditor then
          UpdateEditor(nil);
    end;
 end;
@@ -277,7 +277,7 @@ begin
       edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
       edtVar.Font.Color := NOK_COLOR;
    end;
-   if GSettings.UpdateEditor and not SkipUpdateEditor then
+   if ShouldUpdateEditor then
       UpdateEditor(nil);
 end;
 
@@ -510,7 +510,7 @@ end;
 
 procedure TForDoBlock.UpdateEditor(AEdit: TCustomEdit);
 begin
-   if PerformEditorUpdate then
+   if ShouldFocusEditor then
    begin
       var chLine := TInfra.GetChangeLine(Self);
       if chLine.Row <> ROW_NOT_FOUND then

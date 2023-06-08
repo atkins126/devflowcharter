@@ -86,7 +86,7 @@ type
          function DrawTextLabel(x, y: integer; const AText: string; ARightJust: boolean = False; ADownJust: boolean = False; APrint: boolean = True): TRect;
          procedure DrawBlockLabel(x, y: integer; const AText: string; rightJust: boolean = False; downJust: boolean = False);
          function GetId: integer;
-         function PerformEditorUpdate: boolean;
+         function ShouldFocusEditor: boolean;
          procedure Select;
          function IsAtSelectPos(const APoint: TPoint): boolean;
          procedure SetCursor(const APoint: TPoint);
@@ -151,7 +151,6 @@ type
          function ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
          procedure ExportToGraphic(AGraphic: TGraphic); virtual;
          procedure UpdateEditor(AEdit: TCustomEdit); virtual;
-         function SkipUpdateEditor: boolean;
          procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          function RetrieveFocus(AInfo: TFocusInfo): boolean; virtual;
          function CanBeFocused: boolean; virtual;
@@ -187,6 +186,7 @@ type
          procedure LockDrawing;
          procedure UnlockDrawing;
          function FindSelectedBlock: TBlock; virtual;
+         function ShouldUpdateEditor: boolean;
    end;
 
    TGroupBlock = class(TBlock)    // block which can aggregate child blocks
@@ -2257,7 +2257,7 @@ end;
 
 procedure TBlock.UpdateEditor(AEdit: TCustomEdit);
 begin
-   if (AEdit <> nil) and PerformEditorUpdate then
+   if (AEdit <> nil) and ShouldFocusEditor then
    begin
       var chLine := TInfra.GetChangeLine(Self, AEdit);
       if chLine.Row <> ROW_NOT_FOUND then
@@ -2269,7 +2269,14 @@ begin
    end;
 end;
 
-function TBlock.PerformEditorUpdate: boolean;
+function TBlock.ShouldUpdateEditor: boolean;
+begin
+   var funcHeader := TInfra.GetFunctionHeader(Self);
+   var skipUpdateEditor := (funcHeader <> nil) and (TInfra.IsNOkColor(funcHeader.Font.Color) or (funcHeader.chkExternal.Checked and not GInfra.CurrentLang.CodeIncludeExternFunction));
+   result := TInfra.ShouldUpdateEditor and not skipUpdateEditor;
+end;
+
+function TBlock.ShouldFocusEditor: boolean;
 begin
    result := TInfra.GetEditorForm.Visible and (not FRefreshMode) and not (fsStrikeOut in Font.Style);
 end;
@@ -2405,12 +2412,6 @@ procedure TGroupBlock.LinkAllBlocks;
 begin
    for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
       LinkBlocks(FBranchList[i]);
-end;
-
-function TBlock.SkipUpdateEditor: boolean;
-begin
-   var funcHeader := TInfra.GetFunctionHeader(Self);
-   result := (funcHeader <> nil) and (TInfra.IsNOkColor(funcHeader.Font.Color) or (funcHeader.chkExternal.Checked and not GInfra.CurrentLang.CodeIncludeExternFunction));
 end;
 
 function TBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;

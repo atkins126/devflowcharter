@@ -665,7 +665,7 @@ begin
       end
       else
       begin
-         i := GProject.GetLibSectionOffset;
+         i := GProject.LibSectionOffset;
          if i >= 0 then
          begin
             if not GInfra.CurrentLang.LibTemplate.IsEmpty then
@@ -1245,7 +1245,7 @@ end;
 
 procedure TEditorForm.UpdateEditorForBlock(ABlock: TBlock; const AChangeLine: TChangeLine);
 begin
-   if GSettings.UpdateEditor and (not ABlock.SkipUpdateEditor) and AChangeLine.Change then
+   if ABlock.ShouldUpdateEditor and AChangeLine.Change then
       memCodeEditor.Modified := True;
    SetCaretPos(AChangeLine);
 end;
