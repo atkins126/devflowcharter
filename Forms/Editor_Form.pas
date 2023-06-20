@@ -632,23 +632,16 @@ begin
 end;
 
 procedure TEditorForm.InsertLibraryEntry(const ALibrary: string);
-var
-   libEntry, indent: string;
-   i, a: integer;
-   found: boolean;
-   lines: TStringList;
-   libObj: TObject;
 begin
+   var libEntry := ALibrary;
    if not GInfra.CurrentLang.LibEntry.IsEmpty then
       libEntry := Format(GInfra.CurrentLang.LibEntry, [ALibrary])
    else if not GInfra.CurrentLang.LibEntryList.IsEmpty then       // this functionality is disabled for libs in LibEntryList
-      Exit
-   else
-      libEntry := ALibrary;
-   found := False;
-   for i := 0 to memCodeEditor.Lines.Count-1 do
+      Exit;
+   var found := False;
+   for var a := 0 to memCodeEditor.Lines.Count-1 do
    begin
-      if memCodeEditor.Lines[i].TrimLeft.StartsWith(libEntry, not GInfra.CurrentLang.CaseSensitiveSyntax) then
+      if memCodeEditor.Lines[a].TrimLeft.StartsWith(libEntry, not GInfra.CurrentLang.CaseSensitiveSyntax) then
       begin
          found := True;
          break;
@@ -656,33 +649,29 @@ begin
    end;
    if not found then
    begin
-      libObj := TInfra.GetLibObject;
-      i := memCodeEditor.Lines.IndexOfObject(libObj);
+      var libObj := TInfra.GetLibObject;
+      var i := memCodeEditor.Lines.IndexOfObject(libObj);
       if i <> -1 then
       begin
-         indent := TInfra.ExtractIndentString(memCodeEditor.Lines[i]);
+         var indent := TInfra.ExtractIndentString(memCodeEditor.Lines[i]);
          memCodeEditor.Lines.InsertObject(i, indent + libEntry, libObj);
       end
-      else
+      else if GProject.LibSectionOffset >= 0 then
       begin
-         i := GProject.LibSectionOffset;
-         if i >= 0 then
+         if not GInfra.CurrentLang.LibTemplate.IsEmpty then
          begin
-            if not GInfra.CurrentLang.LibTemplate.IsEmpty then
-            begin
-               lines := TStringList.Create;
-               try
-                  lines.Text := GInfra.CurrentLang.LibTemplate;
-                  TInfra.InsertTemplateLines(lines, PRIMARY_PLACEHOLDER, libEntry, libObj);
-                  for a := lines.Count-1 downto 0 do
-                     memCodeEditor.Lines.InsertObject(i, lines.Strings[a], lines.Objects[a]);
-               finally
-                  lines.Free;
-               end;
-            end
-            else
-               memCodeEditor.Lines.InsertObject(i, libEntry, libObj);
-         end;
+            var lines := TStringList.Create;
+            try
+               lines.Text := GInfra.CurrentLang.LibTemplate;
+               TInfra.InsertTemplateLines(lines, PRIMARY_PLACEHOLDER, libEntry, libObj);
+               for var a := lines.Count-1 downto 0 do
+                  memCodeEditor.Lines.InsertObject(GProject.LibSectionOffset, lines.Strings[a], lines.Objects[a]);
+            finally
+               lines.Free;
+            end;
+         end
+         else
+            memCodeEditor.Lines.InsertObject(GProject.LibSectionOffset, libEntry, libObj);
       end;
    end;
 end;
