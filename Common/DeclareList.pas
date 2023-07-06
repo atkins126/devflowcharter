@@ -42,6 +42,8 @@ type
     end;
 
    TDeclareList = class(TGroupBox, IWithFocus, IWithId)
+      private
+         FExternalModifiers: array[TCheckBoxState] of string;
       protected
          FModifying: boolean;
          FId,
@@ -77,6 +79,7 @@ type
          procedure Resize; override;
          procedure OnCanResizeSplitter(Sender: TObject; var NewSize: Integer; var Accept: Boolean);
          procedure SetColumnLabel(ACol: integer; const AColLabel: string = '');
+         procedure SetExternalModifiers(const AExtern, ANotExtern, ATransExtern: string);
       public
          sgList: TStringGridEx;
          btnRemove,
@@ -108,7 +111,7 @@ type
          procedure SetDefaultFocus;
          function GetExternalState(ARow: integer): TCheckBoxState;
          procedure SetExternalColumn(AExternalCol: integer);
-         function GetExternModifier(idx: integer): string; virtual; abstract;
+         function GetExternalModifier(idx: integer): string;
    end;
 
    TVarDeclareList = class(TDeclareList)
@@ -134,7 +137,6 @@ type
          function IsGlobal: boolean; override;
          function GetDimensionCount(const AVarName: string; AIncludeType: boolean = False): integer;
          function GetDimensions(const AVarName: string; AIncludeType: boolean = False): TArray<string>;
-         function GetExternModifier(idx: integer): string; override;
    end;
 
    TConstDeclareList = class(TDeclareList)
@@ -151,7 +153,6 @@ type
          procedure ExportItemToXML(ANode: IXMLNode; idx: integer); override;
          function GetValue(const AIdent: string): string;
          function IsGlobal: boolean; override;
-         function GetExternModifier(idx: integer): string; override;
    end;
 
 const
@@ -302,6 +303,8 @@ begin
 
    FShort := 'Const';
    FNodeName := CONST_TAG;
+   with GInfra.CurrentLang do
+      SetExternalModifiers(ConstExtern, ConstNotExtern, ConstTransExtern);
 
    inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
 
@@ -334,6 +337,8 @@ begin
 
    FShort := 'Var';
    FNodeName := VAR_TAG;
+   with GInfra.CurrentLang do
+      SetExternalModifiers(VarExtern, VarNotExtern, VarTransExtern);
 
    inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
 
@@ -411,6 +416,13 @@ procedure TDeclareList.OnCanResizeSplitter(Sender: TObject; var NewSize: Integer
 begin
    if (NewSize < sgList.BoundsRect.Right + 4) and (NewSize < sgList.GetMinWidth) then
       Accept := False;
+end;
+
+procedure TDeclareList.SetExternalModifiers(const AExtern, ANotExtern, ATransExtern: string);
+begin
+   FExternalModifiers[cbChecked]   := AExtern;
+   FExternalModifiers[cbUnchecked] := ANotExtern;
+   FExternalModifiers[cbGrayed]    := ATransExtern;
 end;
 
 function TDeclareList.RetrieveFocus(AInfo: TFocusInfo): boolean;
@@ -981,24 +993,9 @@ begin
       result := TCheckBox(sgList.Objects[FExternalCol, ARow]).State;
 end;
 
-function TVarDeclareList.GetExternModifier(idx: integer): string;
+function TDeclareList.GetExternalModifier(idx: integer): string;
 begin
-   var lang := GInfra.CurrentLang;
-   case GetExternalState(idx) of
-      cbChecked:   result := lang.VarExtern;
-      cbUnchecked: result := lang.VarNotExtern;
-      cbGrayed:    result := lang.VarTransExtern;
-   end;
-end;
-
-function TConstDeclareList.GetExternModifier(idx: integer): string;
-begin
-   var lang := GInfra.CurrentLang;
-   case GetExternalState(idx) of
-      cbChecked:   result := lang.ConstExtern;
-      cbUnchecked: result := lang.ConstNotExtern;
-      cbGrayed:    result := lang.ConstTransExtern;
-   end;
+   result := FExternalModifiers[GetExternalState(idx)];
 end;
 
 procedure TDeclareList.OnClickChBox(Sender: TObject);
