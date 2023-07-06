@@ -142,10 +142,11 @@ type
   end;
 
   TColorShapeHelper = record helper for TColorShape
-    procedure Draw(ACanvas: TCanvas; AColor: TColor);
-    procedure Fill(ACanvas: TCanvas; AColor: TColor);
+    class var Canvas: TCanvas;
+    procedure Draw(AColor: TColor);
+    procedure Fill(AColor: TColor);
     function Rect: TRect;
-    function Color(ACanvas: TCanvas): TColor;
+    function Color: TColor;
   end;
 
 var
@@ -224,6 +225,7 @@ begin
    imgShapes.Canvas.FillRect(imgShapes.Canvas.ClipRect);
    GInfra.GetLangNames(cbLanguage.Items);
    cbLanguage.ItemIndex := cbLanguage.Items.IndexOf(GInfra.CurrentLang.Name);
+   shpDiamond.Canvas := imgShapes.Canvas;   // hack equivalent for TColorShapeHelper.Canvas
 end;
 
 procedure TSettingsForm.pnlSelectClick(Sender: TObject);
@@ -257,12 +259,12 @@ end;
 procedure TSettingsForm.imgShapesClick(Sender: TObject);
 begin
    var pnt := imgShapes.ScreenToClient(Mouse.CursorPos);
-   for var shape := Low(TColorShape) to High(TColorShape) do
+   for var colorShape in COLOR_SHAPES do
    begin
-      if shape.Rect.Contains(pnt) then
+      if colorShape.Rect.Contains(pnt) then
       begin
          if ColorDialog.Execute then
-            shape.Fill(imgShapes.Canvas, ColorDialog.Color);
+            colorShape.Fill(ColorDialog.Color);
          break;
       end;
    end;
@@ -270,19 +272,19 @@ end;
 
 function TSettingsForm.GetShapeColor(AShape: TColorShape): TColor;
 begin
-   result := AShape.Color(imgShapes.Canvas);
+   result := AShape.Color;
 end;
 
 procedure TSettingsForm.FillAllShapes(AColor: TColor);
 begin
-   for var shape := Low(TColorShape) to High(TColorShape) do
-      shape.Fill(imgShapes.Canvas, AColor);
+   for var colorShape in COLOR_SHAPES do
+      colorShape.Fill(AColor);
 end;
 
 procedure TSettingsForm.DrawShapes(ASettings: TSettings);
 begin
-   for var shape := Low(TColorShape) to High(TColorShape) do
-      shape.Draw(imgShapes.Canvas, ASettings.GetShapeColor(shape));
+   for var colorShape in COLOR_SHAPES do
+      colorShape.Draw(ASettings.GetShapeColor(colorShape));
 end;
 
 procedure TSettingsForm.SetDefault;
@@ -480,81 +482,81 @@ begin
    result := SHAPE_RECTS[Self];
 end;
 
-procedure TColorShapeHelper.Draw(ACanvas: TCanvas; AColor: TColor);
+procedure TColorShapeHelper.Draw(AColor: TColor);
 begin
    var r := Rect;
-   ACanvas.Pen.Color := SHAPE_BORDER_COLOR;
-   ACanvas.Brush.Color := AColor;
+   Canvas.Pen.Color := SHAPE_BORDER_COLOR;
+   Canvas.Brush.Color := AColor;
    case Self of
       shpEllipse:
-         ACanvas.Ellipse(r);
+         Canvas.Ellipse(r);
       shpRectangle:
-         ACanvas.Rectangle(r);
+         Canvas.Rectangle(r);
       shpParallel:
       begin
          var p := Point(r.Left+10, r.Top);
-         ACanvas.Polygon([p,
-                          Point(r.Right, r.Top),
-                          Point(r.Right-10, r.Bottom),
-                          Point(r.Left, r.Bottom),
-                          p]);
+         Canvas.Polygon([p,
+                         Point(r.Right, r.Top),
+                         Point(r.Right-10, r.Bottom),
+                         Point(r.Left, r.Bottom),
+                         p]);
       end;
       shpDiamond:
       begin
          var p := r.CenterPoint;
-         ACanvas.Polygon([Point(r.Left, p.Y),
-                          Point(p.X, r.Top),
-                          Point(r.Right, p.Y),
-                          Point(p.X, r.Bottom),
-                          Point(r.Left, p.Y)]);
+         Canvas.Polygon([Point(r.Left, p.Y),
+                         Point(p.X, r.Top),
+                         Point(r.Right, p.Y),
+                         Point(p.X, r.Bottom),
+                         Point(r.Left, p.Y)]);
       end;
       shpRoadSign:
-         ACanvas.Polygon([r.TopLeft,
-                          Point(r.Left+35, r.Top),
-                          Point(r.Right, r.CenterPoint.Y),
-                          Point(r.Left+35, r.Bottom),
-                          Point(r.Left, r.Bottom),
-                          r.TopLeft]);
+         Canvas.Polygon([r.TopLeft,
+                         Point(r.Left+35, r.Top),
+                         Point(r.Right, r.CenterPoint.Y),
+                         Point(r.Left+35, r.Bottom),
+                         Point(r.Left, r.Bottom),
+                         r.TopLeft]);
       shpRoutine:
       begin
-         ACanvas.Rectangle(r);
-         ACanvas.Brush.Color := ACanvas.Pen.Color;
+         Canvas.Rectangle(r);
+         Canvas.Brush.Color := Canvas.Pen.Color;
          var r1 := System.Types.Rect(r.Left+5, r.Top, r.Right-42, r.Bottom);
-         ACanvas.Rectangle(r1);
+         Canvas.Rectangle(r1);
          r1.Offset(37, 0);
-         ACanvas.Rectangle(r1);
+         Canvas.Rectangle(r1);
       end;
       shpFolder:
       begin
-         ACanvas.Pen.Width := 2;
-         ACanvas.Rectangle(r);
+         Canvas.Pen.Width := 2;
+         Canvas.Rectangle(r);
          var r1 := r;
          r1.Inflate(-2, -2, -3, -3);
-         ACanvas.Pen.Width := 1;
-         ACanvas.Rectangle(r1);
+         Canvas.Pen.Width := 1;
+         Canvas.Rectangle(r1);
       end;
    end;
 end;
 
-procedure TColorShapeHelper.Fill(ACanvas: TCanvas; AColor: TColor);
+procedure TColorShapeHelper.Fill(AColor: TColor);
 begin
-   ACanvas.Brush.Color := AColor;
+   Canvas.Brush.Color := AColor;
    var r := Rect;
    var pnt := r.CenterPoint;
-   ACanvas.FloodFill(pnt.X, pnt.Y, SHAPE_BORDER_COLOR, fsBorder);
+   Canvas.FloodFill(pnt.X, pnt.Y, SHAPE_BORDER_COLOR, fsBorder);
    if Self = shpFolder then
-      ACanvas.FloodFill(r.Left+1, r.Top+1, SHAPE_BORDER_COLOR, fsBorder)
+      Canvas.FloodFill(r.Left+1, r.Top+1, SHAPE_BORDER_COLOR, fsBorder)
    else if Self = shpRoutine then
    begin
-      ACanvas.FloodFill(r.Left+3, r.Top+2, SHAPE_BORDER_COLOR, fsBorder);
-      ACanvas.FloodFill(r.Right-3, r.Top+2, SHAPE_BORDER_COLOR, fsBorder);
+      Canvas.FloodFill(r.Left+3, r.Top+2, SHAPE_BORDER_COLOR, fsBorder);
+      Canvas.FloodFill(r.Right-3, r.Top+2, SHAPE_BORDER_COLOR, fsBorder);
    end;
 end;
 
-function TColorShapeHelper.Color(ACanvas: TCanvas): TColor;
+function TColorShapeHelper.Color: TColor;
 begin
    var pnt := Rect.CenterPoint;
-   result := ACanvas.Pixels[pnt.X, pnt.Y];
+   result := Canvas.Pixels[pnt.X, pnt.Y];
 end;
 
 end.
