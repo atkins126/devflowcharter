@@ -1,11 +1,12 @@
 object HelpForm: THelpForm
   Left = 415
   Top = 186
+  AutoSize = True
   BorderIcons = [biSystemMenu, biMinimize]
   BorderStyle = bsSingle
   Caption = 'Code Editor - Help'
-  ClientHeight = 428
-  ClientWidth = 411
+  ClientHeight = 14
+  ClientWidth = 49
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -17,23 +18,17 @@ object HelpForm: THelpForm
   Position = poScreenCenter
   PixelsPerInch = 96
   TextHeight = 13
-  object memHelp: TMemo
+  object lblHelp: TLabel
     Left = 0
     Top = 0
-    Width = 411
-    Height = 428
-    TabStop = False
-    Align = alClient
+    Width = 49
+    Height = 14
+    Caption = 'lblHelp'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clWindowText
     Font.Height = -11
     Font.Name = 'Courier New'
     Font.Style = []
-    ParentColor = True
     ParentFont = False
-    ReadOnly = True
-    ScrollBars = ssVertical
-    TabOrder = 0
-    WantTabs = True
   end
 end

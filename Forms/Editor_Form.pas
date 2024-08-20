@@ -133,7 +133,7 @@ type
     FDialog: TFindDialog;
     FWithFocus: IWithFocus;
     function BuildBracketHint(startLine, endLine: integer): string;
-    function CharToPixels(P: TBufferCoord): TPoint;
+    function CharToPixels(const P: TBufferCoord): TPoint;
     function GetAllLines: TStrings;
     procedure PasteComment(const AText: string);
     procedure DisplayLines(ALines: TStringList; AReset: boolean);
@@ -170,7 +170,8 @@ implementation
 uses
    System.StrUtils, System.UITypes, System.Math, WinApi.Windows, Infrastructure,
    Goto_Form, Settings, LangDefinition, Main_Block, Help_Form, Comment, OmniXMLUtils,
-   Main_Form, SynEditTypes, ParserHelper, Constants, System.Character;
+   Main_Form, SynEditTypes, ParserHelper, TabComponent, UserFunction, UserDataType,
+   Constants, System.Character;
 
 {$R *.dfm}
 
@@ -370,20 +371,18 @@ begin
 end;
 
 procedure TEditorForm.PasteComment(const AText: string);
-var
-   line, bline, beginComment, endComment: string;
-   bc: TBufferCoord;
-   strings: TStringList;
-   i, count: integer;
-   afterLine: boolean;
 begin
    if AText.IsEmpty then
       Exit;
-   line := '';
-   bline := '';
-   strings := TStringList.Create;
+   var line := '';
+   var ctext := '';
+   Clipboard.Open;
+   if Clipboard.HasFormat(CF_TEXT) then
+      ctext := Clipboard.AsText;
+   memCodeEditor.BeginUpdate;
+   var strings := TStringList.Create;
    try
-      for i := 1 to AText.Length do
+      for var i := 1 to AText.Length do
       begin
          if not AText[i].IsControl then
          begin
@@ -397,15 +396,12 @@ begin
             line := '';
          end;
       end;
-      Clipboard.Open;
-      if Clipboard.HasFormat(CF_TEXT) then
-         bline := Clipboard.AsText;
-      bc := memCodeEditor.CaretXY;
-      beginComment := GInfra.CurrentLang.CommentBegin;
-      endComment := GInfra.CurrentLang.CommentEnd;
-      count := strings.Count - 1;
-      afterLine := True;
-      for i := 0 to count do
+      var bc := memCodeEditor.CaretXY;
+      var beginComment := GInfra.CurrentLang.CommentBegin;
+      var endComment := GInfra.CurrentLang.CommentEnd;
+      var count := strings.Count - 1;
+      var afterLine := True;
+      for var i := 0 to count do
       begin
          if memCodeEditor.CaretX <= memCodeEditor.Lines[memCodeEditor.CaretY-1+i].Length then
          begin
@@ -413,7 +409,7 @@ begin
             break;
          end;
       end;
-      for i := 0 to count do
+      for var i := 0 to count do
       begin
          line := ' ' + strings[i].Trim;
          memCodeEditor.CaretY := bc.Line + i;
@@ -429,7 +425,7 @@ begin
             if i = 0 then
             begin
                line := beginComment + line;
-               if (count = i) and not endComment.IsEmpty then
+               if (i = count) and not endComment.IsEmpty then
                   line := line + ' ' + endComment;
             end
             else if i = count then
@@ -447,10 +443,11 @@ begin
          memCodeEditor.PasteFromClipboard;
       end;
    finally
-      if not bline.IsEmpty then
-         Clipboard.AsText := bline;
-      Clipboard.Close;
       strings.Free;
+      memCodeEditor.EndUpdate;
+      if not ctext.IsEmpty then
+         Clipboard.AsText := ctext;
+      Clipboard.Close;
    end;
 end;
 
@@ -869,48 +866,34 @@ begin
    end;
 end;
 
-procedure TEditorForm.memCodeEditorDragOver(Sender, Source: TObject;
-  X, Y: Integer; State: TDragState; var Accept: Boolean);
+procedure TEditorForm.memCodeEditorDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
 begin
+   var exportable: IExportable := nil;
    if State = dsDragEnter then
       memCodeEditor.SetFocus;
-   if not ((Source is TComment) or (Source is TBlock)) then
+   if not ((Source is TComment) or Supports(Source, IExportable, exportable)) then
       Accept := False
    else
       memCodeEditor.CaretXY := memCodeEditor.DisplayToBufferPos(memCodeEditor.PixelsToRowColumn(X, Y));
 end;
 
 procedure TEditorForm.memCodeEditorDragDrop(Sender, Source: TObject; X, Y: Integer);
-var
-   pos: TDisplayCoord;
-   tmpList: TStringList;
-   i: integer;
 begin
-   pos := memCodeEditor.PixelsToRowColumn(X, Y);
+   var exportable: IExportable := nil;
    if Source is TComment then
+      PasteComment(TComment(Source).Text)
+   else if Supports(Source, IExportable, exportable) then
    begin
-      memCodeEditor.CaretXY := memCodeEditor.DisplayToBufferPos(pos);
-      PasteComment(TComment(Source).Text);
-   end
-   else if Source is TBlock then
-   begin
-      Clipboard.Open;
-      tmpList := TStringList.Create;
+      memCodeEditor.BeginUpdate;
+      var lines := TStringList.Create;
       try
-         TBlock(Source).GenerateCode(tmpList, GInfra.CurrentLang.Name, 0);
-         memCodeEditor.BeginUpdate;
-         for i := 0 to tmpList.Count-1 do
-         begin
-            Clipboard.AsText := tmpList.Strings[i];
-            memCodeEditor.CaretY := pos.Row + i;
-            memCodeEditor.CaretX := pos.Column;
-            memCodeEditor.Lines.Insert(memCodeEditor.CaretY-1, '');
-            memCodeEditor.PasteFromClipboard;
-         end;
-         memCodeEditor.EndUpdate;
+         exportable.ExportCode(lines);
+         var pos := memCodeEditor.PixelsToRowColumn(X, Y);
+         for var i := 0 to lines.Count-1 do
+            memCodeEditor.Lines.Insert(pos.Row + i - 1, StringOfChar(SPACE_CHAR, pos.Column - 1) + lines.Strings[i]);
       finally
-         tmpList.Free;
-         Clipboard.Close;
+         lines.Free;
+         memCodeEditor.EndUpdate;
       end;
    end;
 end;
@@ -1003,7 +986,7 @@ begin
    end;
 end;
 
-function TEditorForm.CharToPixels(P: TBufferCoord): TPoint;
+function TEditorForm.CharToPixels(const P: TBufferCoord): TPoint;
 begin
    result := memCodeEditor.RowColumnToPixels(memCodeEditor.BufferToDisplayPos(P));
 end;
@@ -1301,6 +1284,7 @@ end;
 
 procedure TEditorForm.ExportToXML(ANode: IXMLNode);
 begin
+   var i := 0;
    if Visible then
    begin
       SetNodeAttrBool(ANode, 'src_win_show', True);
@@ -1311,15 +1295,12 @@ begin
       SetNodeAttrInt(ANode, 'src_win_sel_start', memCodeEditor.SelStart);
       if memCodeEditor.SelAvail then
          SetNodeAttrInt(ANode, 'src_win_sel_length', memCodeEditor.SelLength);
-      if memCodeEditor.Marks.Count > 0 then
+      for i := 0 to memCodeEditor.Marks.Count-1 do
       begin
-         for var i := 0 to memCodeEditor.Marks.Count-1 do
-         begin
-            var mark := memCodeEditor.Marks[i];
-            var node := AppendNode(ANode, 'src_win_mark');
-            SetNodeAttrInt(node, 'line', mark.Line);
-            SetNodeAttrInt(node, 'index', mark.ImageIndex);
-         end;
+         var mark := memCodeEditor.Marks[i];
+         var node := AppendNode(ANode, 'src_win_mark');
+         SetNodeAttrInt(node, 'line', mark.Line);
+         SetNodeAttrInt(node, 'index', mark.ImageIndex);
       end;
       if memCodeEditor.TopLine > 1 then
          SetNodeAttrInt(ANode, 'src_top_line', memCodeEditor.TopLine);
@@ -1329,7 +1310,7 @@ begin
       if memCodeEditor.CodeFolding.Enabled then
       begin
          var node: IXMLNode := nil;
-         for var i := 0 to memCodeEditor.AllFoldRanges.AllCount-1 do
+         for i := 0 to memCodeEditor.AllFoldRanges.AllCount-1 do
          begin
             var foldRange := memCodeEditor.AllFoldRanges[i];
             if foldRange.Collapsed then
@@ -1343,7 +1324,7 @@ begin
 {$ENDIF}
       var lines := GetAllLines;
       try
-         for var i := 0 to lines.Count-1 do
+         for i := 0 to lines.Count-1 do
          begin
             var node := AppendNode(ANode, 'text_line');
             var withId: IWithId := nil;

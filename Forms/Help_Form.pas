@@ -24,12 +24,12 @@ unit Help_Form;
 interface
 
 uses
-  System.Classes, Vcl.StdCtrls, Vcl.Controls, Base_Form;
+  System.Classes, Vcl.StdCtrls, Base_Form, Vcl.Controls;
 
 type
 
   THelpForm = class(TBaseForm)
-    memHelp: TMemo;
+    lblHelp: TLabel;
     procedure Localize(AList: TStringList); override;
   private
     { Private declarations }
@@ -50,9 +50,16 @@ uses
 procedure THelpForm.Localize(AList: TStringList);
 begin
    var txt := '';
-   for var i := 1 to 28 do
-      txt := txt + ' ' + AList.Values['EditorHelp' + i.ToString] + sLineBreak;
-   memHelp.Text := ReplaceText(txt, ' ' + LB_PHOLDER2, StringOfChar('-', 55));
+   var i := 1;
+   while True do
+   begin
+      var idx := AList.IndexOfName('EditorHelp' + i.ToString);
+      if idx = -1 then
+         break;
+      txt := txt + ' ' + AList.ValueFromIndex[idx] + sLineBreak;
+      i := i + 1;
+   end;
+   lblHelp.Caption := ReplaceText(txt, ' ' + LB_PHOLDER2, StringOfChar('-', 55));
    inherited Localize(AList);
 end;
 

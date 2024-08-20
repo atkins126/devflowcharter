@@ -62,6 +62,7 @@ type
       procedure ExportToXML(ANode: IXMLNode); override;
       procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
       procedure RefreshSizeEdits; override;
+      procedure ExportCode(ALines: TStringList); override;
       function IsValidEnumValue(const AValue: string): boolean;
       function GetDimensionCount: integer;
       function GetDimensions: string;
@@ -86,7 +87,7 @@ var
 constructor TUserDataType.Create(AParentForm: TDataTypesForm);
 begin
 
-   FElementTypeID := 'field';
+   FElementTypeId := 'field';
    FCodeIncludeExtern := GInfra.CurrentLang.CodeIncludeExternDataType;
 
    inherited Create(AParentForm);
@@ -223,6 +224,14 @@ begin
    end;
 end;
 
+procedure TUserDataType.ExportCode(ALines: TStringList);
+begin
+   if Assigned(GInfra.CurrentLang.UserDataTypeGenerator) then
+      GInfra.CurrentLang.UserDataTypeGenerator(ALines, Self)
+   else
+      GInfra.TemplateLang.UserDataTypeGenerator(ALines, Self);
+end;
+
 procedure TUserDataType.Resize;
 begin
    inherited;
@@ -286,9 +295,10 @@ end;
 constructor TField.Create(AParentTab: TUserDataType);
 begin
 
-   inherited Create(AParentTab.sbxElements);
+   inherited Create(AParentTab.sbxElements, AParentTab.FElementTypeId);
 
-   FElementTypeID := AParentTab.FElementTypeID;
+   FParentTab := AParentTab;
+   FParentForm := AParentTab.ParentForm;
    Constraints.MaxWidth := AParentTab.sbxElements.Width - 6;
    SetBounds(0, Parent.Height, Constraints.MaxWidth, TInfra.Scaled(Self, 22));
    Align := alTop;
@@ -303,12 +313,10 @@ end;
 
 function TUserDataType.CreateElement: TElement;
 begin
-   var t := Kind;
-   var field := TField.Create(Self);
-   field.cbType.Enabled := t in [dtRecord, dtArray];
-   field.edtSize.Enabled := field.cbType.Enabled;
-   field.edtName.Enabled := t <> dtArray;
-   result := field;
+   result := TField.Create(Self);
+   result.cbType.Enabled := Kind in [dtRecord, dtArray];
+   TField(result).edtSize.Enabled := result.cbType.Enabled;
+   result.edtName.Enabled := Kind <> dtArray;
 end;
 
 procedure TUserDataType.OnChangeName(Sender: TObject);

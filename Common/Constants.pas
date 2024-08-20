@@ -91,7 +91,7 @@ const   // Global constants
         LB_PHOLDER  = '#!';
         LB_PHOLDER2  = '##';
 
-        VERSION_NUMBER_SEP  = '.';
+        VERSION_NUMBER_SEPARATOR  = '.';
 
         MAIN_PAGE_MARKER  = 'mainPage#!';
 
@@ -127,14 +127,14 @@ const   // Global constants
 
         DEF_PAGE_CAPTION_KEY = 'mainPage';
 
-        UNKNOWN_VERSION = 'unknown';
-
         SETTINGS_SECTION = 'Settings';
 
         PRINT_SCALE_BASE     = 100;   // 100 %
         DEFAULT_PRINT_MARGIN = 5;     //   5 %
 
         DECLARATIONS_FORM_RIGHT_MARGIN = 16;
+
+        BRANCH_PLACEHOLDER = '%b';
 
         RTF_FILES_FILTER_KEY = 'RTFFilesFilter';
         HTML_FILES_FILTER_KEY = 'HTMLFilesFilter';

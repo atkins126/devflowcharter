@@ -1,7 +1,7 @@
 {
    Copyright (C) 2006 The devFlowcharter project.
    The initial author of this file is Michal Domagala.
-    
+
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License
    as published by the Free Software Foundation; either version 2
@@ -38,18 +38,18 @@ type
    end;
 
    TElement = class(TPanel)
-      private
+      protected
+         FTypeId,
+         FHintStr: string;
          FParentTab: TTabSheet;
          FParentForm: TPageControlForm;
-         function GetParentTab: TTabSheet;
-      protected
-         FElementTypeID: string;
-         constructor Create(AParent: TScrollBox);
+         constructor Create(AParent: TScrollBox; const ATypeId: string);
          procedure OnClickRemove(Sender: TObject);
          procedure OnChangeType(Sender: TObject); virtual;
          procedure OnChangeName(Sender: TObject); virtual;
          procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); override;
          procedure DragDrop(Source: TObject; X, Y: Integer); override;
+         procedure CMHintShow(var Message: TCMHintShow); message CM_HINTSHOW;
       public
          edtName: TNameEdit;
          cbType: TComboBox;
@@ -67,18 +67,18 @@ uses
    Vcl.Graphics, System.SysUtils, System.Classes, Interfaces, TabComponent, Infrastructure,
    Constants, OmniXMLUtils;
 
-constructor TElement.Create(AParent: TScrollBox);
+constructor TElement.Create(AParent: TScrollBox; const ATypeId: string);
 begin
 
    inherited Create(AParent);
    Parent := AParent;
-   
+
    Ctl3D := False;
    BevelOuter := bvNone;
-   FParentTab := GetParentTab;
-   FParentForm := TTabComponent(FParentTab).ParentForm;
    DoubleBuffered := True;
    DragMode := dmAutomatic;
+   FTypeId := ATypeId;
+   FHintStr := i18Manager.GetString(FTypeId + 'HintStr');
 
    edtName := TNameEdit.Create(Self);
    edtName.Parent := Self;
@@ -114,19 +114,11 @@ begin
    btnRemove.SetBounds(Parent.Width-w-TInfra.Scaled(Self, 32), 0, w+14, TInfra.Scaled(Self, 20));
 end;
 
-function TElement.GetParentTab: TTabSheet;
+procedure TElement.CMHintShow(var Message: TCMHintShow);
 begin
-   result := nil;
-   var winControl := Parent;
-   while not (winControl is TForm) do
-   begin
-      if winControl is TTabComponent then
-      begin
-         result := TTabComponent(winControl);
-         break;
-      end;
-      winControl := winControl.Parent;
-   end;
+  inherited;
+  if Message.HintInfo.HintControl = Self then
+     Message.HintInfo.HintStr := FHintStr;
 end;
 
 procedure TElement.OnClickRemove(Sender: TObject);
@@ -196,7 +188,7 @@ end;
 
 function TElement.ExportToXML(ANode: IXMLNode): IXMLNode;
 begin
-   result := AppendNode(ANode, FElementTypeID);
+   result := AppendNode(ANode, FTypeId);
    SetNodeAttrStr(result, NAME_ATTR, Trim(edtName.Text));
    SetNodeAttrStr(result, TYPE_ATTR, cbType.Text);
 end;
@@ -245,3 +237,4 @@ begin
 end;
 
 end.
+

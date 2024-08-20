@@ -1,3 +1,29 @@
+10.8 [30-07-2024]
+- compiled with Delphi 12
+
+10.7 [04-02-2024]
+- Code Editor: generate code for single user function or data type by drag and drop
+
+10.6 [25-01-2024]
+- fix not moving flowchart pinned comments between tabs
+
+10.5 [31-12-2023]
+- fix comparing project and app versions
+- minor optimizations
+
+10.4 [15-12-2023]
+- Function Header: add hint that parameters can be reordered by mouse dragging
+- Datatype: add hint that fields can be reordered by mouse dragging
+- make attached SynEdit component compile with Delphi 12
+- minor optimizations
+
+IMPORTANT NOTES:
+Reminder that variables/constants on declaration panel can be reordered by mouse dragging with Shift key pressed.
+
+10.3 [30-08-2023]
+- fix potential memory access violations when generating code
+- minor improvements
+
 10.2 [10-05-2023]
 - fix "No attribute..." errors when importing functions
 

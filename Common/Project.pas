@@ -54,7 +54,7 @@ type
       function GetIWinControlComponent(AHandle: THandle): IWinControl;
       procedure RefreshZOrder;
       procedure ExportPagesToXML(ANode: IXMLNode);
-      function GetSelectList(ANode: IXMLNode; const ALabel: string; const ANodeName: string; const ANodeName2: string = ''): TStringList;
+      function GetSelectList(ANode: IXMLNode; const ALabel, ANodeName: string; const ANodeName2: string = ''): TStringList;
       function GetComponents<T: class>(AComparer: IComparer<T> = nil): IEnumerable<T>;
       function GetIComponents<I: IInterface>(AComparer: IComparer<TComponent> = nil): IEnumerable<I>; overload;
       function GetIComponents<T: class; I: IInterface>(AComparer: IComparer<T> = nil): IEnumerable<I>; overload;
@@ -83,6 +83,7 @@ type
       function GetUserDataTypes: IEnumerable<TUserDataType>;
       function GetUserFunction(const AName: string): TUserFunction;
       function GetUserDataType(const AName: string): TUserDataType;
+      procedure ExportCode(ALines: TStringList);
       procedure ExportToGraphic(AGraphic: TGraphic);
       procedure ExportToXML(ANode: IXMLNode);
       function ExportToXMLFile(const AFile: string): TError;
@@ -295,7 +296,7 @@ begin
    for var i := 0 to FComponentList.Count-1 do
    begin
       var comp := FComponentList[i];
-      if (T = TComponent) or (comp.ClassType = T) then
+      if comp is T then
          list.Add(comp);
    end;
    if AComparer <> nil then
@@ -411,7 +412,7 @@ procedure TProject.ExportToXML(ANode: IXMLNode);
 begin
 
    SetNodeAttrStr(ANode, LANG_ATTR, GInfra.CurrentLang.Name);
-   SetNodeAttrStr(ANode, APP_VERSION_ATTR, TInfra.GetAboutForm.GetProgramVersion);
+   SetNodeAttrStr(ANode, APP_VERSION_ATTR, TInfra.AppVersion);
 
    ExportPagesToXML(ANode);
 
@@ -476,7 +477,7 @@ begin
    end;
 
    var ver := GetNodeAttrStr(ANode, APP_VERSION_ATTR, '');
-   if TInfra.CompareProgramVersion(ver) > 0 then
+   if TInfra.CompareWithAppVersion(ver) > 0 then
       TInfra.ShowWarningBox('OldVerMsg', [ver]);
 
    var s := IfThen(SameText(langName, GInfra.TemplateLang.Name), 'ChangeLngNone', 'ChangeLngAsk');
@@ -558,21 +559,27 @@ begin
    end;
 end;
 
-function TProject.GetSelectList(ANode: IXMLNode; const ALabel: string; const ANodeName: string; const ANodeName2: string = ''): TStringList;
+procedure TProject.ExportCode(ALines: TStringList);
+begin
+   var lines := GInfra.GenerateProgram;
+   try
+      ALines.AddStrings(lines);
+   finally
+      lines.Free;
+   end;
+end;
+
+function TProject.GetSelectList(ANode: IXMLNode; const ALabel, ANodeName: string; const ANodeName2: string = ''): TStringList;
 begin
    result := TStringList.Create;
-   var isTag2Empty := ANodeName2.IsEmpty;
    var nodes := FilterNodes(ANode, ANodeName);
    var node := nodes.NextNode;
    while node <> nil do
    begin
-      var node1: IXMLNode := nil;
-      if not isTag2Empty then
-         node1 := FindNode(node, ANodeName2)
-      else
-         node1 := node;
-      if node1 <> nil then
-         result.Add(GetNodeAttrStr(node1, NAME_ATTR, ''));
+      if not ANodeName2.IsEmpty then
+         node := FindNode(node, ANodeName2);
+      if node <> nil then
+         result.Add(GetNodeAttrStr(node, NAME_ATTR, ''));
       node := nodes.NextNode;
    end;
    if result.Count = 1 then

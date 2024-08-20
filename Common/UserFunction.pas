@@ -101,6 +101,7 @@ type
       property ParameterCount: integer read GetElementCount;
       constructor Create(AParentForm: TFunctionsForm);
       destructor Destroy; override;
+      procedure ExportCode(ALines: TStringList); override;
       procedure ExportToXML(ANode: IXMLNode); override;
       procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
       procedure RefreshSizeEdits; override;
@@ -319,7 +320,7 @@ var
    ctrl: TControl;
 begin
 
-   FElementTypeID := 'arg';
+   FElementTypeId := 'arg';
    FCodeIncludeExtern := GInfra.CurrentLang.CodeIncludeExternFunction;
 
    inherited Create(AParentForm);
@@ -616,16 +617,15 @@ end;
 constructor TParameter.Create(AParentTab: TUserFunctionHeader);
 begin
 
-   inherited Create(AParentTab.sbxElements);
+   inherited Create(AParentTab.sbxElements, AParentTab.FElementTypeId);
 
-   FElementTypeID := AParentTab.FElementTypeID;
-
-   var w17 := TInfra.Scaled(Self, 17);
-
+   FParentTab := AParentTab;
+   FParentForm := AParentTab.ParentForm;
    Constraints.MaxWidth := AParentTab.sbxElements.Width - 17;
    SetBounds(0, Parent.Height, Constraints.MaxWidth, TInfra.Scaled(Self, 22));
    Align := alTop;
    TInfra.PopulateDataTypeCombo(cbType);
+   var w17 := TInfra.Scaled(Self, 17);
 
    edtDefault := TEdit.Create(Self);
    edtDefault.Parent := Self;
@@ -681,6 +681,14 @@ begin
    edtName.Hint := i18Manager.GetFormattedString(info, [funcName]);
    DrawBodyLabel;
    inherited OnChangeName(Sender);
+end;
+
+procedure TUserFunctionHeader.ExportCode(ALines: TStringList);
+begin
+   if Assigned(GInfra.CurrentLang.UserFunctionGenerator) then
+      GInfra.CurrentLang.UserFunctionGenerator(ALines, FUserFunction, False)
+   else
+      GInfra.TemplateLang.UserFunctionGenerator(ALines, FUserFunction, False);
 end;
 
 procedure TUserFunctionHeader.AddElement(Sender: TObject);

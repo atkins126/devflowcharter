@@ -38,7 +38,7 @@ type
          FParentObject: TComponent;
          FActive,
          FCodeIncludeExtern: boolean;
-         FElementTypeID: string;
+         FElementTypeId: string;
          sbxElements: TScrollBox;
          procedure SetActive(AValue: boolean); virtual;
          function GetActive: boolean; virtual;
@@ -69,6 +69,7 @@ type
          property ParentForm: TPageControlForm read FParentForm;
          constructor Create(AParentForm: TPageControlForm);
          destructor Destroy; override;
+         procedure ExportCode(ALines: TStringList); virtual; abstract;
          procedure ExportToXML(ANode: IXMLNode); virtual;
          function ExportToXMLFile(const AFile: string): TError;
          procedure ExportToGraphic(AGraphic: TGraphic);
@@ -309,11 +310,8 @@ end;
 function TTabComponent.GetElementCount: integer;
 begin
    result := 0;
-   for var i := 0 to sbxElements.ControlCount-1 do
-   begin
-      if sbxElements.Controls[i].Visible then
-         Inc(result);
-   end;
+   for var control in sbxElements.GetControls([ceftVisible]) do
+      Inc(result);
 end;
 
 function TTabComponent.IsDuplicated(ANameEdit: TEdit): boolean;
@@ -344,10 +342,9 @@ end;
 function TTabComponent.GetElements<T>(AComparer: IComparer<T> = nil): IEnumerable<T>;
 begin
    var list := TList<T>.Create;
-   for var i := 0 to sbxElements.ControlCount-1 do
+   for var control in sbxElements.GetControls([ceftVisible]) do
    begin
-      var control := sbxElements.Controls[i];
-      if control.Visible then
+      if control is T then
          list.Add(control);
    end;
    if AComparer <> nil then
@@ -465,7 +462,7 @@ begin
       edtName.OnChange(edtName);
    chkExternal.State := TInfra.DecodeCheckBoxState(GetNodeAttrStr(ANode, 'ext_decl'));
    edtLibrary.Text := GetNodeAttrStr(ANode, 'library');
-   var nodes := FilterNodes(ANode, FElementTypeID);
+   var nodes := FilterNodes(ANode, FElementTypeId);
    var node := nodes.NextNode;
    while node <> nil do
    begin

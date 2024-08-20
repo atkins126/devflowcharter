@@ -40,11 +40,6 @@ type
     procedure btnOKClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure imDelphiClick(Sender: TObject);
-  private
-    FVersion: string;
-    function ExtractProgramVersion: string;
-  public
-    function GetProgramVersion: string;
   end;
 
 var
@@ -53,7 +48,7 @@ var
 implementation
 
 uses
-   WinApi.Windows, System.SysUtils, Vcl.Forms, Constants, ShellAPI;
+   WinApi.Windows, System.SysUtils, Constants, ShellAPI, Infrastructure;
 
 {$R *.dfm}
 
@@ -62,47 +57,23 @@ begin
    Close;
 end;
 
-function TAboutForm.ExtractProgramVersion: string;
-var
-   s: string;
-   n, hnd: DWORD;
-   buf: TBytes;
-   value: PVSFixedFileInfo;
-begin
-   result := UNKNOWN_VERSION;
-   s := Application.ExeName;
-   n := GetFileVersionInfoSize(PChar(s), hnd);
-   if n > 0 then
-   begin
-      SetLength(buf, n);
-      if GetFileVersionInfo(PWideChar(s), 0, n, buf) and VerQueryValue(buf, '\', Pointer(value), n) then
-         result := Format('%d%s%d%s%d%s%d', [LongRec(value.dwFileVersionMS).Hi, VERSION_NUMBER_SEP,
-                                             LongRec(value.dwFileVersionMS).Lo, VERSION_NUMBER_SEP,
-                                             LongRec(value.dwFileVersionLS).Hi, VERSION_NUMBER_SEP,
-                                             LongRec(value.dwFileVersionLS).Lo]);
-      buf := nil;
-   end;
-end;
-
-function TAboutForm.GetProgramVersion: string;
-begin
-   result := FVersion;
-end;
-
 procedure TAboutForm.FormCreate(Sender: TObject);
 const
-   LABEL_1 = '                   %s%sThe easiest way from flowchart to program!%s             Version: %s (x%d)';
-   LABEL_2 = ' This program is freeware and released under the%s                GNU General Public License.%s%s       The %s project (2006-2022)';
-{$IFDEF WIN32}
-   winXX = 32;
-{$ENDIF}
-{$IFDEF WIN64}
-   winXX = 64;
-{$ENDIF}
+   LABEL_1 = '''
+                      %s
+   The easiest way from flowchart to program!
+                Version: %s (x%d)
+   ''';
+   LABEL_2 = '''
+    This program is freeware and released under the
+                   GNU General Public License.
+
+          The %s project (2006-2024)
+   ''';
+   WIN_PLATFORM = {$IFDEF WIN32}32{$ELSE}64{$ENDIF};
 begin
-   FVersion := ExtractProgramVersion;
-   lblInfo1.Caption := Format(LABEL_1, [PROGRAM_NAME, sLineBreak, sLineBreak, FVersion, winXX]);
-   lblInfo2.Caption := Format(LABEL_2, [sLineBreak, sLineBreak, sLineBreak, PROGRAM_NAME]);
+   lblInfo1.Caption := Format(LABEL_1, [PROGRAM_NAME, TInfra.AppVersion, WIN_PLATFORM]);
+   lblInfo2.Caption := Format(LABEL_2, [PROGRAM_NAME]);
 end;
 
 procedure TAboutForm.imDelphiClick(Sender: TObject);

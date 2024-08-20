@@ -148,6 +148,7 @@ type
          function IsCursorResize: boolean;
          function CanInsertReturnBlock: boolean; virtual;
          procedure ExportToXML(ANode: IXMLNode);
+         procedure ExportCode(ALines: TStringList);
          function ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
          procedure ExportToGraphic(AGraphic: TGraphic); virtual;
          procedure UpdateEditor(AEdit: TCustomEdit); virtual;
@@ -206,7 +207,6 @@ type
          procedure LinkAllBlocks;
          procedure LinkBlocks(ABranch: TBranch);
          procedure Paint; override;
-         function ExtractBranchIndex(const AStr: string): integer;
          function GetDiamondTop: TPoint; virtual;
          procedure AfterRemovingBranch; virtual;
          function GetBlockParms: TBlockParms; override;
@@ -279,9 +279,9 @@ implementation
 
 uses
    System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, System.TypInfo,
-   System.SysUtils, System.UITypes, Main_Block, Return_Block, Infrastructure, BlockFactory,
-   UserFunction, XMLProcessor, Navigator_Form, LangDefinition, FlashThread, Main_Form,
-   OmniXMLUtils, Constants;
+   System.Character, System.SysUtils, System.UITypes, Main_Block, Return_Block,
+   Infrastructure, BlockFactory, UserFunction, XMLProcessor, Navigator_Form, LangDefinition,
+   FlashThread, Main_Form, OmniXMLUtils, Constants;
 
 type
    TControlHack = class(TControl);
@@ -628,31 +628,26 @@ begin
 end;
 
 procedure TBlock.DragDrop(Source: TObject; X, Y: Integer);
-var
-   srcPage: TBlockTabSheet;
-   mForm: TMainForm;
-   menuItem: TMenuItem;
-   inst: TControl;
-   uobj: TObject;
-   shiftPressed: boolean;
 begin
    if Source is TBlock then
    begin
-      srcPage := TBlock(Source).Page;
-      srcPage.Form.pmPages.PopupComponent := TBlock(Source);
-      shiftPressed := GetAsyncKeyState(vkShift) <> 0;
+      var srcBlock := TBlock(Source);
+      var srcPage := srcBlock.Page;
+      var menuItem: TMenuItem;
+      srcPage.Form.pmPages.PopupComponent := srcBlock;
+      var shiftPressed := GetAsyncKeyState(vkShift) <> 0;
       if shiftPressed then
          menuItem := srcPage.Form.miCopy
       else
       begin
          menuItem := srcPage.Form.miCut;
-         TBlock(Source).TopParentBlock.LockDrawing;
+         srcBlock.TopParentBlock.LockDrawing;
       end;
-      inst := GClpbrd.Instance;
-      uobj := GClpbrd.UndoObject;
+      var inst := GClpbrd.Instance;
+      var uobj := GClpbrd.UndoObject;
       GClpbrd.Instance := nil;
       GClpbrd.UndoObject := nil;
-      mForm := Page.Form;
+      var mForm := Page.Form;
       try
          menuItem.OnClick(menuItem);
          mForm.pmPages.PopupComponent := Self;
@@ -661,7 +656,7 @@ begin
          GClpbrd.Instance := inst;
          GClpbrd.UndoObject := uobj;
          if not shiftPressed then
-            TBlock(Source).TopParentBlock.UnLockDrawing;
+            srcBlock.TopParentBlock.UnLockDrawing;
       end;
    end;
 end;
@@ -991,9 +986,8 @@ procedure TBlock.SetFontStyle(const AStyle: TFontStyles);
 begin
    Font.Style := AStyle;
    Canvas.Font.Style := AStyle;
-   for var i := 0 to ControlCount-1 do
+   for var control in GetControls do
    begin
-      var control := Controls[i];
       if control is TBlock then
          TBlock(control).SetFontStyle(AStyle)
       else
@@ -1006,9 +1000,8 @@ procedure TBlock.SetFontSize(ASize: integer);
 begin
    Font.Size := ASize;
    Canvas.Font.Size := ASize;
-   for var i := 0 to ControlCount-1 do
+   for var control in GetControls do
    begin
-      var control := Controls[i];
       if control is TBlock then
          TBlock(control).SetFontSize(ASize)
       else
@@ -1028,9 +1021,8 @@ begin
    Font.Assign(AFont);
    Canvas.Font.Assign(AFont);
    Refresh;
-   for var i := 0 to ControlCount-1 do
+   for var control in GetControls do
    begin
-      var control := Controls[i];
       if control is TBlock then
       begin
          TBlock(control).SetFontStyle(AFont.Style);
@@ -1145,19 +1137,18 @@ end;
 
 procedure TBlock.RefreshStatements;
 begin
-    var b1 := FRefreshMode;
+    var b := FRefreshMode;
     FRefreshMode := True;
     try
-       for var i := 0 to ControlCount-1 do
+       for var control in GetControls do
        begin
-          var control := Controls[i];
           if control is TCustomEdit then
              TCustomEditHack(control).Change
           else if (control is TBlock) and (control <> GClpbrd.UndoObject) then
              TBlock(control).RefreshStatements;
        end;
     finally
-       FRefreshMode := b1;
+       FRefreshMode := b;
     end;
 end;
 
@@ -1257,9 +1248,8 @@ end;
 procedure TBlock.RepaintAll;
 begin
    Repaint;
-   for var i := 0 to ControlCount-1 do
+   for var control in GetControls do
    begin
-      var control :=  Controls[i];
       if control is TBlock then
          TBlock(control).RepaintAll
       else
@@ -1828,6 +1818,11 @@ begin
    end;
 end;
 
+procedure TBlock.ExportCode(ALines: TStringList);
+begin
+   GenerateCode(ALines, GInfra.CurrentLang.Name, 0);
+end;
+
 procedure TBlock.UnPinComments;
 begin
    var p := ClientToParent(TPoint.Zero, Page.Box);
@@ -2061,7 +2056,7 @@ begin
    TWinControl(Self).UnlockDrawing;
    for var comment in GetComments(True) do
       comment.UnlockDrawing;
-   if not IsDrawingLocked then
+   if not RedrawDisabled then
       GProject.RepaintFlowcharts;
 end;
 
@@ -2443,26 +2438,6 @@ begin
    GenerateTemplateSection(ALines, template, ALangId, ADeep);
 end;
 
-function TGroupBlock.ExtractBranchIndex(const AStr: string): integer;
-begin
-   result := Pos('%b', AStr);
-   if result <> 0 then
-   begin
-      var val := '';
-      var b := 0;
-      for var i := result+2 to AStr.Length do
-      begin
-         if TryStrToInt(AStr[i], b) then
-            val := val + AStr[i]
-         else
-            break;
-      end;
-      result := StrToIntDef(val, 0);
-      if result >= FBranchList.Count then
-         result := 0;
-   end;
-end;
-
 procedure TBlock.GenerateTemplateSection(ALines: TStringList; const ATemplate: string; const ALangId: string; ADeep: integer);
 begin
    var lines := TStringList.Create;
@@ -2476,9 +2451,6 @@ end;
 
 procedure TBlock.GenerateTemplateSection(ALines: TStringList; ATemplate: TStringList; const ALangId: string; ADeep: integer);
 begin
-   var c := ALines.Count + ATemplate.Count;
-   if ALines.Capacity < c then
-      ALines.Capacity := c;
    for var i := 0 to ATemplate.Count-1 do
    begin
       var obj := ATemplate.Objects[i];
@@ -2489,25 +2461,38 @@ begin
 end;
 
 procedure TGroupBlock.GenerateTemplateSection(ALines: TStringList; ATemplate: TStringList; const ALangId: string; ADeep: integer);
-
    function CountLeadXMLIndents(const AString: string): integer;
    begin
       result := 0;
-      for var a := 1 to AString.Length do
+      for var c in AString do
       begin
-         if AString[a] = INDENT_XML_CHAR then
-            result := result + 1
+         if c = INDENT_XML_CHAR then
+            Inc(result)
          else
             break;
       end;
    end;
-
+   function ExtractBranchIndex(const AString: string): integer;
+   begin
+      result := Pos(BRANCH_PLACEHOLDER, AString);
+      if result > 0 then
+      begin
+         var val := '';
+         for var c in Copy(AString, result + BRANCH_PLACEHOLDER.Length) do
+         begin
+            if not c.IsDigit then
+               break;
+            val := val + c
+         end;
+         result := StrToIntDef(val, 0);
+      end;
+   end;
 begin
    for var i := 0 to ATemplate.Count-1 do
    begin
       var templateLine := ATemplate[i];
       var b := ExtractBranchIndex(templateLine);
-      if b > 0 then
+      if (b > 0) and (b < FBranchList.Count) then
       begin
          if (ALines.Count > 0) and (ALines.Objects[ALines.Count-1] = nil) then
             ALines.Objects[ALines.Count-1] := FBranchList[b];

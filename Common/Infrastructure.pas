@@ -27,7 +27,7 @@ uses
    WinApi.Windows, Vcl.StdCtrls, Vcl.Controls, Vcl.Graphics, Vcl.ComCtrls, System.Classes,
    LocalizationManager, Project, Settings, LangDefinition, Types, Base_Form, Interfaces,
    Functions_Form, DataTypes_Form, Declarations_Form, Main_Form, Base_Block, SynEditTypes,
-   Settings_Form, Editor_Form, Explorer_Form, UserFunction, BlockTabSheet, About_Form, YaccLib;
+   Settings_Form, Editor_Form, Explorer_Form, UserFunction, BlockTabSheet, YaccLib;
 
 type
 
@@ -41,10 +41,12 @@ type
          FTemplateLang,
          FCurrentLang: TLangDefinition;
          FLangArray: array of TLangDefinition;
+         class var FAppVersion: string;
          class var FParsedEdit: TCustomEdit;
       public
          property CurrentLang: TLangDefinition read FCurrentLang;
          property TemplateLang: TLangDefinition read FTemplateLang;
+         class property AppVersion: string read FAppVersion;
          constructor Create;
          destructor Destroy; override;
          class procedure ShowWarningBox(const AWarnMsg: string); overload;
@@ -78,7 +80,6 @@ type
          class function GetDeclarationsForm: TDeclarationsForm;
          class function GetEditorForm: TEditorForm;
          class function GetSettingsForm: TSettingsForm;
-         class function GetAboutForm: TAboutForm;
          class function GetExplorerForm: TExplorerForm;
          class function GetMainForm: TMainForm;
          class function GetActiveEdit: TCustomEdit;
@@ -95,7 +96,7 @@ type
          class function GetComboMaxWidth(ACombo: TComboBox): integer;
          class function ExportToFile(AExport: IExportable): TError;
          class function StripInstrEnd(const ALine: string): string;
-         class function CompareProgramVersion(const AVersion: string): integer;
+         class function CompareWithAppVersion(const AVersion: string): integer;
          class function GetBaseForms: IEnumerable<TBaseForm>;
          class function DecodeFontStyle(AValue: integer): TFontStyles;
          class function EncodeFontStyle(AStyle: TFontStyles): integer;
@@ -109,7 +110,6 @@ type
          class function DecodeCheckBoxState(const AState: string): TCheckBoxState;
          class function GetPageFromXY(APageControl: TPageControl; x, y: integer): TTabSheet;
          class function GetPageFromTabIndex(APageControl: TPageControl; ATabIndex: integer): TTabSheet;
-         class function IndexOf<T>(const AValue: T; const AArray: TArray<T>): integer;
          class function Scaled(AWinControl: TWinControl; on96: integer): integer;
          class function ReplaceXMLIndents(const ALine: string): string;
          class function ShouldUpdateEditor: boolean;
@@ -152,7 +152,10 @@ constructor TInfra.Create;
 var
    searchRec: TSearchRec;
    lang: TLangDefinition;
-   lFile, langDir: string;
+   lFile, langDir, s: string;
+   n, hnd: DWORD;
+   buf: TBytes;
+   value: PVSFixedFileInfo;
 begin
    inherited Create;
    langDir := GSettings.LanguageDefinitionsDir;
@@ -176,6 +179,17 @@ begin
    FTemplateLang := TLangDefinition.Create;
    FLangArray := FLangArray + [FTemplateLang];
    FCurrentLang := FLangArray[0];
+   s := Application.ExeName;
+   n := GetFileVersionInfoSize(PChar(s), hnd);
+   if n > 0 then
+   begin
+      SetLength(buf, n);
+      if GetFileVersionInfo(PWideChar(s), 0, n, buf) and VerQueryValue(buf, '\', Pointer(value), n) then
+         FAppVersion := String.join(VERSION_NUMBER_SEPARATOR, [LongRec(value.dwFileVersionMS).Hi,
+                                                               LongRec(value.dwFileVersionMS).Lo,
+                                                               LongRec(value.dwFileVersionLS).Hi,
+                                                               LongRec(value.dwFileVersionLS).Lo]);
+   end;
 end;
 
 destructor TInfra.Destroy;
@@ -255,19 +269,6 @@ begin
       end;
       dialog.FileName := '';
       dialog.Filter := '';
-   end;
-end;
-
-class function TInfra.IndexOf<T>(const AValue: T; const AArray: TArray<T>): integer;
-begin
-   result := -1;
-   for var i := 0 to High(AArray) do
-   begin
-      if TComparer<T>.Default.Compare(AValue, AArray[i]) = 0 then
-      begin
-         result := i;
-         break;
-      end;
    end;
 end;
 
@@ -740,45 +741,32 @@ begin
 end;
 
 class function TInfra.InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; ATemplate: TStringList; AObject: TObject = nil): integer;
-var
-   i, a, p: integer;
-   lBegin, lEnd: string;
-   obj: TObject;
 begin
    result := -1;
-   i := 0;
+   var i := 0;
+   var obj := AObject;
    while i < ADestList.Count do
    begin
-      p := Pos(APlaceHolder, ADestList[i]);
-      if p <> 0 then
+      var line := ADestList[i];
+      if ContainsText(line, APlaceHolder) then
       begin
-         lBegin := '';
-         lEnd := '';
          if (ATemplate <> nil) and (ATemplate.Count > 0) then
          begin
-            for a := p+APlaceHolder.Length to ADestList[i].Length do
-               lEnd := lEnd + ADestList[i][a];
-            for a := 1 to p-1 do
-               lBegin := lBegin + ADestList[i][a];
-            if ADestList.Capacity < ADestList.Count + ATemplate.Count then
-               ADestList.Capacity := ADestList.Count + ATemplate.Count;
-            for a := ATemplate.Count-1 downto 0 do
+            for var a := ATemplate.Count-1 downto 0 do
             begin
-               if AObject <> nil then
-                  obj := AObject
-               else
+               if AObject = nil then
                   obj := ATemplate.Objects[a];
-               ADestList.InsertObject(i, lBegin + ATemplate[a] + lEnd, obj);
+               ADestList.InsertObject(i, ReplaceText(line, APlaceHolder, ATemplate[a]), obj);
             end;
             ADestList.Delete(i+ATemplate.Count);
          end
          else
          begin
-            if ADestList[i].Trim = APlaceHolder then
+            if line.Trim = APlaceHolder then
                ADestList.Delete(i)
             else
             begin
-               ADestList[i] := ReplaceStr(ADestList[i], APlaceHolder, '');
+               ADestList[i] := ReplaceText(line, APlaceHolder, '');
                if AObject <> nil then
                   ADestList.Objects[i] := AObject;
             end;
@@ -786,7 +774,7 @@ begin
          result := i;
          break;
       end;
-      i := i + 1;
+      Inc(i);
    end;
 end;
 
@@ -796,9 +784,6 @@ begin
       ADestList.AddStrings(ASourceList)
    else
    begin
-      var lineCount := ADestList.Count + ASourceList.Count;
-      if ADestList.Capacity < lineCount then
-         ADestList.Capacity := lineCount;
       for var i := ASourceList.Count-1 downto 0 do
          ADestList.InsertObject(AFromLine, ASourceList.Strings[i], ASourceList.Objects[i]);
    end;
@@ -873,30 +858,24 @@ begin
    result := SettingsForm;
 end;
 
-class function TInfra.GetAboutForm: TAboutForm;
-begin
-   result := AboutForm;
-end;
-
 class function TInfra.GetExplorerForm: TExplorerForm;
 begin
    result := ExplorerForm;
 end;
 
-class function TInfra.CompareProgramVersion(const AVersion: string): integer;
+class function TInfra.CompareWithAppVersion(const AVersion: string): integer;
 begin
    result := 0;
-   var currVersion := GetAboutForm.GetProgramVersion;
-   if AVersion.IsEmpty or (currVersion = UNKNOWN_VERSION) or (currVersion = AVersion) then
+   if AVersion.IsEmpty or FAppVersion.IsEmpty or (FAppVersion = AVersion) then
       Exit;
-   var nums := AVersion.Split([VERSION_NUMBER_SEP], 4);
-   var numsCurr := currVersion.Split([VERSION_NUMBER_SEP], 4);
-   for var i := 0 to High(numsCurr) do
+   var nums := AVersion.Split([VERSION_NUMBER_SEPARATOR], 4);
+   var numsApp := FAppVersion.Split([VERSION_NUMBER_SEPARATOR], 4);
+   for var i := 0 to High(numsApp) do
    begin
       if (result <> 0) or (i > High(nums)) then
          break;
       var e1 := StrToIntDef(nums[i], -1);
-      var e2 := StrToIntDef(numsCurr[i], -1);
+      var e2 := StrToIntDef(numsApp[i], -1);
       if e1 > e2 then
          result := 1
       else if e1 < e2 then
@@ -1297,7 +1276,7 @@ begin
    result := VALID_IDENT;
    if not IsValidIdent(AId) then
       result := INCORRECT_IDENT
-   else if CurrentLang.Keywords.IndexOf(AId) <> -1 then
+   else if CurrentLang.Keywords.Contains(AId) then
       result := RESERVED_IDENT;
 end;
 

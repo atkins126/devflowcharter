@@ -29,8 +29,9 @@ implementation
 
 uses
    System.Classes, System.SysUtils, System.StrUtils, Vcl.Graphics, Vcl.ComCtrls,
-   System.Character, SynHighlighterJava, DeclareList, Infrastructure, UserDataType,
-   UserFunction, LangDefinition, ParserHelper, Types, Constants;
+   System.Character, System.Generics.Collections, SynHighlighterJava, DeclareList,
+   Infrastructure, UserDataType, UserFunction, LangDefinition, ParserHelper, Types,
+   Constants;
 
 const
    JAVA_STRING_DELIM = #34;
@@ -127,7 +128,7 @@ end;
 
 function IsPrimitiveType(AType: integer): boolean;
 begin
-   result := (AType <> UNKNOWN_TYPE) and (TInfra.IndexOf<integer>(AType, JAVA_PRIMITIVE_TYPES) <> -1);
+   result := (AType <> UNKNOWN_TYPE) and TArray.Contains(JAVA_PRIMITIVE_TYPES, AType);
 end;
 
 procedure AddLibImport(const ALib: string);
@@ -228,51 +229,32 @@ begin
 end;
 
 procedure Java_LibSectionGenerator(ALines: TStringList);
-var
-   i: integer;
-   libList: TStringList;
-   typeName, libImport: string;
-   pNativeType: PNativeDataType;
 begin
-
    FImportLines := ALines;
-
-   for i := 0 to High(javaLang.NativeDataTypes) do
+   for var nativeType in javaLang.NativeDataTypes do
    begin
-      pNativeType := @javaLang.NativeDataTypes[i];
-      if (pNativeType.Lib <> '') and CheckForDataType(pNativeType.Name) then
-      begin
-         libImport := pNativeType.Lib + '.' + pNativeType.Name;
-         AddLibImport(libImport);
-      end;
+      if (nativeType.Lib <> '') and CheckForDataType(nativeType.Name) then
+         AddLibImport(nativeType.Lib + '.' + nativeType.Name);
    end;
-
-   libList := GProject.GetLibraryList;
+   var libList := GProject.GetLibraryList;
    try
-      for i := 0 to libList.Count-1 do
+      for var i := 0 to libList.Count-1 do
       begin
-         typeName := '';
+         var typeName := '';
          if libList.Objects[i] is TTabSheet then
             typeName := TTabSheet(libList.Objects[i]).Caption;
          if not typeName.IsEmpty then
-         begin
-            libImport := libList.Strings[i] + '.' + typeName;
-            AddLibImport(libImport);
-         end;
+            AddLibImport(libList.Strings[i] + '.' + typeName);
       end;
    finally
       libList.Free;
    end;
 end;
 
-function GetImplementerLibImport(const ATypeName: string; const AContents: string): string;
-var
-   i: integer;
-   implList: TStrings;
-   name: string;
+function GetImplementerLibImport(const ATypeName, AContents: string): string;
 begin
    result := '';
-   implList := nil;
+   var implList: TStrings := nil;
    if ATypeName.EndsWith('List') then
       implList := FListImpl
    else if ATypeName.EndsWith('Map') then
@@ -299,9 +281,9 @@ begin
       implList := FNumberImpl;
    if implList <> nil then
    begin
-      for i := 0 to implList.Count-1 do
+      for var i := 0 to implList.Count-1 do
       begin
-         name := implList.Names[i];
+         var name := implList.Names[i];
          if AContents.Contains(name) then
             Exit(implList.Values[name] + '.' + name);
       end;
@@ -309,28 +291,23 @@ begin
 end;
 
 procedure Java_VarSectionGenerator(ALines: TStringList; AVarList: TVarDeclareList);
-var
-   i, p1, p2, a, b: integer;
-   varType, varInit, varInit2, varVal, varGeneric, varGenericType, libImport, varAccess, varSize, varName, token: string;
-   dims, tokens: TArray<string>;
-   pNativeType: PNativeDataType;
 begin
    if AVarList <> nil then
    begin
-      for i := 1 to AVarList.sgList.RowCount-2 do
+      for var i := 1 to AVarList.sgList.RowCount-2 do
       begin
-         varName := AVarList.sgList.Cells[VAR_NAME_COL, i];
-         varInit := AVarList.sgList.Cells[VAR_INIT_COL, i];
-         varType :=  AVarList.sgList.Cells[VAR_TYPE_COL, i];
+         var varName := AVarList.sgList.Cells[VAR_NAME_COL, i];
+         var varInit := AVarList.sgList.Cells[VAR_INIT_COL, i];
+         var varType :=  AVarList.sgList.Cells[VAR_TYPE_COL, i];
          if TParserHelper.GetType(varType) = UNKNOWN_TYPE then
             continue;
-         varGeneric := '';
-         varSize := '';
-         varAccess := '';
-         p1 := 0;
-         p2 := 0;
+         var varGeneric := '';
+         var varSize := '';
+         var varAccess := '';
          if not varInit.IsEmpty then
          begin
+            var p1 := 0;
+            var p2 := 0;
             if TParserHelper.IsGenericType(varType) then
             begin
                p1 := Pos('<', varInit);
@@ -340,20 +317,15 @@ begin
                   if p2 > p1 then
                   begin
                      varGeneric := Copy(varInit, p1, p2-p1+1);
-                     varGenericType := Copy(varInit, p1+1, p2-p1-1);
-                     tokens := varGenericType.Split([',', ' ', '<', '>']);
-                     for b := 0 to High(tokens) do
+                     for var token in Copy(varInit, p1+1, p2-p1-1).Split([',', ' ', '<', '>']) do
                      begin
-                        token := tokens[b];
                         if token.IsEmpty then
                            continue;
-                        for a := 0 to High(javaLang.NativeDataTypes) do
+                        for var nativeType in javaLang.NativeDataTypes do
                         begin
-                           pNativeType := @javaLang.NativeDataTypes[a];
-                           if (pNativeType.Lib <> '') and (pNativeType.Name = token) then
+                           if (nativeType.Name = token) and not nativeType.Lib.IsEmpty then
                            begin
-                              libImport := pNativeType.Lib + '.' + pNativeType.Name;
-                              AddLibImport(libImport);
+                              AddLibImport(nativeType.Lib + '.' + nativeType.Name);
                               break;
                            end;
                         end;
@@ -361,23 +333,21 @@ begin
                   end;
                end;
             end;
-            libImport := GetImplementerLibImport(varType, varInit);
-            AddLibImport(libImport);
+            AddLibImport(GetImplementerLibImport(varType, varInit));
             if p2 > p1 then
                Delete(varInit, p1+1, p2-p1-1);      // make diamond operator
             varInit := ' = ' + varInit;
          end;
-         p1 := AVarList.GetDimensionCount(varName);
-         if p1 > 0 then
+         if AVarList.GetDimensionCount(varName) > 0 then
          begin
-            varInit2 := '';
-            dims := AVarList.GetDimensions(varName);
+            var varInit2 := '';
+            var dims := AVarList.GetDimensions(varName);
             if dims <> nil then
             begin
-               for p2 := 0 to High(dims) do
+               for var dim in dims do
                begin
-                  varSize := varSize + Format(javaLang.VarEntryArraySize, [dims[p2]]);
-                  varInit2 := varInit2 + '[' + dims[p2] + ']';
+                  varSize := varSize + Format(javaLang.VarEntryArraySize, [dim]);
+                  varInit2 := varInit2 + '[' + dim + ']';
                end;
                if varInit.IsEmpty then
                   varInit := ' = new ' + varType + varInit2;
@@ -387,82 +357,77 @@ begin
          end;
          if AVarList.IsGlobal then
             varAccess := AVarList.GetExternalModifier(i);
-         varVal := varAccess + varType + varGeneric + varSize + ' ' + varName + varInit + ';';
+         var varVal := varAccess + varType + varGeneric + varSize + ' ' + varName + varInit + ';';
          ALines.AddObject(varVal, AVarList);
       end;
    end;
 end;
 
-procedure Java_UserDataTypesSectionGenerator(ALines: TStringList);
-var
-   name, line, fieldSize, fieldName, fieldType, funcStrU, typeAccess, indent: string;
-   dataType: TUserDataType;
-   field: TField;
-   i: integer;
+procedure Java_UserDataTypeGenerator(ALines: TStringList; ADataType: TUserDataType);
 begin
-   i := 0;
-   for dataType in GProject.GetUserDataTypes do
+   var name := ADataType.GetName;
+   if not name.IsEmpty then
    begin
-      name := dataType.GetName;
-      if not name.IsEmpty then
+      var indent := GSettings.IndentString;
+      var typeAccess := ADataType.GetExternModifier;
+      if ADataType.Kind = dtRecord then
       begin
-         indent := GSettings.IndentString;
-         typeAccess := dataType.GetExternModifier;
-         if dataType.Kind = dtRecord then
+         ALines.AddObject(typeAccess + 'class ' + name + ' {', ADataType);
+         if ADataType.FieldCount > 0 then
          begin
-            if i > 0 then
-               ALines.AddObject('', dataType);
-            line := typeAccess + 'class ' + name + ' {';
-            ALines.AddObject(line, dataType);
-            if dataType.FieldCount > 0 then
+            ALines.AddObject('', ADataType);
+            var i := ALines.Count;
+            ALines.AddObject('', ADataType);
+            for var field in ADataType.GetFields do
             begin
-               ALines.AddObject('', dataType);
-               i := ALines.Count;
-               ALines.AddObject('', dataType);
-               for field in dataType.GetFields do
-               begin
-                  fieldSize := javaLang.GetArraySizes(field.edtSize);
-                  fieldName := Trim(field.edtName.Text);
-                  fieldType := field.cbType.Text;
-                  line := indent + 'private ' + fieldType + fieldSize + ' ' + fieldName + ';';
-                  ALines.InsertObject(i, line, dataType);
-                  funcStrU := fieldName;
-                  if not funcStrU.IsEmpty then
-                     funcStrU[1] := funcStrU[1].ToUpper;
-                  line := indent + 'public ' + fieldType + fieldSize + ' get' + funcStrU + '() {';
-                  ALines.AddObject(line, dataType);
-                  line := indent + indent + 'return ' + fieldName + ';';
-                  ALines.AddObject(line, dataType);
-                  ALines.AddObject(indent + '}', dataType);
-                  line := indent + 'public void set' + funcStrU + '(' + fieldType + fieldSize + ' ' + fieldName + ') {';
-                  ALines.AddObject(line, dataType);
-                  line := indent + indent + 'this.' + fieldName + ' = ' + fieldName + ';';
-                  ALines.AddObject(line, dataType);
-                  ALines.AddObject(indent + '}', dataType);
-                  i := i + 1;
-               end;
+               var fieldSize := javaLang.GetArraySizes(field.edtSize);
+               var fieldName := Trim(field.edtName.Text);
+               var fieldType := field.cbType.Text;
+               var line := indent + 'private ' + fieldType + fieldSize + ' ' + fieldName + ';';
+               ALines.InsertObject(i, line, ADataType);
+               var funcStrU := fieldName;
+               if not funcStrU.IsEmpty then
+                  funcStrU[1] := funcStrU[1].ToUpper;
+               line := indent + 'public ' + fieldType + fieldSize + ' get' + funcStrU + '() {';
+               ALines.AddObject(line, ADataType);
+               line := indent + indent + 'return ' + fieldName + ';';
+               ALines.AddObject(line, ADataType);
+               ALines.AddObject(indent + '}', ADataType);
+               line := indent + 'public void set' + funcStrU + '(' + fieldType + fieldSize + ' ' + fieldName + ') {';
+               ALines.AddObject(line, ADataType);
+               line := indent + indent + 'this.' + fieldName + ' = ' + fieldName + ';';
+               ALines.AddObject(line, ADataType);
+               ALines.AddObject(indent + '}', ADataType);
+               i := i + 1;
             end;
-            ALines.AddObject('}', dataType);
-            i := 1;
-         end
-         else if dataType.Kind = dtEnum then
-         begin
-            if i > 0 then
-               ALines.AddObject('', dataType);
-            line := typeAccess + 'enum ' + name + ' {';
-            ALines.AddObject(line, dataType);
-            if dataType.FieldCount > 0 then
-            begin
-               line := indent;
-               for field in dataType.GetFields do
-                  line := line + Trim(field.edtName.Text).ToUpper + ', ';
-               SetLength(line, Length(line)-2);
-               ALines.AddObject(line, dataType);
-            end;
-            ALines.AddObject('}', dataType);
-            i := 1;
          end;
+         ALines.AddObject('}', ADataType);
+      end
+      else if ADataType.Kind = dtEnum then
+      begin
+         ALines.AddObject(typeAccess + 'enum ' + name + ' {', ADataType);
+         if ADataType.FieldCount > 0 then
+         begin
+            var line := indent;
+            for var field in ADataType.GetFields do
+               line := line + Trim(field.edtName.Text).ToUpper + ', ';
+            SetLength(line, Length(line)-2);
+            ALines.AddObject(line, ADataType);
+         end;
+         ALines.AddObject('}', ADataType);
       end;
+   end;
+end;
+
+procedure Java_UserDataTypesSectionGenerator(ALines: TStringList);
+begin
+   var i := 0;
+   for var dataType in GProject.GetUserDataTypes do
+   begin
+      if i > 0 then
+         ALines.AddObject('', dataType);
+      Java_UserDataTypeGenerator(ALines, dataType);
+      i := i + 1;
    end;
 end;
 
@@ -483,32 +448,41 @@ end;
 
 function ContainsOneOf(const AString: string; const ASubStrings: array of string): boolean;
 begin
+   result := False;
    for var i := 0 to High(ASubStrings) do
    begin
       if AString.Contains(ASubStrings[i]) then
-         Exit(True);
+      begin
+         result := True;
+         break;
+      end;
    end;
-   result := False;
 end;
 
 function StartsWithOneOf(const AString: string; const AStartings: array of string): boolean;
 begin
+   result := False;
    for var i := 0 to High(AStartings) do
    begin
       if AString.StartsWith(AStartings[i]) then
-         Exit(True);
+      begin
+         result := True;
+         break;
+      end;
    end;
-   result := False;
 end;
 
 function EndsWithOneOf(const AString: string; const AEndings: array of string): boolean;
 begin
+   result := False;
    for var i := 0 to High(AEndings) do
    begin
       if AString.EndsWith(AEndings[i]) then
-         Exit(True);
+      begin
+         result := True;
+         break;
+      end;
    end;
-   result := False;
 end;
 
 function IsTimeType(const AValue: string; const AType: string; ALastChar: char): boolean;
@@ -1121,6 +1095,7 @@ initialization
       javaLang.AfterProgramGenerator :=  Java_AfterProgramGenerator;
       javaLang.LibSectionGenerator := Java_LibSectionGenerator;
       javaLang.VarSectionGenerator := Java_VarSectionGenerator;
+      javaLang.UserDataTypeGenerator := Java_UserDataTypeGenerator;
       javaLang.UserDataTypesSectionGenerator := Java_UserDataTypesSectionGenerator;
       javaLang.GetConstantType := Java_GetConstantType;
       javaLang.SetHLighterAttrs := Java_SetHLighterAttrs;
