@@ -24,8 +24,7 @@ unit ForDo_Block;
 interface
 
 uses
-   Vcl.StdCtrls, Vcl.Graphics, System.Classes, Base_Block, Statement, OmniXML,
-   Types, LangDefinition;
+   Vcl.StdCtrls, Vcl.Graphics, System.Classes, Base_Block, Statement, OmniXML, Types;
 
 type
 
@@ -74,7 +73,7 @@ implementation
 
 uses
    Vcl.Controls, Vcl.Forms, System.SysUtils, System.StrUtils, System.Math, YaccLib,
-   Infrastructure, Constants, Main_Block, UserFunction, Return_Block, OmniXMLUtils;
+   Infrastructure, Constants, OmniXMLUtils;
 
 const
    DEFAULT_WIDTH = 246;
@@ -228,7 +227,7 @@ begin
       IPoint := Point(bst + 16, 35);
       DrawArrow(Point(bhx, TopHook.Y), Branch.Hook);
       DrawArrow(Width-11, 19, Width-RIGHT_MARGIN, Height-1);
-      if Branch.FindInstanceOf(TReturnBlock) = -1 then
+      if not Branch.EndsWithReturnBlock then
       begin
          DrawArrow(5, Height-21, 5, 19, arrMiddle);
          Canvas.Polyline([Point(BottomHook, Height-21),

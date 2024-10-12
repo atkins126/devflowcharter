@@ -56,7 +56,7 @@ type
          class procedure Reset;
          class procedure PopulateDataTypeCombo(AcbType: TComboBox; ASkipIndex: integer = 100);
          class procedure PrintBitmap(ABitmap: TBitmap);
-         class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; const ATemplateString: string; AObject: TObject = nil): integer; overload;
+         class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder, ATemplateString: string; AObject: TObject = nil): integer; overload;
          class function InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; ATemplate: TStringList; AObject: TObject = nil): integer; overload;
          class procedure SetFontSize(AControl: TControl; ASize: integer);
          class procedure UpdateCodeEditor(AObject: TObject = nil);
@@ -74,7 +74,7 @@ type
          class function FindText(ASubstr, AText: string; idx: integer; ACaseSens: boolean): integer;
          class function IsPrinter: boolean;
          class function IsValidControl(AObject: TObject): boolean;
-         class function SameStrings(const AStr1: string; const AStr2: string): boolean;
+         class function SameStrings(const AStr1, AStr2: string): boolean;
          class function GetDataTypesForm: TDataTypesForm;
          class function GetFunctionsForm: TFunctionsForm;
          class function GetDeclarationsForm: TDeclarationsForm;
@@ -142,7 +142,7 @@ uses
    Vcl.Printers, Vcl.Menus, Vcl.Dialogs, Vcl.Imaging.jpeg, Vcl.Imaging.PngImage,
    Vcl.Forms, System.Math, System.IOUtils, System.Rtti, System.Character, System.StrUtils,
    System.Generics.Defaults, System.SysUtils, Generics.Collections, WinApi.Messages,
-   Constants, UserDataType, XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator;
+   Constants, XMLProcessor, SynEditHighlighter, Main_Block, BaseEnumerator;
 
 type
    TCustomEditHack = class(TCustomEdit);
@@ -194,8 +194,8 @@ end;
 
 destructor TInfra.Destroy;
 begin
-   for var i := 0 to High(FLangArray) do
-      FLangArray[i].Free;
+   for var lang in FLangArray do
+      lang.Free;
    FLangArray := nil;
    inherited Destroy;
 end;
@@ -424,7 +424,7 @@ begin
 end;
 
 // compares two strings based on current case-sensitive context
-class function TInfra.SameStrings(const AStr1: string; const AStr2: string): boolean;
+class function TInfra.SameStrings(const AStr1, AStr2: string): boolean;
 begin
    if GInfra.CurrentLang.CaseSensitiveSyntax then
       result := SameStr(AStr1, AStr2)
@@ -616,26 +616,15 @@ end;
 class function TInfra.GetComboMaxWidth(ACombo: TComboBox): integer;
 begin
    result := 0;
-   if ACombo <> nil then
-   begin
-      for var i := 0 to ACombo.Items.Count-1 do
-      begin
-         var len := ACombo.Canvas.TextWidth(ACombo.Items[i]);
-         if len > result then
-            result := len;
-      end;
-      result := result + 28;
-   end;
+   for var comboItem in ACombo.Items do
+      result := Max(result, ACombo.Canvas.TextWidth(comboItem));
+   result := result + 28;
 end;
 
 class procedure TInfra.PopulateDataTypeCombo(AcbType: TComboBox; ASkipIndex: integer = 100);
-var
-   i, idx: integer;
-   userType: TUserDataType;
-   lType, lName: string;
-   lang: TLangDefinition;
 begin
-   lType := AcbType.Text;
+
+   var lType := AcbType.Text;
    AcbType.Items.BeginUpdate;
    AcbType.Clear;
 
@@ -643,13 +632,13 @@ begin
       AcbType.Items.Add(i18Manager.GetString('NoType'));
 
 // first, populate with native types from language definition XML file
-   for i := 0 to High(GInfra.CurrentLang.NativeDataTypes) do
-      AcbType.Items.Add(GInfra.CurrentLang.NativeDataTypes[i].Name);
+   for var nativeType in GInfra.CurrentLang.NativeDataTypes do
+      AcbType.Items.Add(nativeType.Name);
 
 // next, populate with user data types defined in GUI
    if GInfra.CurrentLang.EnabledUserDataTypes and (GProject <> nil) then
    begin
-      lang := nil;
+      var lang: TLangDefinition := nil;
       if GInfra.CurrentLang.EnabledPointers then
       begin
          if Assigned(GInfra.CurrentLang.GetPointerTypeName) then
@@ -657,9 +646,9 @@ begin
          else if Assigned(GInfra.TemplateLang.GetPointerTypeName) then
             lang := GInfra.TemplateLang;
       end;
-      for userType in GProject.GetUserDataTypes do
+      for var userType in GProject.GetUserDataTypes do
       begin
-         lName := userType.GetName;
+         var lName := userType.GetName;
          if (userType.PageIndex < ASkipIndex) and not lName.IsEmpty then
          begin
             AcbType.Items.Add(lName);
@@ -668,7 +657,7 @@ begin
          end;
       end;
    end;
-   idx := AcbType.Items.IndexOf(lType);
+   var idx := AcbType.Items.IndexOf(lType);
    if idx = -1 then
       idx := 0;
    AcbType.ItemIndex := idx;
@@ -681,11 +670,11 @@ end;
 function TInfra.GetLangDefinition(const AName: string): TLangDefinition;
 begin
    result := nil;
-   for var i := 0 to High(FLangArray) do
+   for var lang in FLangArray do
    begin
-      if SameText(FLangArray[i].Name, AName) then
+      if SameText(lang.Name, AName) then
       begin
-         result := FLangArray[i];
+         result := lang;
          break;
       end;
    end;
@@ -693,10 +682,10 @@ end;
 
 procedure TInfra.SetLangHiglighterAttributes;
 begin
-   for var i := 0 to High(FLangArray) do
+   for var lang in FLangArray do
    begin
-      if Assigned(FLangArray[i].SetHLighterAttrs) then
-         FLangArray[i].SetHLighterAttrs;
+      if Assigned(lang.SetHLighterAttrs) then
+         lang.SetHLighterAttrs;
    end;
 end;
 
@@ -723,7 +712,7 @@ begin
    end;
 end;
 
-class function TInfra.InsertTemplateLines(ADestList: TStringList; const APlaceHolder: string; const ATemplateString: string; AObject: TObject = nil): integer;
+class function TInfra.InsertTemplateLines(ADestList: TStringList; const APlaceHolder, ATemplateString: string; AObject: TObject = nil): integer;
 var
    template: TStringList;
 begin

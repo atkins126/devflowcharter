@@ -18,6 +18,7 @@ type
     procedure chkAlphaVisibleClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure scbAlphaValChange(Sender: TObject);
+    procedure DialogKey(var Msg: TCMDialogKey); message CM_DIALOGKEY;
   private
     { Private declarations }
     procedure SetAlphaValVisible(AValue: boolean);
@@ -36,7 +37,7 @@ var
 implementation
 
 uses
-   WinApi.Windows, System.SysUtils, Vcl.Graphics, Vcl.Forms, Infrastructure, BlockTabSheet,
+   WinApi.Windows, System.SysUtils, System.UITypes, Vcl.Graphics, Vcl.Forms, Infrastructure,
    OmniXMLUtils;
 
 {$R *.dfm}
@@ -49,11 +50,31 @@ begin
    Constraints.MinWidth := 150;
    Constraints.MinHeight := 150;
    ControlStyle := ControlStyle + [csOpaque];
-   Constraints.MaxWidth := (Screen.Width*9) div 10;
-   Constraints.MaxHeight := (Screen.Height*9) div 10;
+   Constraints.MaxWidth := (Screen.Width * 9) div 10;
+   Constraints.MaxHeight := (Screen.Height * 9) div 10;
    scbAlphaVal.Position := GSettings.NavigatorAlphaValue;
    scbAlphaVal.OnKeyDown := TInfra.GetMainForm.OnKeyDown;
    chkAlphaVisible.Checked := GSettings.NavigatorAlphaVisible;
+end;
+
+procedure TNavigatorForm.DialogKey(var Msg: TCMDialogKey);
+begin
+   var y := 0;
+   case Msg.CharCode of
+      vkDown, vkRight: y := 15;
+      vkUp, vkLeft:    y := -15;
+   end;
+   if (y <> 0) and (GProject <> nil) then
+   begin
+      var box := GProject.ActivePage.Box;
+      if Msg.CharCode in [vkLeft, vkRight] then
+         box.HorzScrollBar.Position := box.HorzScrollBar.Position + y
+      else
+         box.VertScrollBar.Position := box.VertScrollBar.Position + y;
+      Repaint;
+   end
+   else
+      inherited;
 end;
 
 procedure TNavigatorForm.FormPaint(Sender: TObject);

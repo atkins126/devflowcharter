@@ -269,7 +269,7 @@ type
          constructor Create(AParentBlock: TGroupBlock; const AHook: TPoint; AId: integer = ID_INVALID);
          destructor Destroy; override;
          procedure InsertAfter(ANewBlock, ABlock: TBlock);
-         function FindInstanceOf(AClass: TClass): integer;
+         function EndsWithReturnBlock: boolean;
          function Remove(ABlock: TBlock): integer;
          procedure UndoRemove(ABlock: TBlock);
          function GetMostRight: integer;
@@ -1067,20 +1067,17 @@ end;
 function TBlock.IsInFront(AControl: TWinControl): boolean;
 begin
    result := False;
-   if AControl <> nil then
+   var hnd := GetWindow(AControl.Handle, GW_HWNDLAST);
+   while hnd <> 0 do
    begin
-      var hnd := GetWindow(AControl.Handle, GW_HWNDLAST);
-      while hnd <> 0 do
+      if hnd = FTopParentBlock.Handle then
       begin
-         if hnd = FTopParentBlock.Handle then
-         begin
-            result := True;
-            break;
-         end
-         else if hnd = AControl.Handle then
-            break;
-         hnd := GetNextWindow(hnd, GW_HWNDPREV);
-      end;
+         result := True;
+         break;
+      end
+      else if hnd = AControl.Handle then
+         break;
+      hnd := GetNextWindow(hnd, GW_HWNDPREV);
    end;
 end;
 
@@ -1617,7 +1614,7 @@ begin
          if result and (func.Header <> nil) then
             result := func.Header.chkBodyVisible.Checked;
       end;
-      if result and (FParentBranch <> nil) and (FParentBranch.IndexOf(Self) = -1) then
+      if result and (FParentBranch <> nil) and not FParentBranch.Contains(Self) then
          result := False;
    end;
 end;
@@ -2576,17 +2573,9 @@ begin
       Inc(result, Items[i].Height);
 end;
 
-function TBranch.FindInstanceOf(AClass: TClass): integer;
+function TBranch.EndsWithReturnBlock: boolean;
 begin
-   result := -1;
-   for var i := 0 to Count-1 do
-   begin
-      if Items[i].ClassType = AClass then
-      begin
-         result := i;
-         break;
-      end;
-   end;
+   result := (Count > 0) and (Last is TReturnBlock);
 end;
 
 procedure TBranch.UndoRemove(ABlock: TBlock);

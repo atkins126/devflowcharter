@@ -136,7 +136,7 @@ begin
    if (FImportLines <> nil) and not ALib.IsEmpty then
    begin
       var importLib := Format(javaLang.LibEntry, [ALib]);
-      if (importLib <> '') and (FImportLines.IndexOf(importLib) = -1) then
+      if (importLib <> '') and not FImportLines.Contains(importLib) then
          FImportLines.AddObject(importLib, TInfra.GetLibObject);
    end;
 end;
@@ -340,10 +340,10 @@ begin
          end;
          if AVarList.GetDimensionCount(varName) > 0 then
          begin
-            var varInit2 := '';
             var dims := AVarList.GetDimensions(varName);
             if dims <> nil then
             begin
+               var varInit2 := '';
                for var dim in dims do
                begin
                   varSize := varSize + Format(javaLang.VarEntryArraySize, [dim]);

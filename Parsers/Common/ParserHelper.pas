@@ -101,7 +101,7 @@ type
       class function GetVarInfo(const AVarName: string): TIdentInfo;
       class function IsArrayType(AType: integer): boolean;
       class function AreTypesCompatible(AType1, AType2: integer): boolean;
-      class function GetSizeExpArrayAsString(const ATypeAsString: string; const ASizeAsString: string): string;
+      class function GetSizeExpArrayAsString(const ATypeAsString, ASizeAsString: string): string;
       class function IsGenericType(const ATypeName: string): boolean;
       class function GetLibForType(const ATypeName: string; const ADefault: string = ''): string;
       class function DecodeArrayDimension(AType: integer): integer;
@@ -137,8 +137,7 @@ const
 implementation
 
 uses
-   System.SysUtils, UserDataType, Statement, Types, Case_Block, Main_Block, ForDo_Block,
-   LangDefinition, Interfaces, Infrastructure, Constants;
+   System.SysUtils, Types, Case_Block, ForDo_Block, Interfaces, Infrastructure, Constants;
 
 class function TIdentInfo.New: TIdentInfo;
 begin
@@ -329,7 +328,7 @@ begin
       result := header.LocalVars;
 end;
 
-class function TParserHelper.GetSizeExpArrayAsString(const ATypeAsString: string; const ASizeAsString: string): string;
+class function TParserHelper.GetSizeExpArrayAsString(const ATypeAsString, ASizeAsString: string): string;
 begin
    result := ASizeAsString;
    if result.IsEmpty then
@@ -580,7 +579,6 @@ end;
 
 class function TParserHelper.GetPointerType(AType: integer): integer;
 begin
-   result := UNKNOWN_TYPE;
    var lang := GInfra.CurrentLang;
    if not Assigned(lang.GetPointerTypeName) then
       lang := GInfra.TemplateLang;

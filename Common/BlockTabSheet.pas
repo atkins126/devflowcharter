@@ -25,7 +25,7 @@ interface
 
 uses
    System.Classes, Vcl.ComCtrls, Vcl.Controls, Vcl.Forms, WinApi.Messages, System.Types,
-   Vcl.Graphics, Interfaces, Main_Form, OmniXML;
+   Vcl.Graphics, Main_Form, OmniXML;
 
 type
 
@@ -67,8 +67,8 @@ type
 implementation
 
 uses
-   System.SysUtils, System.StrUtils, System.Math, System.UITypes, WinApi.Windows,
-   UserFunction, Navigator_Form, OmniXMLUtils, Infrastructure, Constants;
+   System.StrUtils, System.Math, System.UITypes, WinApi.Windows, Navigator_Form,
+   OmniXMLUtils, Infrastructure, Constants;
 
 constructor TBlockTabSheet.Create(AMainForm: TMainForm);
 begin

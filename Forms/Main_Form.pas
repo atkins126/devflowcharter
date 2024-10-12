@@ -537,7 +537,7 @@ begin
    begin
       var block := TBlock(GClpbrd.UndoObject);
       if not block.ParentBlock.CanFocus or
-         not block.ParentBlock.Expanded or ((block is TReturnBlock) and (block.ParentBranch.FindInstanceOf(TReturnBlock) <> -1)) then Exit;
+         not block.ParentBlock.Expanded or ((block is TReturnBlock) and block.ParentBranch.EndsWithReturnBlock) then Exit;
       block.ParentBranch.UndoRemove(block);
       block.ParentBlock.ResizeWithDrawLock;
       block.SetVisible(True);
@@ -724,7 +724,7 @@ begin
    begin
       var page := GProject.ActivePage;
       var p := page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint);
-      TComment.Create(page, p.X, p.Y, 150, 50);
+      TComment.Create(page, p.X, p.Y, 150, 50).SetFocus;
       GProject.SetChanged;
    end;
 end;
@@ -1304,7 +1304,7 @@ begin
       else if Sender = miPaste1 then
          edit.PasteFromClipboard
       else if Sender = miRemove1 then
-         edit.SelText := '';
+         edit.ClearSelection;
    end;
 end;
 
