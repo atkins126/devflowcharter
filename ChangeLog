@@ -1,3 +1,42 @@
+11.7 [28-12-2024]
+- further improvements to look better on Windows 11
+
+11.6 [24-12-2024]
+- set Ctl3D = False for text controls to have better look on Windows 11
+
+11.5 [23-12-2024]
+- Functions: fix too narrow local variables panel on high DPI screens
+
+11.4 [22-12-2024]
+- more robust procedure of opening project in case of errors
+- "loc" directory (containing translations) renamed to "translations"
+
+11.3 [15-12-2024]
+- show warning on application start when current translation file is invalid
+- fix not detecting project change in some situations
+
+11.2 [12-12-2024]
+- default English translation read from memory instead from temporary file
+
+11.1 [01-12-2024]
+- fix not opening plain-flowchart files
+
+11.0 [01-12-2024]
+- Flowchart: enable keyboard shortcuts for inserting blocks. Now it's possible without use of context menu.
+- Flowchart: fix Alt-A sequence not working correctly in text box
+- Code Editor: fix scroll in view sometimes not working correctly when selecting flowchart elements
+
+10.13 [28-11-2024]
+- Code Editor: fix "division by 0" errors when indent length is 0
+- Code Editor Help: more clear info that functions and dataytypes can be dragged to editor starting from their tab name
+- Java: add AtomicInteger, AtomicLong, AtomicBoolean, LongAdder, DoubleAdder types to Java.xml
+
+10.12 [17-11-2024]
+- mention in menu hint that resize frame can also be switched by LMB double click
+
+10.11 [16-11-2024]
+- fix sometimes not updating flowchart labels in Navigator window
+
 10.10 [15-09-2024]
 - fix disabled Undo after removing text in flowchart text controls using popup menu
 - Navigator: enable navigation by arrow keys

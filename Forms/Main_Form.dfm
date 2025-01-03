@@ -10,6 +10,7 @@ object MainForm: TMainForm
   ClientHeight = 800
   ClientWidth = 1078
   Color = clWhite
+  Ctl3D = False
   DragKind = dkDock
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -18,14 +19,13 @@ object MainForm: TMainForm
   Font.Style = []
   KeyPreview = True
   Menu = mmMainMenu
-  OldCreateOrder = False
   Position = poDefault
   WindowState = wsMaximized
   OnClose = FormClose
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
+  OnShortCut = FormShortCut
   OnShow = FormShow
-  PixelsPerInch = 96
   TextHeight = 13
   object pgcPages: TPageControl
     Left = 0
@@ -63,11 +63,13 @@ object MainForm: TMainForm
         object miInstr: TMenuItem
           Tag = 2
           Caption = 'Instruction'
+          ShortCut = 32846
           OnClick = miInstrClick
         end
         object miMultiInstr: TMenuItem
           Tag = 2
           Caption = 'Multiple Instructions'
+          ShortCut = 32845
           OnClick = miInstrClick
         end
         object N7: TMenuItem
@@ -76,11 +78,13 @@ object MainForm: TMainForm
         object miInput: TMenuItem
           Tag = 2
           Caption = 'Input'
+          ShortCut = 32841
           OnClick = miInstrClick
         end
         object miOutput: TMenuItem
           Tag = 2
           Caption = 'Output'
+          ShortCut = 32847
           OnClick = miInstrClick
         end
         object N8: TMenuItem
@@ -89,16 +93,19 @@ object MainForm: TMainForm
         object miIf: TMenuItem
           Tag = 2
           Caption = 'If'
+          ShortCut = 32838
           OnClick = miInstrClick
         end
         object miIfElse: TMenuItem
           Tag = 2
           Caption = 'If..Else'
+          ShortCut = 32837
           OnClick = miInstrClick
         end
         object miCase: TMenuItem
           Tag = 2
           Caption = 'Case'
+          ShortCut = 32835
           OnClick = miInstrClick
         end
         object N9: TMenuItem
@@ -107,11 +114,13 @@ object MainForm: TMainForm
         object miRoutineCall: TMenuItem
           Tag = 2
           Caption = 'Function Call'
+          ShortCut = 32853
           OnClick = miInstrClick
         end
         object miReturn: TMenuItem
           Tag = 2
           Caption = 'Return'
+          ShortCut = 32858
           OnClick = miInstrClick
         end
       end
@@ -121,42 +130,50 @@ object MainForm: TMainForm
         object miFor: TMenuItem
           Tag = 2
           Caption = 'For'
+          ShortCut = 32850
           OnClick = miInstrClick
         end
         object miWhile: TMenuItem
           Tag = 2
           Caption = 'While'
+          ShortCut = 32855
           OnClick = miInstrClick
         end
         object miRepeat: TMenuItem
           Tag = 2
           Caption = 'Repeat'
+          ShortCut = 32848
           OnClick = miInstrClick
         end
       end
       object miText: TMenuItem
         Tag = 2
         Caption = 'Text'
+        ShortCut = 32852
         OnClick = miInstrClick
       end
       object miFolder: TMenuItem
         Tag = 2
         Caption = 'Folder'
+        ShortCut = 32844
         OnClick = miInstrClick
       end
       object miNewFlowchart: TMenuItem
         Tag = 2
         Caption = 'Flowchart'
+        ShortCut = 32836
         OnClick = miNewFlowchartClick
       end
       object miNewFunction: TMenuItem
         Tag = 2
         Caption = 'Function Here'
+        ShortCut = 32854
         OnClick = miNewFunctionClick
       end
       object miComment: TMenuItem
         Tag = 2
         Caption = 'Comment'
+        ShortCut = 32843
         OnClick = miCommentClick
       end
       object N6: TMenuItem
@@ -231,16 +248,19 @@ object MainForm: TMainForm
     object miAddBranch: TMenuItem
       Tag = 2
       Caption = 'Add Branch'
+      ShortCut = 32833
       OnClick = miAddBranchClick
     end
     object miInsertBranch: TMenuItem
       Tag = 2
       Caption = 'Insert Branch'
+      ShortCut = 32834
       OnClick = miAddBranchClick
     end
     object miRemoveBranch: TMenuItem
       Tag = 2
       Caption = 'Remove Branch'
+      ShortCut = 32856
       OnClick = miRemoveBranchClick
     end
     object N11: TMenuItem

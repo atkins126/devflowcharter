@@ -170,7 +170,7 @@ procedure TPageControlForm.miRemoveAllClick(Sender: TObject);
 begin
    var res := mrYes;
    if GSettings.ConfirmRemove then
-      res := TInfra.ShowQuestionBox(i18Manager.GetString('ConfirmRemove'));
+      res := TInfra.ShowQuestionBox(trnsManager.GetString('ConfirmRemove'));
    if res = mrYes then
    begin
       while GetVisiblePageCount > 0 do
@@ -215,8 +215,7 @@ end;
 procedure TPageControlForm.pgcTabsDragOver(Sender, Source: TObject; X,
   Y: Integer; State: TDragState; var Accept: Boolean);
 begin
-   if not (Source is TTabComponent) then
-      Accept := False;
+   Accept := Source is TTabComponent;
 end;
 
 procedure TPageControlForm.pgcTabsMouseDown(Sender: TObject;

@@ -93,6 +93,7 @@ type
          function IsBoldDesc: boolean;
          procedure RefreshFontColor;
          procedure UpdateCodeEditor;
+         procedure SetAsActivePage;
          function GetCompareValue(ACompareType: integer): integer;
          function GetExternModifier: string; virtual; abstract;
    end;
@@ -213,9 +214,9 @@ begin
    chkExternal.Parent := AParent;
    chkExternal.Alignment := AAlignment;
    if not FCodeIncludeExtern then
-      chkExternal.Hint := i18Manager.GetString('chkExternal.Hint');
+      chkExternal.Hint := trnsManager.GetString('chkExternal.Hint');
    if GInfra.CurrentLang.ExternalLabel.IsEmpty then
-      chkExternal.Caption := i18Manager.GetString('chkExternal')
+      chkExternal.Caption := trnsManager.GetString('chkExternal')
    else
       chkExternal.Caption := GInfra.CurrentLang.ExternalLabel;
    chkExternal.ParentFont := False;
@@ -232,18 +233,18 @@ begin
    lblName := TLabel.Create(AParent);
    lblName.Parent := AParent;
    lblName.SetBounds(x, y, 0, 13);
-   lblName.Caption := i18Manager.GetString('lblName');
+   lblName.Caption := trnsManager.GetString('lblName');
    lblName.ParentFont := False;
    lblName.Font.Style := [];
    lblName.Font.Color := clWindowText;
 
    edtName := TEdit.Create(AParent);
    edtName.Parent := AParent;
-   edtName.SetBounds(lblName.BoundsRect.Right+5, y-6, 104, 21);
+   edtName.SetBounds(lblName.BoundsRect.Right+5, y-4, 104, 21);
    edtName.ParentFont := False;
    edtName.Font.Style := [];
    edtName.ShowHint := True;
-   edtName.Hint := i18Manager.GetString('BadIdD');
+   edtName.Hint := trnsManager.GetString('BadIdD');
    edtName.DoubleBuffered := True;
    edtName.OnChange := OnChangeName;
 end;
@@ -253,21 +254,21 @@ begin
    lblLibrary := TLabel.Create(AParent);
    lblLibrary.Parent := AParent;
    lblLibrary.SetBounds(x, y, 0, 13);
-   lblLibrary.Caption := i18Manager.GetString('lblLibrary');
+   lblLibrary.Caption := trnsManager.GetString('lblLibrary');
    lblLibrary.ParentFont := False;
    lblLibrary.Font.Style := [];
    lblLibrary.Font.Color := clWindowText;
 
    edtLibrary := TEdit.Create(AParent);
    edtLibrary.Parent := AParent;
-   edtLibrary.SetBounds(lblLibrary.BoundsRect.Right+5, y-6, 135-lblLibrary.Width, 21);
+   edtLibrary.SetBounds(lblLibrary.BoundsRect.Right+5, y-4, 135-lblLibrary.Width, 21);
    edtLibrary.ParentFont := False;
    edtLibrary.Font.Style := [];
    edtLibrary.Font.Color := clGreen;
    edtLibrary.ShowHint := True;
    edtLibrary.DoubleBuffered := True;
    edtLibrary.OnChange := OnChangeLib;
-   edtLibrary.Hint := i18Manager.GetFormattedString('edtLibraryHint', [GInfra.CurrentLang.LibraryExt]);
+   edtLibrary.Hint := trnsManager.GetFormattedString('edtLibraryHint', [GInfra.CurrentLang.LibraryExt]);
 end;
 
 procedure TTabComponent.OnClickCh(Sender: TObject);
@@ -512,6 +513,11 @@ begin
    result := -1;
    if ACompareType = PAGE_INDEX_COMPARE then
       result := PageIndex;
+end;
+
+procedure TTabComponent.SetAsActivePage;
+begin
+   PageControl.ActivePage := Self;
 end;
 
 initialization

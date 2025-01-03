@@ -177,7 +177,7 @@ type
     procedure miAddBranchClick(Sender: TObject);
     procedure miRemoveBranchClick(Sender: TObject);
     procedure miUnfoldAllClick(Sender: TObject);
-    procedure Localize(AList: TStringList); override;
+    procedure AfterTranslation(AList: TStringList); override;
     procedure ResetForm; override;
     procedure SetProjectMenu(AEnabled: boolean);
     procedure miPrint2Click(Sender: TObject);
@@ -203,6 +203,7 @@ type
     procedure miIsHeaderClick(Sender: TObject);
     procedure miPasteTextClick(Sender: TObject);
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+    procedure FormShortCut(var Msg: TWMKey; var Handled: Boolean);
   private
     { Private declarations }
     FClockPos: TClockPos;
@@ -211,6 +212,7 @@ type
     function CreateNewProject: boolean;
     function CloseExistingProject: boolean;
     function CanCloseExistingProject: boolean;
+    function GetPlacePoint(ABox: TScrollBox): TPoint;
     procedure PopupMenuClosed;
     procedure PPIDialog;
   public
@@ -235,9 +237,12 @@ implementation
 uses
    Vcl.StdCtrls, Vcl.Clipbrd, System.StrUtils, System.UITypes, System.Types, System.Generics.Defaults,
    System.Generics.Collections, System.Math, Toolbox_Form, Infrastructure, About_Form,
-   Main_Block, ParseGlobals, LocalizationManager, XMLProcessor, UserFunction, ForDo_Block,
+   Main_Block, ParseGlobals, TranslationManager, XMLProcessor, UserFunction, ForDo_Block,
    Return_Block, Project, Declarations_Form, Base_Block, Comment, Case_Block, Navigator_Form,
    Types, LangDefinition, EditMemo_Form, BlockFactory, BlockTabSheet, MemoEx, Constants;
+
+type
+  TPopupMenuHack = class(TPopupMenu);
 
 var
    ByCaptionMenuItemComparer: IComparer<TMenuItem>;
@@ -354,12 +359,29 @@ begin
    Menu := mMenu;
 end;
 
-procedure TMainForm.Localize(AList: TStringList);
+procedure TMainForm.AfterTranslation(AList: TStringList);
 begin
    if GProject <> nil then
    begin
       GProject.RepaintFlowcharts;
       GProject.RefreshStatements;
+   end;
+end;
+
+procedure TMainForm.FormShortCut(var Msg: TWMKey; var Handled: Boolean);
+begin
+   PopupMenu := nil;
+   if GProject <> nil then
+   begin
+      var box := GProject.ActivePage.Box;
+      var comp := TComponent(GProject.FindSelectedBlock);
+      if comp = nil then
+         comp := GProject.FindRedArrowBlock;
+      if comp = nil then
+         comp := box;
+      PopupMenu := box.PopupMenu;
+      PopupMenu.PopupComponent := comp;
+      TPopupMenuHack(PopupMenu).SetPopupPoint(TPoint.Zero);
    end;
 end;
 
@@ -372,7 +394,7 @@ end;
 
 procedure TMainForm.PPIDialog;
 begin
-   var ppi := Screen.MonitorFromWindow(Handle).PixelsPerInch;
+   var ppi := CurrentPPI;
    if ppi > MAX_SUPPORTED_PPI then
       TInfra.ShowWarningBox('OverMaxPPI', [ppi, MAX_SUPPORTED_PPI, sLineBreak]);
 end;
@@ -580,11 +602,14 @@ begin
    miImport.Visible := True;
    miFoldUnfold.Visible := False;
    miAddBranch.Visible := False;
+   miAddBranch.Enabled := False;
    miRemoveBranch.Visible := False;
+   miRemoveBranch.Enabled := False;
    miInsertBranch.Visible := False;
+   miInsertBranch.Enabled := False;
    miText.Enabled := False;
    miFolder.Enabled := False;
-   miFoldUnfold.Caption := i18Manager.GetString('miFoldTrue');
+   miFoldUnfold.Caption := trnsManager.GetString('miFoldTrue');
    miReturn.Enabled := False;
    miUnfoldAll.Visible := False;
    miPrint2.Visible := False;
@@ -606,10 +631,12 @@ begin
    miMemoWordWrap.Checked := False;
    miMemoAlignRight.Checked := False;
 
+   comp := pmPages.PopupComponent;
+   if not TInfra.IsValidControl(comp) then
+      Exit;
+
    isFunction := GClpbrd.UndoObject is TUserFunction;
    miPaste.Enabled := TInfra.IsValidControl(GClpbrd.Instance) or isFunction;
-
-   comp := pmPages.PopupComponent;
 
    if Supports(comp, IMemoEx, memoEx) then
    begin
@@ -648,8 +675,11 @@ begin
              miFoldUnfold.Visible := True;
              expanded := TGroupBlock(block).Expanded;
              if expanded and (block is TCaseBlock) then
+             begin
                 miAddBranch.Visible := True;
-             miFoldUnfold.Caption := i18Manager.GetString('miFold' + BoolToStr(expanded, True));
+                miAddBranch.Enabled := True;
+             end;
+             miFoldUnfold.Caption := trnsManager.GetString('miFold' + BoolToStr(expanded, True));
           end;
           if (block is TGroupBlock) and TGroupBlock(block).Expanded and TGroupBlock(block).HasFoldedBlocks then
              miUnfoldAll.Visible := True;
@@ -674,7 +704,9 @@ begin
        if (block is TCaseBlock) and (block.RedArrow > PRIMARY_BRANCH_IDX) then
        begin
           miRemoveBranch.Visible := True;
+          miRemoveBranch.Enabled := True;
           miInsertBranch.Visible := True;
+          miInsertBranch.Enabled := True;
        end;
    end
    else if comp is TComment then
@@ -686,7 +718,7 @@ begin
       miCopy.Visible := True;
       miCut.Visible := TComment(comp).SelLength > 0;
       miIsHeader.Visible := True;
-      miIsHeader.Checked := TComment(comp).IsHeader;
+      miIsHeader.Checked := GProject.HeaderComment = comp;
       if GClpbrd.Instance is TBlock then
          miPaste.Enabled := False;
    end
@@ -723,7 +755,7 @@ begin
    if GProject <> nil then
    begin
       var page := GProject.ActivePage;
-      var p := page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint);
+      var p := GetPlacePoint(page.Box);
       TComment.Create(page, p.X, p.Y, 150, 50).SetFocus;
       GProject.SetChanged;
    end;
@@ -735,8 +767,8 @@ var
    branch: TBranch;
    lParent: TGroupBlock;
    tmpCursor: TCursor;
-   comment: TComment;
    p: TPoint;
+   comment: TComment;
    blockType: TBlockType;
    page: TBlockTabSheet;
    func: TUserFunction;
@@ -755,7 +787,7 @@ begin
    if (Sender = miPaste) and ((func <> nil) or (comment <> nil)) then
    begin
       page := GProject.ActivePage;
-      p := page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint);
+      p := GetPlacePoint(page.Box);
       if func <> nil then
       begin
          if func.Body <> nil then
@@ -995,16 +1027,16 @@ end;
 procedure TMainForm.miImportClick(Sender: TObject);
 var
    comp: TComponent;
-   impProc: TXMLImportProc;
+   importFunc: TFunc<IXMLNode, TImportMode, TError>;
 begin
    if GProject <> nil then
    begin
       comp := pmPages.PopupComponent;
       if (comp is TBlock) and (TBlock(comp).RedArrow >= 0) then
-         impProc := TBlock(comp).ImportFromXML
+         importFunc := TBlock(comp).ImportFromXML
       else
-         impProc := GProject.ImportUserFunctionsFromXML;
-      if not TXMLProcessor.ImportFromXMLFile(impProc, impSelectPopup).IsEmpty then
+         importFunc := GProject.ImportUserFunctionsFromXML;
+      if not TXMLProcessor.ImportFromXMLFile(importFunc, impSelectPopup).IsEmpty then
          TInfra.UpdateCodeEditor;
    end;
 end;
@@ -1041,7 +1073,7 @@ begin
    begin
       var res := IDYES;
       if GSettings.ConfirmRemove then
-         res := TInfra.ShowQuestionBox(i18Manager.GetString('ConfirmRemove'));
+         res := TInfra.ShowQuestionBox(trnsManager.GetString('ConfirmRemove'));
       if res = IDYES then
       begin
          var caseBlock := TCaseBlock(pmPages.PopupComponent);
@@ -1090,7 +1122,7 @@ end;
 
 procedure TMainForm.miProjectClick(Sender: TObject);
 begin
-   miAddMain.Enabled := GInfra.CurrentLang.EnabledMainProgram and (GProject <> nil) and (GProject.GetMainBlock = nil);
+   miAddMain.Enabled := GInfra.CurrentLang.EnabledMainProgram and (GProject <> nil) and (GProject.GetMain = nil);
    miUndoRemove.Enabled := GClpbrd.UndoObject <> nil;
 end;
 
@@ -1109,7 +1141,7 @@ begin
    if GProject <> nil then
    begin
       var page := GProject.ActivePage;
-      var mainBlock := TMainBlock.Create(page, page.Box.ScreenToClient(page.Box.PopupMenu.PopupPoint));
+      var mainBlock := TMainBlock.Create(page, GetPlacePoint(page.Box));
       mainBlock.Resize;
       TUserFunction.Create(nil, mainBlock);
       GProject.SetChanged;
@@ -1164,10 +1196,15 @@ end;
 procedure TMainForm.miNewFunctionClick(Sender: TObject);
 begin
    if GProject <> nil then
-   begin
-      var box := GProject.ActivePage.Box;
-      TInfra.GetFunctionsForm.AddUserFunction(box.ScreenToClient(box.PopupMenu.PopupPoint));
-   end;
+      TInfra.GetFunctionsForm.AddUserFunction(GetPlacePoint(GProject.ActivePage.Box));
+end;
+
+function TMainForm.GetPlacePoint(ABox: TScrollBox): TPoint;
+begin
+   result := ABox.PopupMenu.PopupPoint;
+   if result.IsZero then
+      result := Mouse.CursorPos;
+   result := ABox.ScreenToClient(result);
 end;
 
 procedure TMainForm.pgcPagesContextPopup(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
@@ -1202,7 +1239,7 @@ procedure TMainForm.miRemovePageClick(Sender: TObject);
 begin
    var res := IDYES;
    if GSettings.ConfirmRemove then
-      res := TInfra.ShowQuestionBox(i18Manager.GetString('ConfirmRemove'));
+      res := TInfra.ShowQuestionBox(trnsManager.GetString('ConfirmRemove'));
    if res = IDYES then
    begin
       pmTabs.PopupComponent.Free;
@@ -1243,7 +1280,7 @@ begin
    if pmTabs.PopupComponent is TTabSheet then
    begin
       var page := TTabSheet(pmTabs.PopupComponent);
-      var lCaption := InputBox(i18Manager.GetString('Page'), i18Manager.GetString('EnterPage'), page.Caption).Trim;
+      var lCaption := InputBox(trnsManager.GetString('Page'), trnsManager.GetString('EnterPage'), page.Caption).Trim;
       if (lCaption <> '') and (TInfra.FindDuplicatedPage(page, lCaption) = nil) then
       begin
          page.Caption := lCaption;
@@ -1255,11 +1292,10 @@ end;
 
 procedure TMainForm.miAddPageClick(Sender: TObject);
 begin
-   var lCaption := InputBox(i18Manager.GetString('Page'), i18Manager.GetString('EnterPage'), '').Trim;
+   var lCaption := InputBox(trnsManager.GetString('Page'), trnsManager.GetString('EnterPage'), '').Trim;
    if (lCaption <> '') and (GProject.GetPage(lCaption, False) = nil) then
    begin
-      var page := GProject.GetPage(lCaption);
-      page.PageControl.ActivePage := page;
+      GProject.GetPage(lCaption).SetAsActivePage;
       NavigatorForm.Invalidate;
       GProject.SetChanged;
    end;
@@ -1396,7 +1432,10 @@ procedure TMainForm.miIsHeaderClick(Sender: TObject);
 begin
    if pmPages.PopupComponent is TComment then
    begin
-      TComment(pmPages.PopupComponent).IsHeader := not miIsHeader.Checked;
+      if miIsHeader.Checked then
+         GProject.HeaderComment := nil
+      else
+         GProject.HeaderComment := TComment(pmPages.PopupComponent);
       TInfra.UpdateCodeEditor;
    end;
 end;

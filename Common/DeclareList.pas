@@ -53,7 +53,7 @@ type
          FNodeName: string;
          FSplitter: TSplitter;
          function GetId: integer;
-         function IsDeclared(const AName: string; AssociatedListCheck: boolean): boolean;
+         function IsDeclared(const AName: string; AssociateCheck: boolean): boolean;
          function AddUpdateRow: integer; virtual;
          function IsRowVisible(ARow: integer): boolean;
          function IsControlTooRight(AControl: TWinControl): boolean;
@@ -90,9 +90,9 @@ type
          gbBox: TGroupBox;
          lblName: TLabel;
          edtName: TEdit;
-         AssociatedList: TDeclareList;
+         Associate: TDeclareList;
          property Id: integer read GetId;
-         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
          destructor Destroy; override;
          function ImportFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
          function ImportItemFromXML(ANode: IXMLNode): TError; virtual;
@@ -127,7 +127,7 @@ type
          lblType,
          lblSize,
          lblInit: TLabel;
-         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
          function ImportItemFromXML(ANode: IXMLNode): TError; override;
          procedure ExportItemToXML(ANode: IXMLNode; idx: integer); override;
          function GetImportNode(ANode: IXMLNode): IXMLNode; override;
@@ -148,7 +148,7 @@ type
       public
          edtValue: TEdit;
          lblValue: TLabel;
-         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+         constructor Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
          function ImportItemFromXML(ANode: IXMLNode): TError; override;
          procedure ExportItemToXML(ANode: IXMLNode; idx: integer); override;
          function GetValue(const AIdent: string): string;
@@ -169,16 +169,13 @@ const
    CONST_NAME_COL  = NAME_COL;
    CONST_VALUE_COL = 1;
 
-   DEF_VARLIST_WIDTH = 358;
-   DEF_CONSTLIST_WIDTH = 235;
-
 implementation
 
 uses
    System.SysUtils, System.StrUtils, System.UITypes, System.Rtti, Infrastructure,
    XMLProcessor, Project, UserDataType, LangDefinition, ParserHelper, Constants, OmniXMLUtils;
 
-constructor TDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+constructor TDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
 begin
    FExternalCol := INVALID_COL;
    inherited Create(AParent);
@@ -187,8 +184,6 @@ begin
    ParentBackground := False;
    Font.Style := [fsBold];
    Font.Color := clBlack;
-   FModifying := False;
-   AssociatedList := nil;
    DoubleBuffered := True;
    FDragRow := INVALID_ROW;
    FId := TProject.GetInstance.Register(Self);
@@ -205,7 +200,6 @@ begin
    for var i := 0 to AColCount-1 do
       SetColumnLabel(i);
    sgList.DrawingStyle := gdsClassic;
-   sgList.Ctl3D := False;
    sgList.FixedColor := clMoneyGreen;
    sgList.Options := sgList.Options + [goRowSelect, goColSizing, goThumbTracking, goRowMoving] - [goRangeSelect];
    sgList.ScrollBars := ssVertical;
@@ -228,7 +222,7 @@ begin
    btnRemove.Parent := Self;
    btnRemove.SetBounds(4, sgList.BoundsRect.Bottom+8, (Width div 2)-5, 25);
    btnRemove.OnClick := OnClickRemove;
-   btnRemove.Caption := i18Manager.GetString('btnRemove');
+   btnRemove.Caption := trnsManager.GetString('btnRemove');
    btnRemove.ParentFont := False;
    btnRemove.Font.Style := [];
    btnRemove.Enabled := False;
@@ -238,7 +232,7 @@ begin
    btnChange.Parent := Self;
    btnChange.SetBounds(Width div 2, btnRemove.Top, (Width div 2)-5, 25);
    btnChange.OnClick := OnClickChange;
-   btnChange.Caption := i18Manager.GetString('btnChange');
+   btnChange.Caption := trnsManager.GetString('btnChange');
    btnChange.ParentFont := False;
    btnChange.Font.Style := [];
    btnChange.Enabled := False;
@@ -246,7 +240,7 @@ begin
 
    gbBox := TGroupBox.Create(Self);
    gbBox.Parent := Self;
-   gbBox.SetBounds(5, btnChange.BoundsRect.Bottom+4, AGBoxWidth, 72);
+   gbBox.SetBounds(5, btnChange.BoundsRect.Bottom+4, AWidth-9, 72);
    gbBox.ParentFont := False;
    gbBox.ParentBackground := False;
    gbBox.Font.Style := [];
@@ -256,7 +250,7 @@ begin
    lblName.Parent := gbBox;
    lblName.Top := 22;
    lblName.Left := 5;
-   lblName.Caption := i18Manager.GetString('sgVarListCol0');
+   lblName.Caption := trnsManager.GetString('sgVarListCol0');
 
    edtName := TEdit.Create(gbBox);
    edtName.Parent := gbBox;
@@ -269,7 +263,7 @@ begin
    btnAdd.ParentFont := False;
    btnAdd.Font.Style := [];
    btnAdd.Anchors := [akLeft, akBottom, akRight];
-   btnAdd.Caption := i18Manager.GetString('btnAdd');
+   btnAdd.Caption := trnsManager.GetString('btnAdd');
 
    btnImport := TButton.Create(Self);
    btnImport.Parent := Self;
@@ -278,7 +272,7 @@ begin
    btnImport.ParentFont := False;
    btnImport.Font.Style := [];
    btnImport.Anchors := [akLeft, akBottom, akRight];
-   btnImport.Caption := i18Manager.GetString('btnImport');
+   btnImport.Caption := trnsManager.GetString('btnImport');
 
    btnExport := TButton.Create(Self);
    btnExport.Parent := Self;
@@ -287,7 +281,7 @@ begin
    btnExport.ParentFont := False;
    btnExport.Font.Style := [];
    btnExport.Anchors := [akLeft, akBottom, akRight];
-   btnExport.Caption := i18Manager.GetString('btnExport');
+   btnExport.Caption := trnsManager.GetString('btnExport');
 
 end;
 
@@ -298,7 +292,7 @@ begin
    inherited Destroy;
 end;
 
-constructor TConstDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+constructor TConstDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
 begin
 
    FShort := 'Const';
@@ -306,15 +300,15 @@ begin
    with GInfra.CurrentLang do
       SetExternalModifiers(ConstExtern, ConstNotExtern, ConstTransExtern);
 
-   inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
+   inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount);
 
-   edtName.SetBounds(lblName.Width+10, 17, gbBox.Width-lblName.Width-18, 21);
+   edtName.SetBounds(lblName.Width+10, 19, gbBox.Width-lblName.Width-18, 21);
    edtName.Anchors := edtName.Anchors + [akRight];
-   
+
    lblValue := TLabel.Create(gbBox);
    lblValue.Parent := gbBox;
    lblValue.Top := 47;
-   lblValue.Caption := i18Manager.GetString('sgConstListCol1');
+   lblValue.Caption := trnsManager.GetString('sgConstListCol1');
    lblValue.Left := 5;
 
    if GInfra.CurrentLang.UpperCaseConstId then
@@ -322,17 +316,17 @@ begin
 
    edtValue := TEdit.Create(gbBox);
    edtValue.Parent := gbBox;
-   edtValue.SetBounds(lblValue.Width+10, 42, gbBox.Width-lblValue.Width-18, 21);
+   edtValue.SetBounds(lblValue.Width+10, 44, gbBox.Width-lblValue.Width-18, 21);
    edtValue.Anchors := edtValue.Anchors + [akRight];
    edtValue.ShowHint := True;
-   edtValue.Hint := i18Manager.GetString('DisableFieldValid');
+   edtValue.Hint := trnsManager.GetString('DisableFieldValid');
    edtValue.OnKeyDown := OnKeyDownCommon;
 
-   gbBox.Caption := i18Manager.GetString('gbConstant');
+   gbBox.Caption := trnsManager.GetString('gbConstant');
    Anchors := Anchors + [akBottom];
 end;
 
-constructor TVarDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth: integer);
+constructor TVarDeclareList.Create(AParent: TWinControl; ALeft, ATop, AWidth, ADispRowCount, AColCount: integer);
 begin
 
    FShort := 'Var';
@@ -340,32 +334,32 @@ begin
    with GInfra.CurrentLang do
       SetExternalModifiers(VarExtern, VarNotExtern, VarTransExtern);
 
-   inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount, AGBoxWidth);
+   inherited Create(AParent, ALeft, ATop, AWidth, ADispRowCount, AColCount);
 
-   edtName.SetBounds(lblName.Width+10, 17, 100, 21);
+   edtName.SetBounds(lblName.Width+10, 19, 100, 21);
    
    lblType := TLabel.Create(gbBox);
    lblType.Parent := gbBox;
    lblType.Left := 5;
    lblType.Top := 47;
-   lblType.Caption := i18Manager.GetString('sgVarListCol1');
+   lblType.Caption := trnsManager.GetString('sgVarListCol1');
 
    lblSize := TLabel.Create(gbBox);
    lblSize.Parent := gbBox;
    lblSize.Top := 22;
-   lblSize.Caption := i18Manager.GetString('sgVarListCol2');
+   lblSize.Caption := trnsManager.GetString('sgVarListCol2');
    lblSize.Left := lblName.Width + edtName.Width + 20;
 
    edtSize := TSizeEdit.Create(gbBox);
    edtSize.Parent := gbBox;
-   edtSize.SetBounds(lblSize.BoundsRect.Right+5, 17, gbBox.Width - lblSize.BoundsRect.Right-13, 21);
+   edtSize.SetBounds(lblSize.BoundsRect.Right+5, 19, gbBox.Width - lblSize.BoundsRect.Right-13, 21);
    edtSize.Anchors := edtSize.Anchors + [akRight];
    edtSize.OnKeyDown := OnKeyDownCommon;
 
    cbType := TComboBox.Create(gbBox);
    cbType.Parent := gbBox;
    cbType.Style := csDropDownList;
-   cbType.SetBounds(lblType.BoundsRect.Right + 5, 42, 0, 21);
+   cbType.SetBounds(lblType.BoundsRect.Right + 5, 44, 0, 21);
    cbType.Constraints.MaxWidth := edtName.BoundsRect.Right - lblType.BoundsRect.Right - 5;
    cbType.Constraints.MinWidth := cbType.Constraints.MaxWidth;
    cbType.OnKeyDown := OnKeyDownCommon;
@@ -375,17 +369,17 @@ begin
    lblInit.Parent := gbBox;
    lblInit.Left := cbType.BoundsRect.Right + 10;
    lblInit.Top := 47;
-   lblInit.Caption := i18Manager.GetString('sgVarListCol3');
+   lblInit.Caption := trnsManager.GetString('sgVarListCol3');
 
    edtInit := TEdit.Create(gbBox);
    edtInit.Parent := gbBox;
-   edtInit.SetBounds(lblInit.BoundsRect.Right+5, 42, gbBox.Width-lblInit.BoundsRect.Right-13, 21);
+   edtInit.SetBounds(lblInit.BoundsRect.Right+5, 44, gbBox.Width-lblInit.BoundsRect.Right-13, 21);
    edtInit.Anchors := edtInit.Anchors + [akRight];
    edtInit.ShowHint := True;
-   edtInit.Hint := i18Manager.GetString('DisableFieldValid');
+   edtInit.Hint := trnsManager.GetString('DisableFieldValid');
    edtInit.OnKeyDown := OnKeyDownCommon;
 
-   gbBox.Caption := i18Manager.GetString('gbVariable');
+   gbBox.Caption := trnsManager.GetString('gbVariable');
    Anchors := Anchors + [akBottom];
 end;
 
@@ -393,7 +387,7 @@ procedure TDeclareList.SetColumnLabel(ACol: integer; const AColLabel: string = '
 begin
    var s := AColLabel; 
    if s.IsEmpty then
-      s := i18Manager.GetString('sg' + FShort + 'ListCol' + ACol.ToString);
+      s := trnsManager.GetString('sg' + FShort + 'ListCol' + ACol.ToString);
    sgList.Cells[ACol, 0] := s;
 end;
 
@@ -435,11 +429,11 @@ begin
       i := sgList.Cols[NAME_COL].IndexOf(typeName);
       if i > 0 then
          list := Self
-      else if AssociatedList <> nil then
+      else if Associate <> nil then
       begin
-         i := AssociatedList.sgList.Cols[NAME_COL].IndexOf(typeName);
+         i := Associate.sgList.Cols[NAME_COL].IndexOf(typeName);
          if i > 0 then
-            list := AssociatedList;
+            list := Associate;
       end;
       if list = nil then
       begin
@@ -623,7 +617,7 @@ begin
          DUPLICATED_IDENT: info := 'DupId';
          RESERVED_IDENT:   info := 'IncorrectIdKeyword';
       end;
-      TInfra.ShowErrorBox(i18Manager.GetFormattedString(info, [edit.Text, GInfra.CurrentLang.Name]), errDeclare);
+      TInfra.ShowErrorBox(trnsManager.GetFormattedString(info, [edit.Text, GInfra.CurrentLang.Name]), errDeclare);
       edit.SetFocus;
    end
    else
@@ -640,7 +634,7 @@ procedure TDeclareList.OnClickExport(Sender: TObject);
 begin
    if sgList.RowCount > 2 then
    begin
-      var fileName := GProject.Name + '_' + i18Manager.GetString(FShort + 's');
+      var fileName := GProject.Name + '_' + trnsManager.GetString(FShort + 's');
       TXMLProcessor.ExportToXMLFile(ExportToXML, fileName);
    end;
 end;
@@ -690,7 +684,7 @@ begin
             edit := edtValue;
          end;
       end;
-      TInfra.ShowErrorBox(i18Manager.GetFormattedString(info, [edit.Text, GInfra.CurrentLang.Name]), errDeclare);
+      TInfra.ShowErrorBox(trnsManager.GetFormattedString(info, [edit.Text, GInfra.CurrentLang.Name]), errDeclare);
       edit.SetFocus;
    end
    else
@@ -797,12 +791,12 @@ begin
       result := sgList.Cells[CONST_VALUE_COL, i];
 end;
 
-function TDeclareList.IsDeclared(const AName: string; AssociatedListCheck: boolean): boolean;
+function TDeclareList.IsDeclared(const AName: string; AssociateCheck: boolean): boolean;
 begin
    var i := sgList.Cols[NAME_COL].IndexOf(AName);
    result := (i > 0) and not (FModifying and (i = sgList.Row));
-   if (AssociatedList <> nil) and AssociatedListCheck and not result then
-      result := AssociatedList.IsDeclared(AName, False);
+   if (Associate <> nil) and AssociateCheck and not result then
+      result := Associate.IsDeclared(AName, False);
 end;
 
 procedure TDeclareList.OnKeyDownCommon(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -934,7 +928,7 @@ begin
       var idx := sgList.RowCount - 1;
       var lType := GetNodeAttrStr(ANode, TYPE_ATTR);
       if not cbType.Items.Contains(lType) then
-         lType := i18Manager.GetString('Unknown');
+         lType := trnsManager.GetString('Unknown');
       sgList.Cells[VAR_TYPE_COL, idx] := lType;
       sgList.Cells[VAR_SIZE_COL, idx] := GetNodeAttrStr(ANode, SIZE_ATTR);
       sgList.Cells[VAR_INIT_COL, idx] := GetNodeAttrStr(ANode, INIT_ATTR);
@@ -1073,7 +1067,7 @@ end;
 
 procedure TVarDeclareList.RefreshTypes;
 begin
-   var unknown := i18Manager.GetString('Unknown');
+   var unknown := trnsManager.GetString('Unknown');
    sgList.BeginUpdate;
    for var i := 1 to sgList.RowCount-2 do
    begin

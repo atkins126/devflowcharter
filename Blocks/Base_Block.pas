@@ -161,7 +161,6 @@ type
          procedure GenerateTemplateSection(ALines: TStringList; ATemplate: TStringList; const ALangId: string; ADeep: integer); overload; virtual;
          procedure GenerateTemplateSection(ALines: TStringList; const ATemplate: string; const ALangId: string; ADeep: integer); overload;
          function GetMemoEx: TMemoEx; virtual;
-         function FocusOnTextControl(AInfo: TFocusInfo): boolean;
          procedure DeSelect;
          procedure ChangeFrame;
          procedure RepaintAll;
@@ -187,6 +186,7 @@ type
          procedure LockDrawing;
          procedure UnlockDrawing;
          function FindSelectedBlock: TBlock; virtual;
+         function FindRedArrowBlock: TBlock; virtual;
          function ShouldUpdateEditor: boolean;
    end;
 
@@ -247,6 +247,7 @@ type
          function RemoveBranch(AIndex: integer): boolean;
          function Remove(ANode: TTreeNodeWithFriend = nil): boolean; override;
          function FindSelectedBlock: TBlock; override;
+         function FindRedArrowBlock: TBlock; override;
    end;
 
    TBranch = class(TList<TBlock>, IWithId)
@@ -279,9 +280,8 @@ implementation
 
 uses
    System.StrUtils, Vcl.Menus, System.Types, System.Math, System.Rtti, System.TypInfo,
-   System.Character, System.SysUtils, System.UITypes, Main_Block, Return_Block,
-   Infrastructure, BlockFactory, UserFunction, XMLProcessor, Navigator_Form, LangDefinition,
-   FlashThread, Main_Form, OmniXMLUtils, Constants;
+   System.Character, System.SysUtils, System.UITypes, Main_Block, Return_Block, Infrastructure,
+   BlockFactory, XMLProcessor, Navigator_Form, FlashThread, OmniXMLUtils, Constants;
 
 type
    TControlHack = class(TControl);
@@ -311,12 +311,9 @@ begin
       Parent := Page.Box;
    end;
 
-   ParentFont  := True;
-   ParentColor := True;
-   Ctl3D       := False;
-   Color       := Page.Box.Color;
-   Font.Name   := GSettings.FlowchartFontName;
-   PopupMenu   := Page.Form.pmPages;
+   Color := Page.Box.Color;
+   Font.Name := GSettings.FlowchartFontName;
+   PopupMenu := Page.Form.pmPages;
    DoubleBuffered := GSettings.EnableDBuffering;
    ControlStyle := ControlStyle + [csOpaque];
    ParentBackground := False;
@@ -356,8 +353,8 @@ begin
    FFoldParms.Width := 140;
    FFoldParms.Height := 91;
 
-   FTrueLabel := i18Manager.GetString('CaptionTrue');
-   FFalseLabel := i18Manager.GetString('CaptionFalse');
+   FTrueLabel := trnsManager.GetString('CaptionTrue');
+   FFalseLabel := trnsManager.GetString('CaptionFalse');
 
    FBranchList := TObjectList<TBranch>.Create;
    FBranchList.Add(nil);
@@ -449,7 +446,8 @@ begin
       GClpbrd.Instance := nil;
    if Self = GClpbrd.UndoObject then
       GClpbrd.UndoObject := nil;
-   GProject.UnRegister(Self);
+   if GProject <> nil then
+      GProject.UnRegister(Self);
    inherited Destroy;
 end;
 
@@ -508,21 +506,14 @@ end;
 
 procedure TBlock.CloneComments(ASource: TBlock);
 begin
-   if ASource <> nil then
-   begin
-      var lPage := Page;
-      var unPin := ASource.PinComments > 0;
-      try
-         for var comment in ASource.GetPinComments do
-         begin
-            var newComment := comment.Clone(lPage);
-            newComment.PinControl := Self;
-         end;
-         UnPinComments;
-      finally
-         if unPin then
-            ASource.UnPinComments;
-      end;
+   var unPin := ASource.PinComments > 0;
+   try
+      for var comment in ASource.GetPinComments do
+         comment.Clone(Page).PinControl := Self;
+      UnPinComments;
+   finally
+      if unPin then
+         ASource.UnPinComments;
    end;
 end;
 
@@ -632,15 +623,13 @@ begin
    if Source is TBlock then
    begin
       var srcBlock := TBlock(Source);
-      var srcPage := srcBlock.Page;
-      var menuItem: TMenuItem;
-      srcPage.Form.pmPages.PopupComponent := srcBlock;
+      var srcForm := srcBlock.Page.Form;
+      var menuItem := srcForm.miCopy;
+      srcForm.pmPages.PopupComponent := srcBlock;
       var shiftPressed := GetAsyncKeyState(vkShift) <> 0;
-      if shiftPressed then
-         menuItem := srcPage.Form.miCopy
-      else
+      if not shiftPressed then
       begin
-         menuItem := srcPage.Form.miCut;
+         menuItem := srcForm.miCut;
          srcBlock.TopParentBlock.LockDrawing;
       end;
       var inst := GClpbrd.Instance;
@@ -809,7 +798,10 @@ begin
             SendMessage(FTopParentBlock.Handle, WM_SYSCOMMAND, $F012, 0);
             br := FTopParentBlock.BoundsRect;
             if (b <> br.Bottom) or (r <> br.Right) then
-               FTopParentBlock.Resize
+            begin
+               FTopParentBlock.Resize;
+               GProject.SetChanged;
+            end
             else
                FTopParentBlock.BringAllToFront;
          end;
@@ -887,12 +879,8 @@ begin
    begin
       FFrame := AValue;
       GProject.SetChanged;
-      DeSelect;
       Invalidate;
-      if FFrame then
-         TInfra.GetEditorForm.SelectCodeRange(Self)
-      else
-         TInfra.GetEditorForm.UnSelectCodeRange(Self);
+      NavigatorForm.Invalidate;
    end;
 end;
 
@@ -922,7 +910,7 @@ begin
    TopHook.X := Branch.Hook.X;
    LinkAllBlocks;
 
-   if Branch.Count = 0 then   // case if primary branch is empty
+   if Branch.IsEmpty then   // case if primary branch is empty
    begin
       Width := FInitParms.Width;
       BottomHook := FInitParms.BottomHook;
@@ -1083,12 +1071,14 @@ end;
 
 procedure TBlock.MoveComments(x, y: integer);
 begin
-   if (x <> 0) and (y <> 0) and (Left <> 0) and (Top <> 0) and ((x <> Left) or (y <> Top)) then
+   x := IfThen(x <> 0, x-Left);
+   y := IfThen(y <> 0, y-Top);
+   if (x <> 0) or (y <> 0) then
    begin
       for var comment in GetComments(True) do
       begin
          if comment.Visible then
-            TInfra.MoveWinTopZ(comment, comment.Left+x-Left, comment.Top+y-Top);
+            TInfra.MoveWinTopZ(comment, comment.Left+x, comment.Top+y);
       end;
    end;
 end;
@@ -1107,10 +1097,13 @@ end;
 function TBlock.GetPinComments: IEnumerable<TComment>;
 begin
    var list := TList<TComment>.Create;
-   for var comment in GProject.GetComments do
+   if GProject <> nil then
    begin
-      if comment.PinControl = Self then
-         list.Add(comment);
+      for var comment in GProject.GetComments do
+      begin
+         if comment.PinControl = Self then
+            list.Add(comment);
+      end;
    end;
    result := TEnumeratorFactory<TComment>.Create(list);
 end;
@@ -1190,6 +1183,32 @@ begin
          result := block.FindSelectedBlock;
          if result <> nil then
             break;
+      end;
+   end;
+end;
+
+function TBlock.FindRedArrowBlock: TBlock;
+begin
+   result := nil;
+   if FRedArrow = 0 then
+      result := Self;
+end;
+
+function TGroupBlock.FindRedArrowBlock: TBlock;
+begin
+   result := inherited FindRedArrowBlock;
+   if result = nil then
+   begin
+      if FRedArrow >= 0 then
+         result := Self
+      else
+      begin
+         for var block in GetAllBlocks do
+         begin
+            result := block.FindRedArrowBlock;
+            if result <> nil then
+               break;
+         end;
       end;
    end;
 end;
@@ -1528,13 +1547,8 @@ end;
 
 function TGroupBlock.CanInsertReturnBlock: boolean;
 begin
-   if FRedArrow = 0 then
-      result := (FParentBranch <> nil) and (FParentBranch.Count > 0) and (FParentBranch.Last = Self)
-   else
-   begin
-      var br := GetBranch(FRedArrow);
-      result := (br <> nil) and (br.Count = 0);
-   end;
+   var br := GetBranch(FRedArrow);
+   result := ((br <> nil) and br.IsEmpty) or inherited;
 end;
 
 procedure TBlock.WMGetMinMaxInfo(var Msg: TWMGetMinMaxInfo);
@@ -1581,7 +1595,7 @@ begin
    for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
    begin
       var br := FBranchList[i];
-      if br.Count > 0 then
+      if not br.IsEmpty then
          result := Max(result, br.Last.FindLastRow(AStart, ALines));
    end;
 end;
@@ -1607,7 +1621,7 @@ begin
    end;
    if result then
    begin
-      var func := TUserFunction(TMainBlock(FTopParentBlock).UserFunction);
+      var func := GProject.FindUserFunction(FTopParentBlock);
       if func <> nil then
       begin
          result := func.Active;
@@ -1628,60 +1642,52 @@ end;
 
 function TBlock.RetrieveFocus(AInfo: TFocusInfo): boolean;
 begin
+
+   result := False;
+   var scrollTo := TControl(Self);
+   var lPage := Page;
+   lPage.SetAsActivePage;
+   lPage.Box.Show;
+   FTopParentBlock.BringAllToFront;
+
    if AInfo.FocusEdit = nil then
       AInfo.FocusEdit := GetTextControl;
-   var lPage := Page;
-   AInfo.FocusEditForm := lPage.Form;
-   lPage.PageControl.ActivePage := lPage;
-   result := FocusOnTextControl(AInfo);
-end;
-
-function TBlock.FocusOnTextControl(AInfo: TFocusInfo): boolean;
-var
-   idx, idx2, i: integer;
-   txt: string;
-   memo: TCustomMemo;
-   box: TScrollBoxEx;
-begin
-   result := False;
-   if ContainsControl(AInfo.FocusEdit) and AInfo.FocusEdit.CanFocus then
+   if (AInfo.FocusEdit <> nil) and AInfo.FocusEdit.CanFocus then
    begin
-      box := Page.Box;
-      box.Show;
-      FTopParentBlock.BringAllToFront;
-      box.ScrollInView(AInfo.FocusEdit);
-      box.Repaint;
-      idx2 := 0;
+      result := True;
+      scrollTo := AInfo.FocusEdit;
+      var idx2 := 0;
+      var txt := AInfo.FocusEdit.Text;
       if AInfo.FocusEdit is TCustomMemo then
       begin
-         memo := TCustomMemo(AInfo.FocusEdit);
-         if AInfo.RelativeLine < memo.Lines.Count then
+         var lines := TCustomMemo(AInfo.FocusEdit).Lines;
+         if AInfo.RelativeLine < lines.Count then
          begin
-            txt := memo.Lines[AInfo.RelativeLine];
+            txt := lines[AInfo.RelativeLine];
             if AInfo.RelativeLine > 0 then
             begin
-               for i := 0 to AInfo.RelativeLine-1 do
-                  idx2 := idx2 + (memo.Lines[i] + sLineBreak).Length;
+               for var i := 0 to AInfo.RelativeLine-1 do
+                  Inc(idx2, (lines[i] + sLineBreak).Length);
             end;
          end
          else
-            txt := memo.Text;
-      end
-      else
-         txt := AInfo.FocusEdit.Text;
-      idx := Pos(txt, AInfo.LineText);
-      if idx <> 0 then
+            txt := lines.Text;
+      end;
+      var idx := Pos(txt, AInfo.LineText);
+      if idx > 0 then
          AInfo.SelStart := AInfo.SelStart - idx + idx2
       else
       begin
          idx := Pos(AInfo.SelText, txt);
-         if idx <> 0 then
+         if idx > 0 then
             AInfo.SelStart := idx - 1 + idx2;
       end;
       AInfo.FocusEditCallBack := UpdateEditor;
+      AInfo.FocusEditForm := lPage.Form;
       TFlashThread.Create(AInfo);
-      result := True;
    end;
+   lPage.Box.ScrollInView(scrollTo);
+   lPage.Box.Repaint;
 end;
 
 function TBlock.GetErrorMsg(AEdit: TCustomEdit): string;
@@ -2199,7 +2205,7 @@ begin
    if node <> nil then
       bt := TRttiEnumerationType.GetValue<TBlockType>(GetNodeAttrStr(node, BLOCK_TYPE_ATTR));
    if bt in [blMain, blUnknown, blComment] then
-      Gerr_text := i18Manager.GetString('BadImportTag')
+      Gerr_text := trnsManager.GetString('BadImportTag')
    else
    begin
       var lParent: TGroupBlock := nil;
@@ -2263,8 +2269,8 @@ end;
 
 function TBlock.ShouldUpdateEditor: boolean;
 begin
-   var funcHeader := TInfra.GetFunctionHeader(Self);
-   var skipUpdateEditor := (funcHeader <> nil) and (TInfra.IsNOkColor(funcHeader.Font.Color) or (funcHeader.chkExternal.Checked and not GInfra.CurrentLang.CodeIncludeExternFunction));
+   var header := GProject.FindFunctionHeader(Self);
+   var skipUpdateEditor := (header <> nil) and (TInfra.IsNOkColor(header.Font.Color) or (header.chkExternal.Checked and not GInfra.CurrentLang.CodeIncludeExternFunction));
    result := TInfra.ShouldUpdateEditor and not skipUpdateEditor;
 end;
 
@@ -2541,7 +2547,8 @@ begin
    Statement.Free;
    for var i := 0 to Count-1 do
       Items[i].Free;
-   GProject.UnRegister(Self);
+   if GProject <> nil then
+      GProject.UnRegister(Self);
    inherited Destroy;
 end;
 
@@ -2575,7 +2582,7 @@ end;
 
 function TBranch.EndsWithReturnBlock: boolean;
 begin
-   result := (Count > 0) and (Last is TReturnBlock);
+   result := (not IsEmpty) and (Last is TReturnBlock);
 end;
 
 procedure TBranch.UndoRemove(ABlock: TBlock);

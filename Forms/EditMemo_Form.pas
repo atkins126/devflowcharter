@@ -3,7 +3,8 @@ unit EditMemo_Form;
 interface
 
 uses
-  System.Classes, Vcl.StdCtrls, Vcl.Controls, Base_Form, Base_Block, Interfaces, MemoEx;
+  System.Classes, Vcl.StdCtrls, Vcl.Controls, Base_Form, Base_Block, Interfaces,
+  MemoEx;
 
 type
 
@@ -28,7 +29,7 @@ var
 implementation
 
 uses
-   Vcl.Graphics, Vcl.Forms, Infrastructure;
+   Vcl.Graphics, Infrastructure;
 
 {$R *.dfm}
 
@@ -69,8 +70,9 @@ end;
 procedure TMemoEditorForm.FormCreate(Sender: TObject);
 begin
    memEditor.DoubleBuffered := True;
-   if (i18Manager.LoadStaticLabels(GSettings.TranslateFile) = 0) and (i18Manager.LoadDefaultLabels = 0) then
-      Application.Terminate;
+   // this must be executed here as all forms have been created in this moment
+   if trnsManager.LoadLabels(GSettings.TranslationFile, False) = 0 then
+      trnsManager.LoadDefaultLabels(False);
 end;
 
 end.

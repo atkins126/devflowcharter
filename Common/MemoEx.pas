@@ -81,15 +81,13 @@ begin
    EditFormWidth := 280;
    EditFormHeight := 182;
    FHasVScroll := True;
-   ParentCtl3D := False;
    BorderStyle := bsNone;
-   Ctl3D := False;
 end;
 
 procedure TMemoEx.KeyDown(var Key: Word; Shift: TShiftState);
 begin
    inherited;
-   if (ssCtrl in Shift) and (Key = Ord('A')) then
+   if (Shift = [ssCtrl]) and (Key = Ord('A')) then
       SelectAll;
 end;
 
@@ -219,7 +217,7 @@ begin
          ReleaseDC(Handle, hnd);
       end;
       var count := Lines.Count;
-      if EndsText(sLineBreak, Text) then
+      if EndsText(Lines.LineBreak, Text) then
          Inc(count);
       if count > lineCount then
       begin

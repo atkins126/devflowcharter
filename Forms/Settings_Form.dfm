@@ -6,13 +6,14 @@ object SettingsForm: TSettingsForm
   Caption = 'Settings'
   ClientHeight = 702
   ClientWidth = 557
-  Color = clBtnFace
+  Color = clWindow
+  Ctl3D = False
   ParentFont = True
   Position = poScreenCenter
   OnCreate = FormCreate
   OnShow = FormShow
   TextHeight = 15
-  object btnSaveSettings: TButton
+  object btnSave: TButton
     Tag = 1
     Left = 398
     Top = 674
@@ -23,7 +24,7 @@ object SettingsForm: TSettingsForm
     TabOrder = 5
     OnClick = CloseFormClick
   end
-  object gbMiscSettings: TGroupBox
+  object gbMisc: TGroupBox
     Tag = 4
     Left = 5
     Top = 620
@@ -131,9 +132,9 @@ object SettingsForm: TSettingsForm
     object edtCompiler: TEdit
       Tag = 5
       Left = 104
-      Top = 46
+      Top = 49
       Width = 345
-      Height = 21
+      Height = 19
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -11
@@ -147,7 +148,7 @@ object SettingsForm: TSettingsForm
     object btnBrowseCompilers: TButton
       Tag = 1
       Left = 456
-      Top = 46
+      Top = 48
       Width = 86
       Height = 21
       Caption = 'Browse...'
@@ -181,9 +182,9 @@ object SettingsForm: TSettingsForm
     object edtCompilerNoMain: TEdit
       Tag = 5
       Left = 200
-      Top = 70
+      Top = 73
       Width = 249
-      Height = 21
+      Height = 19
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -11
@@ -220,7 +221,7 @@ object SettingsForm: TSettingsForm
         'BE Unicode')
     end
   end
-  object btnDiscardSettings: TButton
+  object btnDiscard: TButton
     Tag = 1
     Left = 479
     Top = 674
@@ -230,7 +231,7 @@ object SettingsForm: TSettingsForm
     TabOrder = 6
     OnClick = CloseFormClick
   end
-  object gbParseSettings: TGroupBox
+  object gbParse: TGroupBox
     Tag = 4
     Left = 5
     Top = 171
@@ -399,7 +400,7 @@ object SettingsForm: TSettingsForm
       TabOrder = 8
     end
   end
-  object gbEditorSettings: TGroupBox
+  object gbEditor: TGroupBox
     Tag = 4
     Left = 5
     Top = 252
@@ -624,9 +625,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 0
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -640,9 +639,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 1
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -656,9 +653,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 2
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -672,9 +667,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 3
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -688,9 +681,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 4
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -704,9 +695,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 5
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -720,9 +709,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 6
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -736,9 +723,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 7
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -752,9 +737,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 8
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -768,9 +751,7 @@ object SettingsForm: TSettingsForm
         BorderWidth = 1
         BorderStyle = bsSingle
         Color = clWindow
-        Ctl3D = False
         ParentBackground = False
-        ParentCtl3D = False
         TabOrder = 9
         StyleElements = [seFont, seBorder]
         OnClick = pnlSelectClick
@@ -779,9 +760,9 @@ object SettingsForm: TSettingsForm
     object edtEditorIndent: TEdit
       Tag = 5
       Left = 503
-      Top = 13
+      Top = 14
       Width = 38
-      Height = 21
+      Height = 19
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -11
@@ -866,7 +847,7 @@ object SettingsForm: TSettingsForm
         'tab')
     end
   end
-  object btnDefaultSettings: TButton
+  object btnDefault: TButton
     Tag = 1
     Left = 8
     Top = 674
@@ -906,12 +887,12 @@ object SettingsForm: TSettingsForm
       Font.Style = []
       ParentFont = False
     end
-    object edtTranslateFile: TEdit
+    object edtTranslationFile: TEdit
       Tag = 5
       Left = 88
-      Top = 24
+      Top = 27
       Width = 361
-      Height = 21
+      Height = 19
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -11
@@ -922,10 +903,10 @@ object SettingsForm: TSettingsForm
       ShowHint = True
       TabOrder = 0
     end
-    object btnBrowseScripts: TButton
+    object btnBrowseTranslations: TButton
       Tag = 1
       Left = 456
-      Top = 24
+      Top = 26
       Width = 86
       Height = 21
       Caption = 'Browse...'
@@ -936,10 +917,10 @@ object SettingsForm: TSettingsForm
       Font.Style = []
       ParentFont = False
       TabOrder = 1
-      OnClick = btnBrowseScriptsClick
+      OnClick = btnBrowseTranslationsClick
     end
   end
-  object gbFlowchartSettings: TGroupBox
+  object gbFlowchart: TGroupBox
     Tag = 4
     Left = 5
     Top = 396
@@ -1026,9 +1007,7 @@ object SettingsForm: TSettingsForm
       BorderWidth = 1
       BorderStyle = bsSingle
       Color = clWindow
-      Ctl3D = False
       ParentBackground = False
-      ParentCtl3D = False
       ParentShowHint = False
       ShowHint = True
       TabOrder = 0
@@ -1044,9 +1023,7 @@ object SettingsForm: TSettingsForm
       BorderWidth = 1
       BorderStyle = bsSingle
       Color = clWindow
-      Ctl3D = False
       ParentBackground = False
-      ParentCtl3D = False
       TabOrder = 1
       StyleElements = [seFont, seBorder]
       OnClick = pnlSelectClick
@@ -1060,9 +1037,7 @@ object SettingsForm: TSettingsForm
       BorderWidth = 1
       BorderStyle = bsSingle
       Color = clWindow
-      Ctl3D = False
       ParentBackground = False
-      ParentCtl3D = False
       ParentShowHint = False
       ShowHint = True
       TabOrder = 2
@@ -1074,7 +1049,7 @@ object SettingsForm: TSettingsForm
       Left = 104
       Top = 21
       Width = 145
-      Height = 21
+      Height = 19
       TabStop = False
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
@@ -1147,15 +1122,13 @@ object SettingsForm: TSettingsForm
       BorderWidth = 1
       BorderStyle = bsSingle
       Color = clWindow
-      Ctl3D = False
       ParentBackground = False
-      ParentCtl3D = False
       TabOrder = 7
       StyleElements = [seFont, seBorder]
       OnClick = pnlSelectClick
     end
   end
-  object gbPrintSettings: TGroupBox
+  object gbPrint: TGroupBox
     Tag = 4
     Left = 5
     Top = 520
@@ -1271,9 +1244,9 @@ object SettingsForm: TSettingsForm
       object edtMarginLeft: TEdit
         Tag = 5
         Left = 56
-        Top = 24
+        Top = 28
         Width = 25
-        Height = 21
+        Height = 19
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -11
@@ -1286,9 +1259,9 @@ object SettingsForm: TSettingsForm
       object edtMarginRight: TEdit
         Tag = 5
         Left = 56
-        Top = 48
+        Top = 52
         Width = 25
-        Height = 21
+        Height = 19
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -11
@@ -1301,9 +1274,9 @@ object SettingsForm: TSettingsForm
       object edtMarginTop: TEdit
         Tag = 5
         Left = 144
-        Top = 24
+        Top = 28
         Width = 25
-        Height = 21
+        Height = 19
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -11
@@ -1316,9 +1289,9 @@ object SettingsForm: TSettingsForm
       object edtMarginBottom: TEdit
         Tag = 5
         Left = 144
-        Top = 48
+        Top = 52
         Width = 25
-        Height = 21
+        Height = 19
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -11

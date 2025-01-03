@@ -557,11 +557,11 @@ begin
                begin
                   if (i = 2) and (LastDelimiter('0btnfr"\'#39, cValue) = 2) then
                      result := JAVA_CHAR_TYPE
-                  else if (i = 6) and ((cValue[2] = 'u') or (cValue[2] = 'U')) then
+                  else if (i = 6) and (cValue[2].ToUpper = 'U') then
                   begin
                      for a := 3 to 6 do
                      begin
-                        if not CharInSet(cValue[a], ['0'..'9', 'a'..'f', 'A'..'F']) then
+                        if not CharInSet(cValue[a].ToUpper, ['0'..'9', 'A'..'F']) then
                            Exit;
                      end;
                      result := JAVA_CHAR_TYPE;
@@ -999,19 +999,19 @@ begin
                result := JAVA_DOUBLE_TYPE
             else if TryStrToInt64(AValue, i64) then
                result := JAVA_LONG_TYPE
-            else if AValue.Contains('_') and firstChar.IsDigit and CharInSet(lastChar, ['0'..'9', 'l', 'L', 'd', 'D', 'f', 'F']) then
+            else if AValue.Contains('_') and firstChar.IsDigit and CharInSet(lastChar.ToUpper, ['0'..'9', 'L', 'D', 'F']) then
                result := Java_GetConstantType(ReplaceText(AValue, '_', ''), s)
             else
             begin
                cValue := Copy(AValue, 1, len-1);
-               case lastChar of
-                  'l', 'L':
+               case lastChar.ToUpper of
+                  'L':
                   if TryStrToInt64(cValue, i64) then
                      result := JAVA_LONG_TYPE;
-                  'd', 'D':
+                  'D':
                   if TryStrToFloat(cValue, f) then
                      result := JAVA_DOUBLE_TYPE;
-                  'f', 'F':
+                  'F':
                   if TryStrToFloat(cValue, f) then
                      result := JAVA_FLOAT_TYPE;
                end;

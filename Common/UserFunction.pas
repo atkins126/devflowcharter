@@ -56,6 +56,7 @@ type
    private
       FUserFunction: TUserFunction;
       FLocalVars: TVarDeclareList;
+      procedure RedrawBody;
    protected
       procedure OnChangeName(Sender: TObject); override;
       procedure OnChangeDesc(Sender: TObject);
@@ -69,7 +70,6 @@ type
       function CreateElement: TElement; override;
       procedure OnChangeBodyPage(Sender: TObject);
       procedure OnDropDownBodyPage(Sender: TObject);
-      procedure DrawBodyLabel;
       procedure OnClickCh(Sender: TObject); override;
       procedure AddElement(Sender: TObject); override;
    public
@@ -105,8 +105,8 @@ type
       procedure ExportToXML(ANode: IXMLNode); override;
       procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
       procedure RefreshSizeEdits; override;
-      procedure GenerateDescription(ALines: TStrings);
-      procedure SetPageCombo(const ACaption: TCaption = '');
+      procedure AddDescriptionToCode(ALines: TStrings);
+      procedure SetPageBox(const ACaption: TCaption = '');
       function GetParameters: IEnumerable<TParameter>;
       procedure RefreshElements; override;
       function GetExternModifier: string; override;
@@ -124,7 +124,7 @@ type
       property Header: TUserFunctionHeader read FHeader;
       property Body: TMainBlock read FBody;
       property Active: boolean read GetActive write SetActive;
-      constructor Create(AFunctionHeader: TUserFunctionHeader; AFunctionBody: TMainBlock);
+      constructor Create(AHeader: TUserFunctionHeader; ABody: TMainBlock);
       destructor Destroy; override;
       procedure ImportFromXML(ANode: IXMLNode; APinControl: TControl = nil);
       procedure ExportToXML(ANode: IXMLNode);
@@ -152,12 +152,12 @@ uses
 var
    ByTopParameterComparer: IComparer<TParameter>;
 
-constructor TUserFunction.Create(AFunctionHeader: TUserFunctionHeader; AFunctionBody: TMainBlock);
+constructor TUserFunction.Create(AHeader: TUserFunctionHeader; ABody: TMainBlock);
 begin
    inherited Create(Application);
    GProject.AddComponent(Self);
-   FBody := AFunctionBody;
-   FHeader := AFunctionHeader;
+   FBody := ABody;
+   FHeader := AHeader;
    FActive := True;
    if FHeader <> nil then
    begin
@@ -165,13 +165,12 @@ begin
       FHeader.FParentObject := Self;
       if FBody <> nil then
       begin
-         FHeader.SetPageCombo(FBody.Page.Caption);
+         FHeader.SetPageBox(FBody.Page.Caption);
          FHeader.chkBodyVisible.OnClick(FHeader.chkBodyVisible);
       end;
    end;
    if FBody <> nil then
    begin
-      FBody.UserFunction := Self;
       FBody.SetWidth(FBody.Width);
       FBody.Page.Box.SetScrollBars;
    end;
@@ -247,13 +246,12 @@ begin
    end;
 end;
 
-procedure TUserFunctionHeader.GenerateDescription(ALines: TStrings);
+procedure TUserFunctionHeader.AddDescriptionToCode(ALines: TStrings);
 begin
-   if chkInclDescCode.Checked and (memDesc.Text <> '') then
+   if chkInclDescCode.Checked then
    begin
-      for var i := 0 to memDesc.Lines.Count-1 do
-         ALines.Add(memDesc.Lines[i]);
-      if EndsText(sLineBreak, memDesc.Text) then
+      ALines.AddStrings(memDesc.Lines);
+      if EndsText(memDesc.Lines.LineBreak, memDesc.Text) then
          ALines.Add('');
    end;
 end;
@@ -311,7 +309,7 @@ end;
 procedure TUserFunctionHeader.OnClickCh(Sender: TObject);
 begin
    inherited;
-   DrawBodyLabel;
+   RedrawBody;
 end;
 
 constructor TUserFunctionHeader.Create(AParentForm: TFunctionsForm);
@@ -325,8 +323,8 @@ begin
 
    inherited Create(AParentForm);
 
-   FLocalVars := TVarDeclareList.Create(Self, 0, 350, 389, 3, 4, 380);
-   FLocalVars.Caption := i18Manager.GetString('LocalDeclare');
+   FLocalVars := TVarDeclareList.Create(Self, 0, 350, Width, 3, 4);
+   FLocalVars.Caption := trnsManager.GetString('LocalDeclare');
    FLocalVars.gbBox.DoubleBuffered := True;
 
    gbDesc := TGroupBox.Create(Self);
@@ -336,7 +334,7 @@ begin
    gbDesc.ParentBackground := False;
    gbDesc.Font.Color := clBlack;
    gbDesc.Align := alTop;
-   gbDesc.Caption := i18Manager.GetString('gbDesc');
+   gbDesc.Caption := trnsManager.GetString('gbDesc');
    gbDesc.DoubleBuffered := True;
    gbDesc.Constraints.MinHeight := gbDesc.Height;
 
@@ -353,7 +351,7 @@ begin
    chkInclDescCode.ParentFont := False;
    chkInclDescCode.Font.Style := [];
    chkInclDescCode.Font.Color := clWindowText;
-   chkInclDescCode.Caption := i18Manager.GetString('chkInclDescCode');
+   chkInclDescCode.Caption := trnsManager.GetString('chkInclDescCode');
    chkInclDescCode.SetBounds(5, gbDesc.Height-s22, TInfra.GetAutoWidth(chkInclDescCode), s16);
    chkInclDescCode.DoubleBuffered := True;
    chkInclDescCode.Anchors := [akBottom, akLeft];
@@ -364,7 +362,7 @@ begin
    chkInclDescFlow.ParentFont := False;
    chkInclDescFlow.Font.Style := [];
    chkInclDescFlow.Font.Color := clWindowText;
-   chkInclDescFlow.Caption := i18Manager.GetString('chkInclDescFlow');
+   chkInclDescFlow.Caption := trnsManager.GetString('chkInclDescFlow');
    chkInclDescFlow.SetBounds(chkInclDescCode.BoundsRect.Right+20, gbDesc.Height-s22, TInfra.GetAutoWidth(chkInclDescFlow), s16);
    chkInclDescFlow.DoubleBuffered := True;
    chkInclDescFlow.Anchors := [akBottom, akLeft];
@@ -387,7 +385,7 @@ begin
    btnGenDesc.ParentFont := False;
    btnGenDesc.Font.Style := [];
    btnGenDesc.DoubleBuffered := True;
-   btnGenDesc.Caption := i18Manager.GetString('btnGenDesc');
+   btnGenDesc.Caption := trnsManager.GetString('btnGenDesc');
    btnGenDesc.SetBounds(gbDesc.Width-TInfra.Scaled(Self, 85), chkInclDescCode.Top-3, TInfra.Scaled(Self, 80), TInfra.Scaled(Self, 20));
    btnGenDesc.Anchors := [akBottom];
    btnGenDesc.OnClick := OnClickGenDesc;
@@ -399,7 +397,7 @@ begin
    gbBody.ParentFont := False;
    gbBody.ParentBackground := False;
    gbBody.Font.Color := clBlack;
-   gbBody.Caption := i18Manager.GetString('Body');
+   gbBody.Caption := trnsManager.GetString('Body');
    gbBody.DoubleBuffered := True;
    gbBody.Align := alTop;
 
@@ -407,7 +405,7 @@ begin
    lblBodyPage.Parent := gbBody;
    lblBodyPage.SetBounds(8, 25, 0, 13);
    lblBodyPage.ParentFont := False;
-   lblBodyPage.Caption := i18Manager.GetString('lblBodyPage');
+   lblBodyPage.Caption := trnsManager.GetString('lblBodyPage');
    lblBodyPage.Font.Style := [];
    lblBodyPage.Font.Color := clWindowText;
 
@@ -422,14 +420,14 @@ begin
    cbBodyPage.DropDownCount := 9;
    cbBodyPage.OnDropDown := OnDropDownBodyPage;
    cbBodyPage.OnChange := OnChangeBodyPage;
-   SetPageCombo;
+   SetPageBox;
 
    chkBodyVisible := TCheckBox.Create(gbBody);
    chkBodyVisible.Parent := gbBody;
    chkBodyVisible.ParentFont := False;
    chkBodyVisible.Font.Style := [];
    chkBodyVisible.Font.Color := clWindowText;
-   chkBodyVisible.Caption := i18Manager.GetString('Visible');
+   chkBodyVisible.Caption := trnsManager.GetString('Visible');
    chkBodyVisible.SetBounds(cbBodyPage.BoundsRect.Right+20, 22, TInfra.GetAutoWidth(chkBodyVisible), TInfra.Scaled(Self, 17));
    chkBodyVisible.DoubleBuffered := True;
    chkBodyVisible.Anchors := [akBottom, akLeft];
@@ -442,7 +440,7 @@ begin
    gbHeader.ParentFont := False;
    gbHeader.ParentBackground := False;
    gbHeader.Font.Color := clBlack;
-   gbHeader.Caption := i18Manager.GetString('Header');
+   gbHeader.Caption := trnsManager.GetString('Header');
    gbHeader.DoubleBuffered := True;
    gbHeader.Align := alTop;
 
@@ -452,7 +450,7 @@ begin
    lblTYpe.Parent := gbHeader;
    lblType.SetBounds(165, 25, 0, 13);
    lblType.ParentFont := False;
-   lblType.Caption := i18Manager.GetString('lblRetType');
+   lblType.Caption := trnsManager.GetString('lblRetType');
    lblType.Font.Style := [];
    lblType.Font.Color := clWindowText;
 
@@ -475,7 +473,7 @@ begin
    chkArrayType.Font.Style := [];
    chkArrayType.Font.Color := clWindowText;
    x := cbType.BoundsRect.Right + 10;
-   chkArrayType.Caption := i18Manager.GetString('chkArrayType');
+   chkArrayType.Caption := trnsManager.GetString('chkArrayType');
    chkArrayType.SetBounds(x, 23, gbHeader.Width-x-3, 17);
    chkArrayType.DoubleBuffered := True;
    chkArrayType.Anchors := [akBottom, akLeft];
@@ -507,7 +505,7 @@ begin
    chkConstructor.Font.Style := [];
    chkConstructor.Font.Color := clWindowText;
    chkConstructor.Alignment := taLeftJustify;
-   chkConstructor.Caption := i18Manager.GetString('constructor');
+   chkConstructor.Caption := trnsManager.GetString('constructor');
    if chkStatic.Visible then
       ctrl := chkStatic
    else
@@ -527,7 +525,7 @@ begin
    gbParams.ParentFont := False;
    gbParams.ParentBackground := False;
    gbParams.Font.Color := clBlack;
-   gbParams.Caption := i18Manager.GetString('Params');
+   gbParams.Caption := trnsManager.GetString('Params');
    gbParams.Constraints.MinHeight := gbParams.Height;
    gbParams.DoubleBuffered := True;
    gbParams.Align := alTop;
@@ -544,7 +542,7 @@ begin
    lblParam.ParentFont := False;
    lblParam.Font.Color := clWindowText;
    lblParam.SetBounds(8, 18, 0, 13);
-   lblParam.Caption := i18Manager.GetString('lblParam');
+   lblParam.Caption := trnsManager.GetString('lblParam');
 
    lblParamType := TLabel.Create(gbParams);
    lblParamType.Parent := gbParams;
@@ -552,7 +550,7 @@ begin
    lblParamType.ParentFont := False;
    lblParamType.Font.Color := clWindowText;
    lblParamType.SetBounds(TInfra.Scaled(Self, 92), 18, 0, 13);
-   lblParamType.Caption := i18Manager.GetString('lblParamType');
+   lblParamType.Caption := trnsManager.GetString('lblParamType');
 
    lblParamDefault := TLabel.Create(gbParams);
    lblParamDefault.Parent := gbParams;
@@ -560,7 +558,7 @@ begin
    lblParamDefault.ParentFont := False;
    lblParamDefault.Font.Color := clWindowText;
    lblParamDefault.SetBounds(TInfra.Scaled(Self, 180), 18, 0, 13);
-   lblParamDefault.Caption := i18Manager.GetString('lblParamDefault');
+   lblParamDefault.Caption := trnsManager.GetString('lblParamDefault');
 
    lblParamArray := TLabel.Create(gbParams);
    lblParamArray.Parent := gbParams;
@@ -568,7 +566,7 @@ begin
    lblParamArray.ParentFont := False;
    lblParamArray.Font.Color := clWindowText;
    lblParamArray.SetBounds(TInfra.Scaled(Self, 239), 18, 0, 13);
-   lblParamArray.Caption := i18Manager.GetString('lblParamArray');
+   lblParamArray.Caption := trnsManager.GetString('lblParamArray');
 
    lblParamRef := TLabel.Create(gbParams);
    lblParamRef.Parent := gbParams;
@@ -576,13 +574,12 @@ begin
    lblParamRef.ParentFont := False;
    lblParamRef.Font.Color := clWindowText;
    lblParamRef.SetBounds(TInfra.Scaled(Self, 281), 18, 0, 13);
-   lblParamRef.Caption := i18Manager.GetString('lblParamRef');
+   lblParamRef.Caption := trnsManager.GetString('lblParamRef');
 
    sbxElements := TScrollBox.Create(gbParams);
    sbxElements.Parent := gbParams;
    sbxElements.StyleElements := sbxElements.StyleElements - [seClient];
    sbxElements.SetBounds(6, 36, gbParams.Width-10, 0);
-   sbxElements.Ctl3D := False;
    sbxElements.BorderStyle := bsNone;
    sbxElements.Constraints.MaxHeight := 44;
    sbxElements.Constraints.MinWidth := sbxElements.Width;
@@ -595,7 +592,7 @@ begin
    btnAddElement.ParentFont := False;
    btnAddElement.Font.Style := [];
    btnAddElement.DoubleBuffered := True;
-   btnAddElement.Caption := i18Manager.GetString('btnAddParm');
+   btnAddElement.Caption := trnsManager.GetString('btnAddParm');
    btnAddElement.SetBounds(8, 81, gbParams.Width-12, 25);
    btnAddElement.Anchors := [akBottom];
    btnAddElement.OnClick := AddElement;
@@ -633,8 +630,6 @@ begin
    edtDefault.ParentFont := False;
    edtDefault.Font.Style := [];
    edtDefault.Font.Color := clGreen;
-   edtDefault.ParentCtl3D := False;
-   edtDefault.Ctl3D := True;
    edtDefault.OnChange := OnChangeType;
 
    chkTable := TCheckBox.Create(Self);
@@ -678,8 +673,8 @@ begin
       info := 'OkIdD';
    end;
    edtName.Font.Color := lColor;
-   edtName.Hint := i18Manager.GetFormattedString(info, [funcName]);
-   DrawBodyLabel;
+   edtName.Hint := trnsManager.GetFormattedString(info, [funcName]);
+   RedrawBody;
    inherited OnChangeName(Sender);
 end;
 
@@ -707,17 +702,17 @@ procedure TUserFunctionHeader.OnChangeDesc(Sender: TObject);
 begin
    GProject.SetChanged;
    if GSettings.ShowFuncLabels and chkInclDescFlow.Checked then
-      DrawBodyLabel;
+      RedrawBody;
    if (Font.Color <> NOK_COLOR) and chkInclDescCode.Checked then
       UpdateCodeEditor;
 end;
 
 procedure TUserFunctionHeader.OnDropDownBodyPage(Sender: TObject);
 begin
-   SetPageCombo(cbBodyPage.Text);
+   SetPageBox(cbBodyPage.Text);
 end;
 
-procedure TUserFunctionHeader.SetPageCombo(const ACaption: TCaption = '');
+procedure TUserFunctionHeader.SetPageBox(const ACaption: TCaption = '');
 begin
    var lCaption := cbBodyPage.Text;
    cbBodyPage.Items.Clear;
@@ -746,7 +741,7 @@ begin
    if (page <> nil) and (FUserFunction <> nil) and (FUserFunction.Body <> nil) then
    begin
       FUserFunction.Body.Page := page;
-      page.PageControl.ActivePage := page;
+      page.SetAsActivePage;
       page.Box.ScrollInView(FUserFunction.Body);
       NavigatorForm.Invalidate;
    end;
@@ -779,7 +774,7 @@ begin
    if Font.Color <> NOK_COLOR then
       UpdateCodeEditor;
    GProject.SetChanged;
-   DrawBodyLabel;
+   RedrawBody;
 end;
 
 procedure TUserFunction.GenerateTree(ANode: TTreeNode);
@@ -810,7 +805,7 @@ begin
          result := lang.GetMainProgramDesc;
       end
       else
-         result := i18Manager.GetString('Flowchart');
+         result := trnsManager.GetString('Flowchart');
    end
    else
    begin
@@ -833,10 +828,7 @@ end;
 procedure TUserFunctionHeader.OnClickInclDescFlow(Sender: TObject);
 begin
    if GSettings.ShowFuncLabels then
-   begin
-      DrawBodyLabel;
-      NavigatorForm.Invalidate;
-   end;
+      RedrawBody;
    GProject.SetChanged;
 end;
 
@@ -870,12 +862,13 @@ begin
       UpdateCodeEditor;
 end;
 
-procedure TUserFunctionHeader.DrawBodyLabel;
+procedure TUserFunctionHeader.RedrawBody;
 begin
    if (FUserFunction <> nil) and (FUserFunction.Body <> nil) then
    begin
       FUserFunction.Body.SetWidth(0);
-      FUserFunction.Body.DrawLabel;
+      FUserFunction.Body.Invalidate;
+      NavigatorForm.Invalidate;
    end;
 end;
 
@@ -934,13 +927,13 @@ end;
 procedure TParameter.OnChangeType(Sender: TObject);
 begin
    inherited OnChangeType(Sender);
-   TUserFunctionHeader(ParentTab).DrawBodyLabel;
+   TUserFunctionHeader(ParentTab).RedrawBody;
 end;
 
 procedure TParameter.OnChangeName(Sender: TObject);
 begin
    inherited OnChangeName(Sender);
-   TUserFunctionHeader(ParentTab).DrawBodyLabel;
+   TUserFunctionHeader(ParentTab).RedrawBody;
 end;
 
 procedure TParameter.ImportFromXML(ANode: IXMLNode);

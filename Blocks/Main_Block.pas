@@ -25,27 +25,23 @@ interface
 
 uses
    WinApi.Windows, WinApi.Messages, Vcl.Graphics, Vcl.ComCtrls, System.Classes,
-   Base_Block, OmniXML, Interfaces, Types, BlockTabSheet;
+   System.Math, Base_Block, OmniXML, Interfaces, Types, BlockTabSheet;
 
 type
 
    TMainBlock = class(TGroupBlock, IWinControl)
       private
          FPage: TBlockTabSheet;
-         FLabelRect: TRect;
-         FHandle: HDC;
-         procedure DrawStartEllipse;
-         procedure DrawStopEllipse;
+         procedure DrawStart;
+         procedure DrawStop;
          function GetMaxBounds: TPoint;
       public
-         UserFunction: TObject;
          constructor Create(APage: TBlockTabSheet; const ABlockParms: TBlockParms); overload;
          constructor Create(APage: TBlockTabSheet; const ATopLeft: TPoint); overload;
          procedure SaveInXML(ANode: IXMLNode); override;
          procedure ExportToGraphic(AGraphic: TGraphic); override;
          procedure SetWidth(AMinX: integer); override;
          procedure SetZOrder(AValue: integer);
-         procedure DrawLabel;
          function ExportToXMLFile(const AFile: string): TError; override;
          function GetExportFileName: string; override;
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
@@ -66,7 +62,6 @@ type
          procedure SetPage(APage: TBlockTabSheet); override;
          procedure OnWindowPosChanged(x, y: integer); override;
          function GetFunctionLabel(var ARect: TRect): string;
-         function GetDefaultWidth: integer;
          function GetPage: TBlockTabSheet; override;
          function GetUndoObject: TObject; override;
    end;
@@ -88,17 +83,19 @@ begin
 
    inherited Create(nil, ABlockParms, shpEllipse, taLeftJustify);
 
-   FStartLabel := i18Manager.GetString('CaptionStart');
-   FStopLabel := i18Manager.GetString('CaptionStop');
+   FStartLabel := trnsManager.GetString('CaptionStart');
+   FStopLabel  := trnsManager.GetString('CaptionStop');
 
-   var defWidth := GetDefaultWidth;
-   var defWidthHalf := defWidth div 2;
-   if defWidth > Width then
+   var w := Max(GetEllipseTextRect(0, 0, FStartLabel).Width,
+                GetEllipseTextRect(0, 0, FStopLabel).Width) + 40;
+   var w2 := w div 2;
+
+   if w > Width then
    begin
-      Width := defWidth;
-      Branch.Hook.X := defWidthHalf;
-      BottomHook := defWidthHalf;
-      TopHook.X := defWidthHalf;
+      Width := w;
+      Branch.Hook.X := w2;
+      BottomHook := w2;
+      TopHook.X := w2;
    end
    else
    begin
@@ -106,10 +103,10 @@ begin
       TopHook.X := ABlockParms.br.X;
    end;
 
-   FInitParms.Width := defWidth;
+   FInitParms.Width := w;
    FInitParms.Height := MAIN_BLOCK_DEF_HEIGHT;
-   FInitParms.BottomHook := defWidthHalf;
-   FInitParms.BranchPoint.X := defWidthHalf;
+   FInitParms.BottomHook := w2;
+   FInitParms.BranchPoint.X := w2;
    FInitParms.BottomPoint.X := -60000;
    FInitParms.P2X := 0;
    FInitParms.HeightAffix := 42;
@@ -119,8 +116,6 @@ begin
    FZOrder := -1;
    Constraints.MinWidth := FInitParms.Width;
    Constraints.MinHeight := FInitParms.Height;
-   FLabelRect := TRect.Empty;
-   FHandle := Canvas.Handle;
    FStatement.Free;
    FStatement := nil;
 end;
@@ -152,29 +147,15 @@ begin
          if unPin then
             UnPinComments;
       end;
-      if UserFunction <> nil then
-      begin
-         var header := TUserFunction(UserFunction).Header;
-         if header <> nil then
-            header.SetPageCombo(APage.Caption);
-      end;
+      var header := GProject.FindFunctionHeader(Self);
+      if header <> nil then
+         header.SetPageBox(APage.Caption);
    end;
 end;
 
 function TMainBlock.GetPage: TBlockTabSheet;
 begin
    result := FPage;
-end;
-
-function TMainBlock.GetDefaultWidth: integer;
-begin
-   var R := GetEllipseTextRect(0, 0, FStartLabel);
-   result := R.Width;
-   R := GetEllipseTextRect(0, 0, FStopLabel);
-   var w := R.Width;
-   if w > result then
-      result := w;
-   result := result + 40;
 end;
 
 procedure TMainBlock.SetZOrder(AValue: integer);
@@ -206,11 +187,9 @@ begin
          begin
             if comment.Visible then
             begin
-               var pnt := comment.BoundsRect.BottomRight;
-               if pnt.X > result.X then
-                  result.X := pnt.X;
-               if pnt.Y > result.Y then
-                  result.Y := pnt.Y;
+               var p := comment.BoundsRect.BottomRight;
+               result.X := Max(result.X, p.X);
+               result.Y := Max(result.Y, p.Y);
             end;
          end;
       end;
@@ -290,29 +269,25 @@ begin
          Canvas.Font.Color := clNavy;
          DrawText(Canvas.Handle, PChar(lLabel), -1, R, 0);
          Canvas.Font.Color := fontColor;
-         if Canvas.Handle = FHandle then
-            FLabelRect := R;
-      end
-      else
-         FLabelRect := TRect.Empty;
-      DrawStartEllipse;
+      end;
+      DrawStart;
       if not Branch.EndsWithReturnBlock then
-         DrawStopEllipse;
+         DrawStop;
       Canvas.Font.Style := fontStyles;
       DrawArrow(Point(Branch.Hook.X, TopHook.Y), Branch.Hook);
    end;
    DrawI;
 end;
 
-procedure TMainBlock.DrawStartEllipse;
+procedure TMainBlock.DrawStart;
 begin
    DrawEllipsedText(Branch.Hook.X, TopHook.Y, FStartLabel);
 end;
 
-procedure TMainBlock.DrawStopEllipse;
+procedure TMainBlock.DrawStop;
 begin
    var y := GetEllipseTextRect(0, 0, FStopLabel).Height;
-   if Branch.Count = 0 then
+   if Branch.IsEmpty then
       Inc(y, Branch.Hook.Y+1)
    else
       Inc(y, Branch.Last.BoundsRect.Bottom);
@@ -323,19 +298,18 @@ function TMainBlock.GetFunctionLabel(var ARect: TRect): string;
 begin
    result := '';
    ARect := Rect(Branch.Hook.X+75, 7, 0, 0);
-   if GSettings.ShowFuncLabels and (UserFunction <> nil) and Expanded then
+   if GSettings.ShowFuncLabels and Expanded then
    begin
-      var header := TUserFunction(UserFunction).Header;
+      var lang := GInfra.CurrentLang;
+      var header := GProject.FindFunctionHeader(Self);
       if header <> nil then
       begin
-         var lang := GInfra.CurrentLang;
          if not Assigned(lang.GetUserFuncDesc) then
             lang := GInfra.TemplateLang;
          result := lang.GetUserFuncDesc(header, False, header.chkInclDescFlow.Checked);
       end
       else
       begin
-         var lang := GInfra.CurrentLang;
          if not Assigned(lang.GetMainProgramDesc) then
             lang := GInfra.TemplateLang;
          result := lang.GetMainProgramDesc;
@@ -344,48 +318,31 @@ begin
    if not result.IsEmpty then
    begin
       DrawText(Canvas.Handle, PChar(result), -1, ARect, DT_CALCRECT);
-      if (Branch.Count > 0) and (ARect.Bottom > Branch.First.Top-5) and (ARect.Left < Branch.First.BoundsRect.Right+5) then
-         ARect.Offset(Branch.First.BoundsRect.Right + 5 - ARect.Left, 0);
+      if not Branch.IsEmpty then
+      begin
+         var r := Branch.First.BoundsRect.Right + 5;
+         if (ARect.Bottom > Branch.First.Top-5) and (ARect.Left < r) then
+            ARect.Offset(r - ARect.Left, 0);
+      end;
    end;
 end;
 
 function TMainBlock.GetExportFileName: string;
 begin
-   if UserFunction <> nil then
-      result := TUserFunction(UserFunction).GetName
+   var userFunction := GProject.FindUserFunction(Self);
+   if userFunction <> nil then
+      result := userFunction.GetName
    else
       result := inherited GetExportFileName;
 end;
 
 function TMainBlock.ExportToXMLFile(const AFile: string): TError;
 begin
-   if UserFunction <> nil then
-      result := TXMLProcessor.ExportToXMLFile(TUserFunction(UserFunction).ExportToXML, AFile)
+   var userFunction := GProject.FindUserFunction(Self);
+   if userFunction <> nil then
+      result := TXMLProcessor.ExportToXMLFile(userFunction.ExportToXML, AFile)
    else
       result := inherited ExportToXMLFile(AFile);
-end;
-
-procedure TMainBlock.DrawLabel;
-var
-   R: TRect;
-   lLabel: string;
-   lColor: TColor;
-begin
-   lLabel := GetFunctionLabel(R);
-   if not lLabel.IsEmpty then
-   begin
-      if not FLabelRect.IsEmpty then
-      begin
-         Canvas.Brush.Style := bsSolid;
-         Canvas.Brush.Color := Color;
-         Canvas.FillRect(FLabelRect);
-      end;
-      lColor := Canvas.Font.Color;
-      Canvas.Font.Color := clNavy;
-      DrawText(Canvas.Handle, PChar(lLabel), -1, R, 0);
-      Canvas.Font.Color := lColor;
-      FLabelRect := R;
-   end;
 end;
 
 procedure TMainBlock.MouseMove(Shift: TShiftState; X, Y: Integer);
@@ -426,7 +383,7 @@ begin
          var vars := GProject.GlobalVars;
          var lName := GProject.Name;
          var template := lang.MainFunctionTemplate;
-         var header := TInfra.GetFunctionHeader(Self);
+         var header := GProject.FindFunctionHeader(Self);
          if header <> nil then
          begin
             vars := header.LocalVars;
@@ -523,16 +480,20 @@ end;
 
 function TMainBlock.GetUndoObject: TObject;
 begin
-   result := UserFunction;
+   result := GProject.FindUserFunction(Self);
 end;
 
 function TMainBlock.Remove(ANode: TTreeNodeWithFriend = nil): boolean;
 begin
    result := inherited Remove(ANode);
-   if result and (UserFunction <> nil) then
+   if result then
    begin
-      TUserFunction(UserFunction).Active := False;
-      TInfra.UpdateCodeEditor;
+      var userFunction := GProject.FindUserFunction(Self);
+      if userFunction <> nil then
+      begin
+         userFunction.Active := False;
+         TInfra.UpdateCodeEditor;
+      end;
    end;
 end;
 

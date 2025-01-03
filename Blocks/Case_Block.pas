@@ -91,7 +91,7 @@ begin
    BottomHook := ABlockParms.bh;
    TopHook.X := ABlockParms.br.X;
    IPoint.Y := 50;
-   FCaseLabel := i18Manager.GetString('CaptionCase');
+   FCaseLabel := trnsManager.GetString('CaptionCase');
    Constraints.MinWidth := FInitParms.Width;
    Constraints.MinHeight := FInitParms.Height;
    FStatement.EditorAction := EditorAction;
@@ -251,7 +251,7 @@ begin
       PlaceBranchStatement(br);
       if not br.EndsWithReturnBlock then
       begin
-         if br.Count > 0 then
+         if not br.IsEmpty then
             BottomHook := br.Last.Left + br.Last.BottomPoint.X
          else
             BottomHook := br.Hook.X;
@@ -329,7 +329,7 @@ begin
       lines.Text := ReplaceStr(caseOfTemplate, PRIMARY_PLACEHOLDER, statement);
       TInfra.InsertTemplateLines(lines, '%s2', caseLines);
 
-      var defTemplate := IfThen(DefaultBranch.Count > 0, GInfra.GetLangDefinition(ALangId).CaseOfDefaultValueTemplate);
+      var defTemplate := IfThen(not DefaultBranch.IsEmpty, GInfra.GetLangDefinition(ALangId).CaseOfDefaultValueTemplate);
       TInfra.InsertTemplateLines(lines, '%s3', defTemplate);
 
       GenerateTemplateSection(tmpList, lines, ALangId, ADeep);
@@ -427,7 +427,7 @@ begin
          block.GenerateTree(newNode);
    end;
 
-   var newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(result, i18Manager.GetString('DefValue')));
+   var newNode := TTreeNodeWithFriend(AParentNode.Owner.AddChild(result, trnsManager.GetString('DefValue')));
    newNode.Offset := FBranchList.Count;
 
    for var block in DefaultBranch do

@@ -53,7 +53,7 @@ begin
 
    inherited Create(ABranch, ABlockParms, shpEllipse, yymReturn, taCenter);
 
-   FReturnLabel := i18Manager.GetString('CaptionExit');
+   FReturnLabel := trnsManager.GetString('CaptionExit');
 
    Width := Max(Width, GetReturnEllipseRect.Width+48);
 

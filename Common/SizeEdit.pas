@@ -51,7 +51,7 @@ begin
    Text := '1';
    ShowHint := True;
    CharCase := ecUpperCase;
-   Hint := i18Manager.GetString('DisableFieldValid') + sLineBreak + ReplaceStr(i18Manager.GetString('edtSizeHint'), LB_PHOLDER2, sLineBreak);
+   Hint := trnsManager.GetString('DisableFieldValid') + sLineBreak + ReplaceStr(trnsManager.GetString('edtSizeHint'), LB_PHOLDER2, sLineBreak);
    ParentFont := False;
    Font.Style := [];
    Font.Color := BLACK_COLOR;

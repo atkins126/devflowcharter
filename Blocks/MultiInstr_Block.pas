@@ -66,24 +66,24 @@ begin
    GProject.SetChanged;
    FErrLine := -1;
    var txt := Trim(FStatements.Text);
-   var h := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
+   var h := trnsManager.GetFormattedString('ExpOk', [txt, sLineBreak]);
    var c := GSettings.FontColor;
    UpdateEditor(nil);
    if GSettings.ParseMultiAssign then
    begin
       if txt.IsEmpty then
       begin
-         h := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
+         h := trnsManager.GetFormattedString('NoInstr', [sLineBreak]);
          c := WARN_COLOR
       end
       else
       begin
          for var i := 0 to FStatements.Lines.Count-1 do
          begin
-            var line := FStatements.Lines.Strings[i].Trim;
+            var line := FStatements.Lines[i].Trim;
             if not TInfra.Parse(line, yymAssign) then
             begin
-               h := i18Manager.GetFormattedString('ExpErrMult', [i+1, line, sLineBreak, TInfra.GetParserErrMsg]);
+               h := trnsManager.GetFormattedString('ExpErrMult', [i+1, line, sLineBreak, TInfra.GetParserErrMsg]);
                c := NOK_COLOR;
                FErrLine := i;
                break;
@@ -108,10 +108,10 @@ begin
       var tmpList := TStringList.Create;
       try
          for var i := 0 to FStatements.Lines.Count-1 do
-            GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, FStatements.Lines.Strings[i].Trim), ALangId, ADeep);
+            GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, FStatements.Lines[i].Trim), ALangId, ADeep);
          if tmpList.Text.IsEmpty then
             GenerateTemplateSection(tmpList, ReplaceStr(template, PRIMARY_PLACEHOLDER, ''), ALangId, ADeep);
-         if EndsText(sLineBreak, FStatements.Text) then
+         if EndsText(FStatements.Lines.LineBreak, FStatements.Text) then
             tmpList.AddObject(GSettings.IndentString(ADeep), Self);
          TInfra.InsertLinesIntoList(ALines, tmpList, AFromLine);
          result := tmpList.Count;

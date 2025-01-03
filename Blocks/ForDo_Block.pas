@@ -95,7 +95,7 @@ begin
    FInitParms.HeightAffix := 22;
 
    var sColor := GSettings.GetShapeColor(FShape);
-   FForLabel := i18Manager.GetString('CaptionFor');
+   FForLabel := trnsManager.GetString('CaptionFor');
 
    edtStart := TStatement.Create(Self, yymFor, taLeftJustify);
    edtStart.Color := sColor;
@@ -110,7 +110,6 @@ begin
    cbVar.StyleElements := cbVar.StyleElements - [seClient];
    cbVar.Visible := False;
    cbVar.Font.Color := GSettings.FontColor;
-   cbVar.Ctl3D := False;
    cbVar.BevelInner := bvRaised;
    cbVar.BevelKind := bkSoft;
    cbVar.BevelOuter := bvNone;
@@ -192,7 +191,7 @@ begin
    if AValue <> FDescOrder then
    begin
       FDescOrder := AValue;
-      Repaint;
+      Invalidate;
       if ShouldUpdateEditor then
          UpdateEditor(nil);
    end;
@@ -268,12 +267,12 @@ begin
    edtVar.Text := cbVar.Text;
    if (edtVar.Text <> '') or not GSettings.ParseFor then
    begin
-      edtVar.Hint := i18Manager.GetFormattedString('ExpOk', [edtVar.Text, sLineBreak]);
+      edtVar.Hint := trnsManager.GetFormattedString('ExpOk', [edtVar.Text, sLineBreak]);
       edtVar.Font.Color := GSettings.FontColor;
    end
    else
    begin
-      edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
+      edtVar.Hint := trnsManager.GetFormattedString('NoCVar', [sLineBreak]);
       edtVar.Font.Color := NOK_COLOR;
    end;
    if ShouldUpdateEditor then
@@ -284,7 +283,7 @@ procedure TForDoBlock.VarOnChange(Sender: TObject);
 begin
    GProject.SetChanged;
    edtVar.Font.Color := GSettings.FontColor;
-   edtVar.Hint := i18Manager.GetFormattedString('ExpOk', [edtVar.Text, sLineBreak]);
+   edtVar.Hint := trnsManager.GetFormattedString('ExpOk', [edtVar.Text, sLineBreak]);
    if not GInfra.CurrentLang.ForDoVarList then
       UpdateEditor(edtVar);
    if GSettings.ParseFor then
@@ -292,16 +291,16 @@ begin
       var isVarOk := True;
       if (GProject.GlobalVars = nil) or not GProject.GlobalVars.IsValidLoopVar(edtVar.Text) then
       begin
-         var header := TInfra.GetFunctionHeader(Self);
+         var header := GProject.FindFunctionHeader(Self);
          isVarOk := (header <> nil) and header.LocalVars.IsValidLoopVar(edtVar.Text);
       end;
       if not isVarOk then
       begin
          edtVar.Font.Color := NOK_COLOR;
          if edtVar.Text <> '' then
-            edtVar.Hint := i18Manager.GetFormattedString('BadCVar', [edtVar.Text, sLineBreak])
+            edtVar.Hint := trnsManager.GetFormattedString('BadCVar', [edtVar.Text, sLineBreak])
          else
-            edtVar.Hint := i18Manager.GetFormattedString('NoCVar', [sLineBreak]);
+            edtVar.Hint := trnsManager.GetFormattedString('NoCVar', [sLineBreak]);
       end;
    end;
    var w := TInfra.GetAutoWidth(edtVar, IfThen(GInfra.CurrentLang.ForDoVarList, 28, 5));
@@ -459,7 +458,7 @@ begin
       cbVar.Items.Clear;
       if GProject.GlobalVars <> nil then
          GProject.GlobalVars.FillForList(cbVar.Items);
-      var header := TInfra.GetFunctionHeader(Self);
+      var header := GProject.FindFunctionHeader(Self);
       if header <> nil then
          header.LocalVars.FillForList(cbVar.Items);
       cbVar.ItemIndex := cbVar.Items.IndexOf(edtVar.Text);

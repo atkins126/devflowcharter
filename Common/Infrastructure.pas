@@ -25,9 +25,9 @@ interface
 
 uses
    WinApi.Windows, Vcl.StdCtrls, Vcl.Controls, Vcl.Graphics, Vcl.ComCtrls, System.Classes,
-   LocalizationManager, Project, Settings, LangDefinition, Types, Base_Form, Interfaces,
+   TranslationManager, Project, Settings, LangDefinition, Types, Base_Form, Interfaces,
    Functions_Form, DataTypes_Form, Declarations_Form, Main_Form, Base_Block, SynEditTypes,
-   Settings_Form, Editor_Form, Explorer_Form, UserFunction, BlockTabSheet, YaccLib;
+   Settings_Form, Editor_Form, Explorer_Form, BlockTabSheet, YaccLib;
 
 type
 
@@ -91,7 +91,6 @@ type
          class function GetChangeLine(AObject: TObject; AEdit: TCustomEdit = nil; const ATemplate: string = ''): TChangeLine;
          class function GetCaretPos(AEdit: TCustomEdit): TBufferCoord;
          class function ExtractIndentString(const AText: string): string;
-         class function GetFunctionHeader(ABlock: TBlock): TUserFunctionHeader;
          class function FindDuplicatedPage(APage: TTabSheet; const ACaption: TCaption): TTabSheet;
          class function GetComboMaxWidth(ACombo: TComboBox): integer;
          class function ExportToFile(AExport: IExportable): TError;
@@ -110,7 +109,7 @@ type
          class function DecodeCheckBoxState(const AState: string): TCheckBoxState;
          class function GetPageFromXY(APageControl: TPageControl; x, y: integer): TTabSheet;
          class function GetPageFromTabIndex(APageControl: TPageControl; ATabIndex: integer): TTabSheet;
-         class function Scaled(AWinControl: TWinControl; on96: integer): integer;
+         class function Scaled(AControl: TControl; on96: integer): integer;
          class function ReplaceXMLIndents(const ALine: string): string;
          class function ShouldUpdateEditor: boolean;
          function GetNativeDataType(const AName: string): PNativeDataType;
@@ -134,7 +133,7 @@ type
     GSettings:      TSettings;
     GCustomCursor:  TCustomCursor;
     GErr_text:      string;
-    i18Manager:     Ti18Manager;
+    trnsManager:     TTranslationManager;
 
 implementation
 
@@ -245,7 +244,7 @@ begin
    begin
       var dialog := GetMainForm.ExportDialog;
       dialog.FileName := AExport.GetExportFileName;
-      dialog.Filter := i18Manager.GetJoinedString('|', PROJECT_DIALOG_FILTER_KEYS);
+      dialog.Filter := trnsManager.GetJoinedString('|', PROJECT_DIALOG_FILTER_KEYS);
       dialog.FilterIndex := 1;
       if dialog.Execute then
       begin
@@ -366,32 +365,32 @@ const
                     'PrintError', 'CompileError', 'ImportError', 'Error');
 begin
    if AError <> errNone then
-      Application.MessageBox(PChar(AErrorMsg), PChar(i18Manager.GetString(ErrorsTypeArray[AError])), MB_ICONERROR);
+      Application.MessageBox(PChar(AErrorMsg), PChar(trnsManager.GetString(ErrorsTypeArray[AError])), MB_ICONERROR);
 end;
 
 class procedure TInfra.ShowErrorBox(const AKey: string; Args: array of const; AError: TError);
 begin
-   ShowErrorBox(i18Manager.GetFormattedString(AKey, Args), AError);
+   ShowErrorBox(trnsManager.GetFormattedString(AKey, Args), AError);
 end;
 
 class procedure TInfra.ShowWarningBox(const AKey: string; Args: array of const);
 begin
-   ShowWarningBox(i18Manager.GetFormattedString(AKey, Args));
+   ShowWarningBox(trnsManager.GetFormattedString(AKey, Args));
 end;
 
 class procedure TInfra.ShowWarningBox(const AWarnMsg: string);
 begin
-   Application.MessageBox(PChar(AWarnMsg), PChar(i18Manager.GetString('Warning')), MB_ICONWARNING);
+   Application.MessageBox(PChar(AWarnMsg), PChar(trnsManager.GetString('Warning')), MB_ICONWARNING);
 end;
 
 class function TInfra.ShowQuestionBox(const AMsg: string; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
 begin
-   result := Application.MessageBox(PChar(AMsg), PChar(i18Manager.GetString('Confirmation')), AFlags);
+   result := Application.MessageBox(PChar(AMsg), PChar(trnsManager.GetString('Confirmation')), AFlags);
 end;
 
 class function TInfra.ShowQuestionBox(const AKey: string; Args: array of const; AFlags: Longint = MB_ICONQUESTION + MB_YESNOCANCEL): integer;
 begin
-   result := ShowQuestionBox(i18Manager.GetFormattedString(AKey, Args), AFlags);
+   result := ShowQuestionBox(trnsManager.GetFormattedString(AKey, Args), AFlags);
 end;
 
 class procedure TInfra.Reset;
@@ -445,7 +444,7 @@ var
    printRect: TRect;
 begin
    if not IsPrinter then
-     ShowErrorBox(i18Manager.GetString('NoPrinter'), errPrinter)
+     ShowErrorBox(trnsManager.GetString('NoPrinter'), errPrinter)
    else if MainForm.PrintDialog.Execute then
    begin
      last_err := 0;
@@ -541,9 +540,9 @@ begin
               pos := fPoint;
               if GSettings.PrintMultPages then
               begin
-                 fLine1 := i18Manager.GetFormattedString('PageCount', [(i-1)*rowCount+j, colCount*rowCount]);
-                 fLine2 := i18Manager.GetFormattedString('ColumnCount', [i, colCount]);
-                 fLine3 := i18Manager.GetFormattedString('RowCount', [j, rowCount]);
+                 fLine1 := trnsManager.GetFormattedString('PageCount', [(i-1)*rowCount+j, colCount*rowCount]);
+                 fLine2 := trnsManager.GetFormattedString('ColumnCount', [i, colCount]);
+                 fLine3 := trnsManager.GetFormattedString('RowCount', [j, rowCount]);
                  maxValue := Printer.Canvas.TextWidth(GProject.Name);
                  maxTmp := Printer.Canvas.TextWidth(fLine1);
                  if maxValue < maxTmp then
@@ -577,7 +576,7 @@ begin
      if status <> GDI_ERROR then
         Printer.EndDoc
      else
-        ShowErrorBox(i18Manager.GetFormattedString('PrinterError', [sLineBreak, SysErrorMessage(last_err)]), errPrinter);
+        ShowErrorBox(trnsManager.GetFormattedString('PrinterError', [sLineBreak, SysErrorMessage(last_err)]), errPrinter);
    end;
 end;
 
@@ -629,7 +628,7 @@ begin
    AcbType.Clear;
 
    if AcbType.Tag = FUNCTION_TYPE_IND then
-      AcbType.Items.Add(i18Manager.GetString('NoType'));
+      AcbType.Items.Add(trnsManager.GetString('NoType'));
 
 // first, populate with native types from language definition XML file
    for var nativeType in GInfra.CurrentLang.NativeDataTypes do
@@ -739,7 +738,7 @@ begin
       var line := ADestList[i];
       if ContainsText(line, APlaceHolder) then
       begin
-         if (ATemplate <> nil) and (ATemplate.Count > 0) then
+         if (ATemplate <> nil) and not ATemplate.IsEmpty then
          begin
             for var a := ATemplate.Count-1 downto 0 do
             begin
@@ -1014,17 +1013,6 @@ begin
    SetLength(result, i-1);
 end;
 
-class function TInfra.GetFunctionHeader(ABlock: TBlock): TUserFunctionHeader;
-begin
-   result := nil;
-   if ABlock <> nil then
-   begin
-      var mainBlock := TMainBlock(ABlock.TopParentBlock);
-      if mainBlock.UserFunction is TUserFunction then
-         result := TUserFunction(mainBlock.UserFunction).Header;
-   end;
-end;
-
 class procedure TInfra.SetFontSize(AControl: TControl; ASize: integer);
 begin
    var flag := (AControl is TCustomEdit)
@@ -1087,7 +1075,7 @@ class function TInfra.GetAutoWidth(AControl: TControl; AMinWidth: integer = 0): 
 begin
    result := 0;
    if AControl is TCheckBox then
-      result := GetTextWidth(TCheckBox(AControl).Caption, AControl) + GetSystemMetrics(SM_CXMENUCHECK) + 3
+      result := GetTextWidth(TCheckBox(AControl).Caption, AControl) + GetSystemMetrics(SM_CXMENUCHECK) + 4
    else if AControl is TCustomEdit then
       result := GetTextWidth(TCustomEdit(AControl).Text, AControl)
    else if AControl is TButton then
@@ -1220,9 +1208,9 @@ begin
       result := APageControl.Pages[idx];
 end;
 
-class function TInfra.Scaled(AWinControl: TWinControl; on96: integer): integer;
+class function TInfra.Scaled(AControl: TControl; on96: integer): integer;
 begin
-   var ppi := Screen.MonitorFromWindow(AWinControl.Handle).PixelsPerInch;
+   var ppi := AControl.CurrentPPI;
    if ppi = 96 then
       result := on96
    else
@@ -1256,7 +1244,7 @@ begin
    result := True;
    var lang := GetLangDefinition(PASCAL_LANG_ID);
    var goParse := (lang <> nil) and Assigned(lang.Parse);
-   if (ASize <> '') and ((ASize[1] = '0') or (ASize[1] = '-') or (goParse and not lang.Parse(ASize, yymVarSize))) then
+   if (ASize.Length > 0) and (CharInSet(ASize[1], ['0', '-']) or (goParse and not lang.Parse(ASize, yymVarSize))) then
       result := False;
 end;
 
@@ -1273,23 +1261,25 @@ initialization
 
    GSettings := TSettings.Create;
 
-   i18Manager := Ti18Manager.Create;
-   if i18Manager.LoadDynamicLabels(GSettings.TranslateFile) = 0 then
-      i18Manager.LoadDefaultLabels;
+   trnsManager := TTranslationManager.Create;
+   if trnsManager.LoadLabels(GSettings.TranslationFile, True, False) = 0 then
+   begin
+      trnsManager.LoadDefaultLabels(True, False);
+      if not GSettings.TranslationFile.IsEmpty then
+      begin
+         TInfra.ShowWarningBox('LoadTranslFail', [GSettings.TranslationFile, sLineBreak]);
+         GSettings.TranslationFile := '';
+      end;
+   end;
 
    GInfra := TInfra.Create;
 
 finalization
 
-   GInfra.Free;
-   GInfra := nil;
-
+   FreeAndNil(GInfra);
    GSettings.Save;
-   GSettings.Free;
-   GSettings := nil;
-
-   i18Manager.Free;
-   i18Manager := nil;
+   FreeAndNil(GSettings);
+   FreeAndNil(trnsManager);
 
 end.
 

@@ -92,7 +92,7 @@ type
       function ImportUserDataTypesFromXML(ANode: IXMLNode; AImportMode: TImportMode): TError;
       function ImportCommentsFromXML(ANode: IXMLNode): integer;
       procedure ImportPagesFromXML(ANode: IXMLNode);
-      function GetMainBlock: TMainBlock;
+      function GetMain: TMainBlock;
       procedure PopulateDataTypeCombos;
       procedure RefreshStatements;
       procedure ChangeDesktopColor(AColor: TColor);
@@ -119,6 +119,9 @@ type
       function IsNew: boolean;
       procedure SetNotChanged;
       function FindSelectedBlock: TBlock;
+      function FindRedArrowBlock: TBlock;
+      function FindUserFunction(ABody: TGroupBlock): TUserFunction;
+      function FindFunctionHeader(ABlock: TBlock): TUserFunctionHeader;
    end;
 
 implementation
@@ -145,7 +148,7 @@ end;
 
 destructor TProject.Destroy;
 begin
-   while FComponentList.Count > 0 do             // automatic disposing objects that are stored in list by calling list's destructor
+   while not FComponentList.IsEmpty do             // automatic disposing objects that are stored in list by calling list's destructor
       FComponentList[0].Free;                    // will generate EListError exception for pinned comments
    FComponentList.Free;                          // so to destroy FComponentList, objects must be freed in while loop first
    FGlobalVars.Free;
@@ -197,7 +200,7 @@ end;
 function TProject.MainPage: TBlockTabSheet;
 begin
    if FMainPage = nil then
-      FMainPage := GetPage(i18Manager.GetString(DEF_PAGE_CAPTION_KEY));
+      FMainPage := GetPage(trnsManager.GetString(DEF_PAGE_CAPTION_KEY));
    result := FMainPage;
 end;
 
@@ -460,7 +463,7 @@ begin
       end;
       if activePage = nil then
          activePage := MainPage;
-      activePage.PageControl.ActivePage := activePage;
+      activePage.SetAsActivePage;
    end;
 end;
 
@@ -469,10 +472,10 @@ begin
 
    result := errValidate;
 
-   var langName := GetNodeAttrStr(ANode, LANG_ATTR, '');
+   var langName := GetNodeAttrStr(ANode, LANG_ATTR);
    if GInfra.GetLangDefinition(langName) = nil then
    begin
-      Gerr_text := i18Manager.GetFormattedString('LngNoSprt', [langName]);
+      Gerr_text := trnsManager.GetFormattedString('LngNoSprt', [langName]);
       Exit;
    end;
 
@@ -517,12 +520,10 @@ end;
 
 procedure TProject.SetGlobalDeclarations(AForm: TDeclarationsForm);
 begin
-   FGlobalVars.Free;
-   FGlobalVars := nil;
-   FGlobalConsts.Free;
-   FGlobalConsts := nil;
+   FreeAndNil(FGlobalVars);
+   FreeAndNil(FGlobalConsts);
    if GInfra.CurrentLang.EnabledVars then
-      FGlobalVars := TVarDeclareList.Create(AForm, 2, 1, DEF_VARLIST_WIDTH, 6, 5, DEF_VARLIST_WIDTH-10);
+      FGlobalVars := TVarDeclareList.Create(AForm, 2, 1, 358, 6, 5);
    if GInfra.CurrentLang.EnabledConsts then
    begin
       var splitter: TSplitter := nil;
@@ -537,24 +538,24 @@ begin
          splitter.Align := FGlobalVars.Align;
          FGlobalVars.SetSplitter(splitter);
       end;
-      FGlobalConsts := TConstDeclareList.Create(AForm, x, 1, DEF_CONSTLIST_WIDTH-5, 6, 3, DEF_CONSTLIST_WIDTH-15);
+      FGlobalConsts := TConstDeclareList.Create(AForm, x, 1, 235, 6, 3);
       if splitter <> nil then
          FGlobalConsts.Align := alClient;
    end;
    if FGlobalVars <> nil then
    begin
-      FGlobalVars.Caption := i18Manager.GetString(GInfra.CurrentLang.GlobalVarsLabelKey);
+      FGlobalVars.Caption := trnsManager.GetString(GInfra.CurrentLang.GlobalVarsLabelKey);
       FGlobalVars.SetExternalColumn(4);
-      FGlobalVars.AssociatedList := FGlobalConsts;
+      FGlobalVars.Associate := FGlobalConsts;
       AForm.Width := FGlobalVars.BoundsRect.Right + DECLARATIONS_FORM_RIGHT_MARGIN;
       if FGlobalConsts = nil then
          FGlobalVars.Align := alClient;
    end;
    if FGlobalConsts <> nil then
    begin
-      FGlobalConsts.Caption := i18Manager.GetString(GInfra.CurrentLang.GlobalConstsLabelKey);
+      FGlobalConsts.Caption := trnsManager.GetString(GInfra.CurrentLang.GlobalConstsLabelKey);
       FGlobalConsts.SetExternalColumn(2);
-      FGlobalConsts.AssociatedList := FGlobalVars;
+      FGlobalConsts.Associate := FGlobalVars;
       AForm.Width := FGlobalConsts.BoundsRect.Right + DECLARATIONS_FORM_RIGHT_MARGIN;
    end;
 end;
@@ -587,7 +588,7 @@ begin
    else if result.Count > 1 then
    begin
       SelectImportForm.SetSelectList(result);
-      SelectImportForm.Caption := i18Manager.GetString(ALabel);
+      SelectImportForm.Caption := trnsManager.GetString(ALabel);
       if IsAbortResult(SelectImportForm.ShowModal) then
          result.Clear;
    end;
@@ -677,7 +678,7 @@ begin
             box.ScrollInView(lastBody);
       end;
       if lastHeader <> nil then
-         lastHeader.PageControl.ActivePage := lastHeader;
+         lastHeader.SetAsActivePage;
    finally
       selectList.Free;
    end;
@@ -712,7 +713,7 @@ begin
          dataTypeNode := dataTypeNodes.NextNode;
       end;
       if dataType <> nil then
-         dataType.PageControl.ActivePage := dataType;
+         dataType.SetAsActivePage;
    finally
       selectList.Free;
    end;
@@ -751,7 +752,7 @@ begin
    if HeaderComment <> nil then
    begin
       result := HeaderComment.Text;
-      if EndsText(sLineBreak, HeaderComment.Text) then
+      if EndsText(HeaderComment.Lines.LineBreak, HeaderComment.Text) then
          result := result + sLineBreak;
    end;
 end;
@@ -815,16 +816,40 @@ begin
    end;
 end;
 
-function TProject.GetMainBlock: TMainBlock;
+function TProject.GetMain: TMainBlock;
 begin
    result := nil;
    for var func in GetUserFunctions do
    begin
-      if (func.Header = nil) and func.Active then
+      if func.IsMain and func.Active then
       begin
          result := func.Body;
          break;
       end;
+   end;
+end;
+
+function TProject.FindUserFunction(ABody: TGroupBlock): TUserFunction;
+begin
+   result := nil;
+   for var func in GetUserFunctions do
+   begin
+      if func.Body = ABody then
+      begin
+         result := func;
+         break;
+      end;
+   end;
+end;
+
+function TProject.FindFunctionHeader(ABlock: TBlock): TUserFunctionHeader;
+begin
+   result := nil;
+   if ABlock <> nil then
+   begin
+      var userFunction := FindUserFunction(ABlock.TopParentBlock);
+      if userFunction <> nil then
+         result := userFunction.Header;
    end;
 end;
 
@@ -937,7 +962,7 @@ begin
    for var func in GetUserFunctions do
    begin
       if (func.Header <> nil ) and (func.Body <> nil) and (func.Body.Page = APage) then
-         func.Header.SetPageCombo(APage.Caption);
+         func.Header.SetPageBox(APage.Caption);
    end;
 end;
 
@@ -998,6 +1023,20 @@ begin
       if func.Body <> nil then
       begin
          result := func.Body.FindSelectedBlock;
+         if result <> nil then
+            break;
+      end;
+   end;
+end;
+
+function TProject.FindRedArrowBlock: TBlock;
+begin
+   result := nil;
+   for var func in GetUserFunctions do
+   begin
+      if func.Body <> nil then
+      begin
+         result := func.Body.FindRedArrowBlock;
          if result <> nil then
             break;
       end;

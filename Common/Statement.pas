@@ -23,12 +23,11 @@ interface
 
 uses
    System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.StdCtrls, WinApi.Messages,
-   Interfaces, Types, YaccLib;
+   System.SysUtils, Interfaces, Types, YaccLib;
 
 type
 
   TWinControlHack = class(TWinControl);
-  TEditorAction = procedure(AEdit: TCustomEdit) of object;
 
   TStatement = class(TCustomEdit, IWithId, IWithFocus)
   private
@@ -47,7 +46,7 @@ type
     procedure CreateHandle; override;
   public
     { Public declarations }
-    EditorAction: TEditorAction;
+    EditorAction: TProc<TCustomEdit>;
     property Id: integer read GetId;
     constructor Create(AParent: TWinControl; AParserMode: TYYMode; AAlignment: TAlignment; AId: integer = ID_INVALID);
     destructor Destroy; override;
@@ -120,7 +119,7 @@ type
 implementation
 
 uses
-   WinApi.Windows, System.SysUtils, Vcl.Forms, Infrastructure, Navigator_Form, Constants;
+   WinApi.Windows, Vcl.Forms, Infrastructure, Navigator_Form, Constants;
 
 constructor TStatement.Create(AParent: TWinControl; AParserMode: TYYMode; AAlignment: TAlignment; AId: integer = ID_INVALID);
 begin
@@ -179,7 +178,7 @@ begin
    inherited Change;
    GProject.SetChanged;
    var txt := Trim(Text);
-   var h := i18Manager.GetFormattedString('ExpOk', [txt, sLineBreak]);
+   var h := trnsManager.GetFormattedString('ExpOk', [txt, sLineBreak]);
    var c := GSettings.FontColor;
    if GSettings.ExecuteParse(FParserMode) then
    begin
@@ -188,34 +187,34 @@ begin
          case FParserMode of
             yymFor:
             begin
-               h := i18Manager.GetFormattedString('ExpErr', ['', sLineBreak, i18Manager.GetString('IntReq')]);
+               h := trnsManager.GetFormattedString('ExpErr', ['', sLineBreak, trnsManager.GetString('IntReq')]);
                c := NOK_COLOR;
             end;
             yymCondition:
             begin
-               h := i18Manager.GetFormattedString('NoCExp', [sLineBreak]);
+               h := trnsManager.GetFormattedString('NoCExp', [sLineBreak]);
                c := NOK_COLOR;
             end;
             yymCase:
             begin
-               h := i18Manager.GetFormattedString('NoCaseExp', [sLineBreak]);
+               h := trnsManager.GetFormattedString('NoCaseExp', [sLineBreak]);
                c := NOK_COLOR;
             end;
             yymAssign:
             begin
-               h := i18Manager.GetFormattedString('NoInstr', [sLineBreak]);
+               h := trnsManager.GetFormattedString('NoInstr', [sLineBreak]);
                c := WARN_COLOR;
             end;
             yymFuncCall:
             begin
-               h := i18Manager.GetFormattedString('NoFCall', [sLineBreak]);
+               h := trnsManager.GetFormattedString('NoFCall', [sLineBreak]);
                c := WARN_COLOR;
             end;
          end;
       end
       else if not TInfra.Parse(Self, FParserMode) then
       begin
-         h := i18Manager.GetFormattedString('ExpErr', [txt, sLineBreak, TInfra.GetParserErrMsg]);
+         h := trnsManager.GetFormattedString('ExpErr', [txt, sLineBreak, TInfra.GetParserErrMsg]);
          c := NOK_COLOR;
       end;
    end;
@@ -230,7 +229,7 @@ end;
 procedure TStatement.KeyDown(var Key: Word; Shift: TShiftState);
 begin
    inherited;
-   if (ssCtrl in Shift) and (Key = Ord('A')) then
+   if (Shift = [ssCtrl]) and (Key = Ord('A')) then
       SelectAll;
 end;
 

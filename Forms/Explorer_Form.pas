@@ -53,7 +53,7 @@ type
     procedure tvExplorerCustomDrawItem(Sender: TCustomTreeView;
       Node: TTreeNode; State: TCustomDrawState; var DefaultDraw: Boolean);
     procedure miRemoveClick(Sender: TObject);
-    procedure Localize(AList: TStringList); override;
+    procedure AfterTranslation(AList: TStringList); override;
     procedure ResetForm; override;
     procedure FormCreate(Sender: TObject);
     procedure chkAutoNavClick(Sender: TObject);
@@ -90,14 +90,14 @@ begin
     begin
        FErrWarnCount := GProject.CountErrWarn;
        lblErrors.Font.Color := IfThen(FErrWarnCount.ErrorCount = 0, OK_COLOR, NOK_COLOR);
-       lblErrors.Caption := i18Manager.GetFormattedString('lblErrors', [FErrWarnCount.ErrorCount]);
-       lblWarnings.Caption := i18Manager.GetFormattedString('lblWarnings', [FErrWarnCount.WarningCount]);
+       lblErrors.Caption := trnsManager.GetFormattedString('lblErrors', [FErrWarnCount.ErrorCount]);
+       lblWarnings.Caption := trnsManager.GetFormattedString('lblWarnings', [FErrWarnCount.WarningCount]);
        ClearTreeViewItems;
        with tvExplorer do
        begin
           Items.BeginUpdate;
           try
-             Selected := Items.AddChild(nil, i18Manager.GetFormattedString('RootNodeText', [GProject.Name]));
+             Selected := Items.AddChild(nil, trnsManager.GetFormattedString('RootNodeText', [GProject.Name]));
              GProject.GenerateTree(Selected);
           finally
              Items.EndUpdate;
@@ -134,11 +134,11 @@ begin
       Supports(ANode.Data, IWithFocus, result);
 end;
 
-procedure TExplorerForm.Localize(AList: TStringList);
+procedure TExplorerForm.AfterTranslation(AList: TStringList);
 begin
    if tvExplorer.CanFocus then
       miRefresh.Click;
-   inherited Localize(AList);
+   inherited AfterTranslation(AList);
 end;
 
 procedure TExplorerForm.tvExplorerChange(Sender: TObject; Node: TTreeNode);
