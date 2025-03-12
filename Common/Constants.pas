@@ -24,7 +24,7 @@ unit Constants;
 interface
 
 uses
-   Vcl.Graphics, Types, System.UITypes;
+   Vcl.Graphics, Types, System.Types, System.UITypes;
 
 const   // Global constants
 
@@ -62,7 +62,7 @@ const   // Global constants
         FRAME_ATTR        = 'frame';
         BLOCK_TYPE_ATTR   = 'type';
         ID_ATTR           = 'hash';
-        BRANCH_STMNT_ATTR = 'bstmnt_hash';
+        BRANCH_TEXT_ATTR  = 'bstmnt_hash';
         FONT_SIZE_ATTR    = 'fontsize';
         FONT_STYLE_ATTR   = 'fontstyle';
         Z_ORDER_ATTR      = 'ZOrdVal';
@@ -129,8 +129,7 @@ const   // Global constants
 
         SETTINGS_SECTION = 'Settings';
 
-        PRINT_SCALE_BASE     = 100;   // 100 %
-        DEFAULT_PRINT_MARGIN = 5;     //   5 %
+        DEFAULT_PRINT_MARGINS: TRect = (Left:5; Top:5; Right:5; Bottom:5);  // in percents
 
         DECLARATIONS_FORM_RIGHT_MARGIN = 16;
 

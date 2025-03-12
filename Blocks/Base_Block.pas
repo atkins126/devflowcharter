@@ -64,10 +64,11 @@ type
          FVResize,
          FRefreshMode,
          FFrame,
-         FMouseLeave: boolean;
+         FMouseLeave,
+         FPosChanged: boolean;              // flag to indicate that block was moved from its initial position (0, 0)
          FShape: TColorShape;
          FRedArrow: integer;                // indicates active arrow; -1: none, 0: bottom, 1: branch1, 2: branch2...
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode; AAlignment: TAlignment);
+         constructor Create(AParentBranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AParserMode: TYYMode; AAlignment: TAlignment);
          procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
          procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
          function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
@@ -80,6 +81,7 @@ type
          procedure NCHitTest(var Msg: TWMNCHitTest); message WM_NCHITTEST;
          procedure WMGetMinMaxInfo(var Msg: TWMGetMinMaxInfo); message WM_GETMINMAXINFO;
          procedure WMExitSizeMove(var Msg: TWMMove); message WM_EXITSIZEMOVE;
+         procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
          procedure WMWindowPosChanged(var Msg: TWMWindowPosChanged); message WM_WINDOWPOSCHANGED;
          procedure Paint; override;
          procedure DrawI;
@@ -92,18 +94,17 @@ type
          procedure SetCursor(const APoint: TPoint);
          procedure SetFrame(AValue: boolean);
          procedure PutTextControls; virtual;
-         procedure DrawArrowTo(toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
+         procedure DrawArrowTo(toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone);
          procedure DrawArrow(const aFrom, aTo: TPoint; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          procedure DrawArrow(fromX, fromY, toX, toY: integer; AArrowPos: TArrowPosition = arrEnd; AColor: TColor = clNone); overload;
          function GetEllipseTextRect(ax, ay: integer; const AText: string): TRect;
          function DrawEllipsedText(ax, ay: integer; const AText: string): TRect;
-         procedure MoveComments(x, y: integer);
          function GetUndoObject: TObject; virtual;
          function IsInFront(AControl: TWinControl): boolean;
          procedure SetPage(APage: TBlockTabSheet); virtual;
          function GetPage: TBlockTabSheet; virtual;
          procedure CreateParams(var Params: TCreateParams); override;
-         procedure OnWindowPosChanged(x, y: integer); virtual;
+         procedure MoveComment(AComment: TComment; dx, dy: integer); virtual;
          function ProcessComments: boolean;
          function IsAncestor(AParent: TObject): boolean;
          function GetErrorMsg(AEdit: TCustomEdit): string;
@@ -200,7 +201,7 @@ type
          FFalseLabel: string;
          FFixedBranches: integer;
          FDiamond: TDiamond;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
+         constructor Create(AParentBranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
          procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          function CanResize(var NewWidth, NewHeight: Integer): Boolean; override;
          procedure SetWidth(AMinX: integer); virtual;
@@ -224,7 +225,7 @@ type
          function FindLastRow(AStart: integer; ALines: TStrings): integer; override;
          procedure ChangeColor(AColor: TColor); override;
          function GenerateTree(AParentNode: TTreeNode): TTreeNode; override;
-         function AddBranch(const AHook: TPoint; ABranchId: integer = ID_INVALID; ABranchTextId: integer = ID_INVALID): TBranch; virtual;
+         function AddBranch(const AHook: TPoint; AId: integer = ID_UNDEFINED; ATextId: integer = ID_UNDEFINED): TBranch; virtual;
          procedure ExpandAll;
          function HasFoldedBlocks: boolean;
          procedure PopulateComboBoxes; override;
@@ -267,7 +268,7 @@ type
          property ParentBlock: TGroupBlock read FParentBlock;
          property Height: integer read GetHeight;
          property Id: integer read GetId;
-         constructor Create(AParentBlock: TGroupBlock; const AHook: TPoint; AId: integer = ID_INVALID);
+         constructor Create(AParentBlock: TGroupBlock; const AHook: TPoint; AId: integer = ID_UNDEFINED);
          destructor Destroy; override;
          procedure InsertAfter(ANewBlock, ABlock: TBlock);
          function EndsWithReturnBlock: boolean;
@@ -287,7 +288,7 @@ type
    TControlHack = class(TControl);
    TCustomEditHack = class(TCustomEdit);
 
-constructor TBlock.Create(ABranch: TBranch;
+constructor TBlock.Create(AParentBranch: TBranch;
                           const ABlockParms: TBlockParms;
                           AShape: TColorShape;
                           AParserMode: TYYMode;
@@ -296,13 +297,13 @@ begin
 
    FType := ABlockParms.bt;
 
-   if ABranch <> nil then
+   if AParentBranch <> nil then
    begin
-      FParentBlock := ABranch.ParentBlock;
+      FParentBlock := AParentBranch.ParentBlock;
       FTopParentBlock := FParentBlock.TopParentBlock;
       inherited Create(FParentBlock);
       Parent := FParentBlock;
-      FParentBranch := ABranch;
+      FParentBranch := AParentBranch;
    end
    else                                     // current object is TMainBlock class
    begin
@@ -330,10 +331,10 @@ begin
    FStatement.Color := GSettings.GetShapeColor(FShape);
 end;
 
-constructor TGroupBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
+constructor TGroupBlock.Create(AParentBranch: TBranch; const ABlockParms: TBlockParms; AShape: TColorShape; AAlignment: TAlignment; AParserMode: TYYMode = yymUndefined);
 begin
 
-   inherited Create(ABranch, ABlockParms, AShape, AParserMode, AAlignment);
+   inherited Create(AParentBranch, ABlockParms, AShape, AParserMode, AAlignment);
 
    FStatement.Width := 65;
 
@@ -1032,14 +1033,11 @@ begin
    begin
       for var comment in GProject.GetComments do
       begin
-         if comment.Page = Page then
-         begin
-            var isFront := True;
-            if AInFront then
-               isFront := IsInFront(comment);
-            if isFront and (comment.PinControl = nil) and ClientRect.Contains(ParentToClient(comment.BoundsRect.TopLeft, Page.Box)) then
+         if (comment.PinControl = nil) and
+            (comment.Parent = FTopParentBlock.Parent) and
+            ((not AInFront) or IsInFront(comment)) and
+            ClientToScreen(ClientRect).Contains(comment.ClientOrigin) then
                list.Add(comment);
-         end
       end;
    end;
    result := TEnumeratorFactory<TComment>.Create(list);
@@ -1069,29 +1067,36 @@ begin
    end;
 end;
 
-procedure TBlock.MoveComments(x, y: integer);
+procedure TBlock.WMWindowPosChanging(var Msg: TWMWindowPosChanging);
 begin
-   x := IfThen(x <> 0, x-Left);
-   y := IfThen(y <> 0, y-Top);
-   if (x <> 0) or (y <> 0) then
+   if FPosChanged and ((Msg.WindowPos.flags and SWP_NOMOVE) = 0) then
    begin
-      for var comment in GetComments(True) do
+      var dx := Msg.WindowPos.x - Left;
+      var dy := Msg.WindowPos.y - Top;
+      if (dx <> 0) or (dy <> 0) then
       begin
-         if comment.Visible then
-            TInfra.MoveWinTopZ(comment, comment.Left+x, comment.Top+y);
+         for var comment in GetComments(True) do
+            MoveComment(comment, dx, dy);
       end;
    end;
-end;
-
-procedure TBlock.OnWindowPosChanged(x, y: integer);
-begin
-   MoveComments(x, y);
+   inherited;
 end;
 
 procedure TBlock.WMWindowPosChanged(var Msg: TWMWindowPosChanged);
 begin
-   OnWindowPosChanged(Msg.WindowPos.x, Msg.WindowPos.y);
+   if (Msg.WindowPos.flags and SWP_NOMOVE) = 0 then
+      FPosChanged := True;
    inherited;
+end;
+
+procedure TBlock.MoveComment(AComment: TComment; dx, dy: integer);
+begin
+  if not AComment.Moved then
+  begin
+     if AComment.Visible then
+        TInfra.MoveWinTopZ(AComment, AComment.Left+dx, AComment.Top+dy);
+     AComment.Moved := True;
+  end;
 end;
 
 function TBlock.GetPinComments: IEnumerable<TComment>;
@@ -1119,27 +1124,27 @@ end;
 
 procedure TBlock.PerformRefreshStatements;
 begin
-    var b := NavigatorForm.InvalidateIndicator;
-    NavigatorForm.InvalidateIndicator := False;
-    RefreshStatements;
-    NavigatorForm.InvalidateIndicator := b;
+   var b := NavigatorForm.InvalidateIndicator;
+   NavigatorForm.InvalidateIndicator := False;
+   RefreshStatements;
+   NavigatorForm.InvalidateIndicator := b;
 end;
 
 procedure TBlock.RefreshStatements;
 begin
-    var b := FRefreshMode;
-    FRefreshMode := True;
-    try
-       for var control in GetControls do
-       begin
-          if control is TCustomEdit then
-             TCustomEditHack(control).Change
-          else if (control is TBlock) and (control <> GClpbrd.UndoObject) then
-             TBlock(control).RefreshStatements;
-       end;
-    finally
-       FRefreshMode := b;
-    end;
+   var b := FRefreshMode;
+   FRefreshMode := True;
+   try
+      for var control in GetControls do
+      begin
+         if control is TCustomEdit then
+            TCustomEditHack(control).Change
+         else if (control is TBlock) and (control <> GClpbrd.UndoObject) then
+            TBlock(control).RefreshStatements;
+      end;
+   finally
+      FRefreshMode := b;
+   end;
 end;
 
 function TBlock.GetId: integer;
@@ -1385,35 +1390,26 @@ const
    MX: array[boolean, boolean] of integer = ((10, -10), (-5, -5));
    MY: array[boolean, boolean] of integer = ((5, 5), (10, -10));
    MD: array[boolean, boolean] of integer = ((0, -10), (10, 0));
-var
-   isVert, toBottomRight: boolean;
-   aX, aY: integer;
-   p: TPoint;
 begin
    if AColor = clNone then
       AColor := GSettings.PenColor;
-   aX := toX;
-   aY := toY;
-   isVert := fromX = toX;
+   var isVert := fromX = toX;
+   var arrTo := Point(toX, toY);
    if AArrowPos = arrMiddle then
    begin
       if isVert then
-         Inc(aY, (fromY-toY) div 2)
+         arrTo.Offset(0, (fromY-toY) div 2)
       else
-         Inc(aX, (fromX-toX) div 2);
+         arrTo.Offset((fromX-toX) div 2, 0);
    end;
+   var toBottomRight := toX > fromX;
    if isVert then
-      toBottomRight := toY > fromY
-   else
-      toBottomRight := toX > fromX;
-   p := Point(aX+MX[isVert, toBottomRight], aY+MY[isVert, toBottomRight]);
+      toBottomRight := toY > fromY;
+   var arrFrom := arrTo + Point(MX[isVert, toBottomRight], MY[isVert, toBottomRight]);
    Canvas.Brush.Style := bsSolid;
    Canvas.Pen.Color := AColor;
    Canvas.Brush.Color := AColor;
-   Canvas.Polygon([p,
-                   Point(p.X+MD[isVert, False], p.Y+MD[isVert, True]),
-                   Point(aX, aY),
-                   p]);
+   Canvas.Polygon([arrFrom, arrFrom + Point(MD[isVert, False], MD[isVert, True]), arrTo]);
    Canvas.MoveTo(fromX, fromY);
    Canvas.LineTo(toX, toY);
 end;
@@ -1752,9 +1748,9 @@ begin
    end;
 end;
 
-function TGroupBlock.AddBranch(const AHook: TPoint; ABranchId: integer = ID_INVALID; ABranchTextId: integer = ID_INVALID): TBranch;
+function TGroupBlock.AddBranch(const AHook: TPoint; AId: integer = ID_UNDEFINED; ATextId: integer = ID_UNDEFINED): TBranch;
 begin
-   result := TBranch.Create(Self, AHook, ABranchId);
+   result := TBranch.Create(Self, AHook, AId);
    FBranchList.Add(result);
 end;
 
@@ -2032,7 +2028,7 @@ begin
             SetNodeAttrInt(node, ID_ATTR, br.Id);
 
             if br.Statement <> nil then
-               SetNodeAttrInt(node, BRANCH_STMNT_ATTR, br.Statement.Id);
+               SetNodeAttrInt(node, BRANCH_TEXT_ATTR, br.Statement.Id);
 
             SetNodeTextInt(node, 'x', br.hook.X);
             SetNodeTextInt(node, 'y', br.hook.Y);
@@ -2155,19 +2151,19 @@ begin
       var branchNode := branchNodes.NextNode;
       while branchNode <> nil do
       begin
-         var hx := 0;
-         var hy := 0;
-         var node := FindNode(branchNode, 'x');
-         if node <> nil then
-            hx := StrToIntDef(node.Text, 0);
-         node := FindNode(branchNode, 'y');
-         if node <> nil then
-            hy := StrToIntDef(node.Text, 0);
-         var bId := GetNodeAttrInt(branchNode, ID_ATTR);
-         var bStmntId := GetNodeAttrInt(branchNode, BRANCH_STMNT_ATTR, ID_INVALID);
          if GetBranch(idx) = nil then
-            AddBranch(Point(hx, hy), bId, bStmntId);
-         node := FindNode(branchNode, BLOCK_TAG);
+         begin
+            var hx := 0;
+            var hy := 0;
+            var node := FindNode(branchNode, 'x');
+            if node <> nil then
+               hx := StrToIntDef(node.Text, 0);
+            node := FindNode(branchNode, 'y');
+            if node <> nil then
+               hy := StrToIntDef(node.Text, 0);
+            AddBranch(Point(hx, hy), GetNodeAttrInt(branchNode, ID_ATTR), GetNodeAttrInt(branchNode, BRANCH_TEXT_ATTR, ID_UNDEFINED));
+         end;
+         var node := FindNode(branchNode, BLOCK_TAG);
          if node <> nil then
          begin
             TXMLProcessor.ImportFlowchartFromXML(node, Self, nil, idx, result);
@@ -2408,8 +2404,14 @@ end;
 
 procedure TGroupBlock.LinkAllBlocks;
 begin
-   for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
-      LinkBlocks(FBranchList[i]);
+   var comments := GetComments(True);
+   try
+      for var i := PRIMARY_BRANCH_IDX to FBranchList.Count-1 do
+         LinkBlocks(FBranchList[i]);
+   finally
+      for var comment in comments do
+         comment.Moved := False;
+   end;
 end;
 
 function TBlock.GenerateCode(ALines: TStringList; const ALangId: string; ADeep: integer; AFromLine: integer = LAST_LINE): integer;
@@ -2533,7 +2535,7 @@ begin
    end;
 end;
 
-constructor TBranch.Create(AParentBlock: TGroupBlock; const AHook: TPoint; AId: integer = ID_INVALID);
+constructor TBranch.Create(AParentBlock: TGroupBlock; const AHook: TPoint; AId: integer = ID_UNDEFINED);
 begin
    inherited Create;
    FParentBlock := AParentBlock;
@@ -2561,11 +2563,7 @@ function TBranch.GetMostRight: integer;
 begin
    result := Hook.X;
    for var i := 0 to Count-1 do
-   begin
-      var br := Items[i].BoundsRect.Right;
-      if br > result then
-         result := br;
-   end;
+      result := Max(result, Items[i].BoundsRect.Right);
 end;
 
 procedure TBranch.InsertAfter(ANewBlock, ABlock: TBlock);

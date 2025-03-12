@@ -37,8 +37,8 @@ type
 
    TTextBlock = class(TMultiLineBlock)
       public
-         constructor Create(ABranch: TBranch); overload;
-         constructor Create(ABranch: TBranch; const ABlockParms: TBlockParms); overload;
+         constructor Create(AParentBranch: TBranch); overload;
+         constructor Create(AParentBranch: TBranch; const ABlockParms: TBlockParms); overload;
          procedure ChangeColor(AColor: TColor); override;
       protected
          FCorner: TCorner;
@@ -52,9 +52,9 @@ implementation
 uses
    System.Types, Constants, Infrastructure;
 
-constructor TTextBlock.Create(ABranch: TBranch; const ABlockParms: TBlockParms);
+constructor TTextBlock.Create(AParentBranch: TBranch; const ABlockParms: TBlockParms);
 begin
-   inherited Create(ABranch, ABlockParms);
+   inherited Create(AParentBranch, ABlockParms);
    FStatements.Font.Color := TEXT_COLOR;
    FStatements.OnChange := OnChangeStatements;
    Font.Color := TEXT_COLOR;
@@ -67,9 +67,9 @@ begin
    FCorner.SetBounds(Width-15, 0, 15, 15);
 end;
 
-constructor TTextBlock.Create(ABranch: TBranch);
+constructor TTextBlock.Create(AParentBranch: TBranch);
 begin
-   Create(ABranch, TBlockParms.New(blText, 0, 0, 140, 91));
+   Create(AParentBranch, TBlockParms.New(blText, 0, 0, 140, 91));
 end;
 
 procedure TTextBlock.Paint;
@@ -106,11 +106,11 @@ begin
 
    Canvas.Pen.Color := TWinControlHack(Parent).Color;
    Canvas.Brush.Color := Canvas.Pen.Color;
-   Canvas.Polygon([r.TopLeft, Point(r.Right, r.Top), r.BottomRight, r.TopLeft]);
+   Canvas.Polygon([r.TopLeft, Point(r.Right, r.Top), r.BottomRight]);
 
    Canvas.Pen.Color := GSettings.PenColor;
    Canvas.Brush.Color := Color;
-   Canvas.Polygon([r.TopLeft, r.BottomRight, Point(r.Left, r.Bottom), r.TopLeft]);
+   Canvas.Polygon([r.TopLeft, r.BottomRight, Point(r.Left, r.Bottom)]);
 end;
 
 end.

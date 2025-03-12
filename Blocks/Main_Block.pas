@@ -24,8 +24,8 @@ unit Main_Block;
 interface
 
 uses
-   WinApi.Windows, WinApi.Messages, Vcl.Graphics, Vcl.ComCtrls, System.Classes,
-   System.Math, Base_Block, OmniXML, Interfaces, Types, BlockTabSheet;
+   WinApi.Windows, Vcl.Graphics, Vcl.ComCtrls, System.Classes, System.Math, Base_Block,
+   OmniXML, Interfaces, Types, BlockTabSheet, Comment;
 
 type
 
@@ -58,9 +58,8 @@ type
          FStopLabel: string;
          procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
          procedure Paint; override;
-         procedure WMWindowPosChanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
+         procedure MoveComment(AComment: TComment; dx, dy: integer); override;
          procedure SetPage(APage: TBlockTabSheet); override;
-         procedure OnWindowPosChanged(x, y: integer); override;
          function GetFunctionLabel(var ARect: TRect): string;
          function GetPage: TBlockTabSheet; override;
          function GetUndoObject: TObject; override;
@@ -74,22 +73,19 @@ implementation
 
 uses
    Vcl.Forms, System.SysUtils, System.StrUtils, Infrastructure, XMLProcessor, OmniXMLUtils,
-   Navigator_Form, UserFunction, Comment, Constants;
+   Navigator_Form, UserFunction, Constants;
 
 constructor TMainBlock.Create(APage: TBlockTabSheet; const ABlockParms: TBlockParms);
 begin
 
    FPage := APage;
-
    inherited Create(nil, ABlockParms, shpEllipse, taLeftJustify);
 
    FStartLabel := trnsManager.GetString('CaptionStart');
    FStopLabel  := trnsManager.GetString('CaptionStop');
 
-   var w := Max(GetEllipseTextRect(0, 0, FStartLabel).Width,
-                GetEllipseTextRect(0, 0, FStopLabel).Width) + 40;
+   var w := Max(GetEllipseTextRect(0, 0, FStartLabel).Width, GetEllipseTextRect(0, 0, FStopLabel).Width) + 40;
    var w2 := w div 2;
-
    if w > Width then
    begin
       Width := w;
@@ -467,15 +463,10 @@ begin
    result := True;
 end;
 
-procedure TMainBlock.WMWindowPosChanging(var Msg: TWMWindowPosChanging);
+procedure TMainBlock.MoveComment(AComment: TComment; dx, dy: integer);
 begin
-   MoveComments(Msg.WindowPos.x, Msg.WindowPos.y);
-   inherited;
-end;
-
-procedure TMainBlock.OnWindowPosChanged(x, y: integer);
-begin
-// do nothing
+   if AComment.Visible then
+      TInfra.MoveWinTopZ(AComment, AComment.Left+dx, AComment.Top+dy);
 end;
 
 function TMainBlock.GetUndoObject: TObject;

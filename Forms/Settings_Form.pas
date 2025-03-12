@@ -87,10 +87,10 @@ type
     chkMultiPrint: TCheckBox;
     chkMultiPrintHorz: TCheckBox;
     gbPrintMargins: TGroupBox;
-    edtMarginLeft: TEdit;
-    edtMarginRight: TEdit;
-    edtMarginTop: TEdit;
-    edtMarginBottom: TEdit;
+    edtPrintMarginLeft: TEdit;
+    edtPrintMarginRight: TEdit;
+    edtPrintMarginTop: TEdit;
+    edtPrintMarginBottom: TEdit;
     lblMarginLeft: TLabel;
     lblMarginRight: TLabel;
     lblMarginTop: TLabel;
@@ -137,7 +137,10 @@ type
     procedure LoadFromSettings(ASettings: TSettings);
     procedure ProtectFields;
     procedure SetDefault;
+    procedure SetPrintMargins(const APrintMargins: TRect);
+    function GetPrintMargins: TRect;
   public
+    property PrintMargins: TRect read GetPrintMargins write SetPrintMargins;
     function GetShapeColor(AShape: TColorShape): TColor;
   end;
 
@@ -194,6 +197,22 @@ end;
 procedure TSettingsForm.ResetForm;
 begin
 {}
+end;
+
+procedure TSettingsForm.SetPrintMargins(const APrintMargins: TRect);
+begin
+   edtPrintMarginLeft.Text   := APrintMargins.Left.ToString;
+   edtPrintMarginTop.Text    := APrintMargins.Top.ToString;
+   edtPrintMarginRight.Text  := APrintMargins.Right.ToString;
+   edtPrintMarginBottom.Text := APrintMargins.Bottom.ToString;
+end;
+
+function TSettingsForm.GetPrintMargins: TRect;
+begin
+   result.Left   := StrToIntDef(edtPrintMarginLeft.Text, DEFAULT_PRINT_MARGINS.Left);
+   result.Top    := StrToIntDef(edtPrintMarginTop.Text, DEFAULT_PRINT_MARGINS.Top);
+   result.Right  := StrToIntDef(edtPrintMarginRight.Text, DEFAULT_PRINT_MARGINS.Right);
+   result.Bottom := StrToIntDef(edtPrintMarginBottom.Text, DEFAULT_PRINT_MARGINS.Bottom);
 end;
 
 procedure TSettingsForm.btnBrowseCCompClick(Sender: TObject);
@@ -318,11 +337,7 @@ begin
    chkMultiPrint.Checked := False;
    chkMultiPrintHorz.Checked := False;
    chkMultiPrintHorz.Enabled := False;
-   var m := IntToStr(DEFAULT_PRINT_MARGIN);
-   edtMarginLeft.Text := m;
-   edtMarginRight.Text := m;
-   edtMarginTop.Text := m;
-   edtMarginBottom.Text := m;
+   PrintMargins := DEFAULT_PRINT_MARGINS;
    chkEnableDBuffer.Checked := False;
    chkShowFuncLabels.Checked := True;
    chkShowBlockLabels.Checked := False;
@@ -396,10 +411,7 @@ begin
    chkShowFuncLabels.Checked := ASettings.ShowFuncLabels;
    chkShowBlockLabels.Checked := ASettings.ShowBlockLabels;
    chkMultiPrintHorz.Checked := ASettings.PrintMultPagesHorz;
-   edtMarginLeft.Text := ASettings.PrintRect.Left.ToString;
-   edtMarginTop.Text := ASettings.PrintRect.Top.ToString;
-   edtMarginRight.Text := (PRINT_SCALE_BASE - ASettings.PrintRect.Right).ToString;
-   edtMarginBottom.Text := (PRINT_SCALE_BASE - ASettings.PrintRect.Bottom).ToString;
+   PrintMargins := ASettings.PrintMargins;
    pnlSelect.Color := ASettings.SelectColor;
    pnlPen.Color := ASettings.PenColor;
    pnlDesktop.Color := ASettings.DesktopColor;
@@ -496,30 +508,24 @@ begin
       shpRectangle:
          cnv.Rectangle(r);
       shpParallel:
-      begin
-         var p := Point(r.Left+10, r.Top);
-         cnv.Polygon([p,
+         cnv.Polygon([Point(r.Left+10, r.Top),
                       Point(r.Right, r.Top),
                       Point(r.Right-10, r.Bottom),
-                      Point(r.Left, r.Bottom),
-                      p]);
-      end;
+                      Point(r.Left, r.Bottom)]);
+      shpRoadSign:
+         cnv.Polygon([r.TopLeft,
+                      Point(r.Left+35, r.Top),
+                      Point(r.Right, r.CenterPoint.Y),
+                      Point(r.Left+35, r.Bottom),
+                      Point(r.Left, r.Bottom)]);
       shpDiamond:
       begin
          var p := r.CenterPoint;
          cnv.Polygon([Point(r.Left, p.Y),
                       Point(p.X, r.Top),
                       Point(r.Right, p.Y),
-                      Point(p.X, r.Bottom),
-                      Point(r.Left, p.Y)]);
+                      Point(p.X, r.Bottom)]);
       end;
-      shpRoadSign:
-         cnv.Polygon([r.TopLeft,
-                      Point(r.Left+35, r.Top),
-                      Point(r.Right, r.CenterPoint.Y),
-                      Point(r.Left+35, r.Bottom),
-                      Point(r.Left, r.Bottom),
-                      r.TopLeft]);
       shpRoutine:
       begin
          cnv.Rectangle(r);
